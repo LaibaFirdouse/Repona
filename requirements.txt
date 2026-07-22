@@ -1,0 +1,8 @@
+fastapi
+neo4j
+openai
+psycopg[binary]
+sqlalchemy
+uvicorn[standard]
+sentence-transformers
+numpy
