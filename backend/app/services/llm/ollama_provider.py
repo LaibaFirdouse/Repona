@@ -31,11 +31,25 @@ class OllamaProvider(BaseLLMProvider):
     def generate(self, prompt: str) -> str:
         if not prompt.strip():
             raise LLMProviderError("Prompt cannot be empty.")
+        print(f"Model = {self.model}")
+        print(f"Base URL = {self.base_url}")
 
+        # payload = {
+        #     "model": self.model,
+        #     "prompt": prompt,
+        #     "stream": False,
+        # }
         payload = {
             "model": self.model,
             "prompt": prompt,
             "stream": False,
+            "options": {
+                "stop": [
+                    "```",
+                    "\n\nHuman:",
+                    "\n\nUser:"
+                ]
+            }
         }
         request_data = json.dumps(payload).encode("utf-8")
         last_error: Exception | None = None
@@ -64,13 +78,23 @@ class OllamaProvider(BaseLLMProvider):
           )
 
           try:
-            with urllib.request.urlopen(request, timeout=120) as response:
+            with urllib.request.urlopen(request, timeout=600) as response:
              raw_response = response.read().decode("utf-8")
-          except (urllib.error.URLError, TimeoutError) as error:
-             print(f"FAILED {base_url}: {error}")
-             last_error = error
-             continue
+        #   except (urllib.error.URLError, TimeoutError) as error:
+        #      print(f"FAILED {base_url}: {error}")
+        #      last_error = error
+        #      continue
+          except Exception as error:
+                import traceback
 
+                print("=" * 50)
+                print(type(error))
+                print(repr(error))
+                traceback.print_exc()
+                print("=" * 50)
+
+                last_error = error
+                continue
 
           try:
                 payload_response = json.loads(raw_response)

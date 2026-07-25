@@ -8,7 +8,8 @@ from app.services.embedding_service import EmbeddingService
 
 class RetrievalService:
     """
-    Retrieves the most relevant code chunks for a query.
+    Retrieves the most semantically relevant code chunks
+    for a user query using cosine similarity.
     """
 
     def __init__(
@@ -23,19 +24,58 @@ class RetrievalService:
         self,
         query: str,
     ) -> list[float]:
-        return self.embedding_service.generate_text_embedding(query)
+        """
+        Generate an embedding for the user's question.
+        """
+        return self.embedding_service.generate_text_embedding(
+            query
+        )
+
+    def cosine_similarity(
+        self,
+        embedding1: np.ndarray,
+        embedding2: np.ndarray,
+    ) -> float:
+        """
+        Compute cosine similarity between two embeddings.
+        """
+
+        denominator = (
+            np.linalg.norm(embedding1)
+            * np.linalg.norm(embedding2)
+        )
+
+        if denominator == 0:
+            return 0.0
+
+        return float(
+            np.dot(
+                embedding1,
+                embedding2,
+            )
+            / denominator
+        )
 
     def retrieve_chunks(
         self,
         repository_id: str,
         query: str,
         db: Session,
-        top_k: int = 5,
+        top_k: int = 2,
     ) -> list[CodeChunk]:
+        """
+        Retrieve the Top-K most relevant code chunks
+        for a given repository and query.
+        """
+
+        print("\n========== RETRIEVAL ==========")
+        print(f"Question: {query}")
 
         query_embedding = np.array(
             self.generate_query_embedding(query)
         )
+
+        print("Generated query embedding.")
 
         chunks = (
             db.execute(
@@ -47,32 +87,37 @@ class RetrievalService:
             .all()
         )
 
+        print(f"Loaded {len(chunks)} chunks.")
+
         if not chunks:
+            print("No chunks found.")
             return []
 
         scored_chunks = []
 
         for chunk in chunks:
-            chunk_embedding = np.array(chunk.embedding)
-
-            similarity = np.dot(
+            similarity = self.cosine_similarity(
                 query_embedding,
-                chunk_embedding,
-            ) / (
-                np.linalg.norm(query_embedding)
-                * np.linalg.norm(chunk_embedding)
+                np.array(chunk.embedding),
             )
 
             scored_chunks.append(
-                (similarity, chunk)
+                (
+                    similarity,
+                    chunk,
+                )
             )
 
         scored_chunks.sort(
-            key=lambda x: x[0],
+            key=lambda item: item[0],
             reverse=True,
         )
 
-        return [
+        top_chunks = [
             chunk
             for _, chunk in scored_chunks[:top_k]
         ]
+
+        print(f"Returning Top {len(top_chunks)} chunks.")
+
+        return top_chunks

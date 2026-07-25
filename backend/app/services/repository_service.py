@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 import json
 import os
 import subprocess
@@ -8,6 +9,7 @@ from pathlib import Path
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 try:
     import tomllib
@@ -37,6 +39,7 @@ from app.schemas.repository import (
 from app.services.chunk_service import ChunkService
 from app.services.embedding_service import EmbeddingService
 from app.services.code_chunk_service import CodeChunkService
+from app.services.retrieval_service import RetrievalService
 
 
 class RepositoryServiceError(Exception):
@@ -182,16 +185,71 @@ class RepositoryService:
                 chunk_embeddings=chunk_embeddings,
                 db=db,
             )
+            print("save_chunks finished")
+
             db.commit()
+
+            print("commit finished")
+            
+            # from app.services.retrieval_service import RetrievalService
+
+            print("\n========== TESTING RETRIEVAL ==========")
+
+            retrieval_service = RetrievalService()
+
+            results = retrieval_service.retrieve_chunks(
+                repository_id=repository.id,
+                query="How is SidebarProvider implemented?",
+                db=db,
+            )
+
+            print(f"\nRetrieved {len(results)} chunks")
+
+            for i, chunk in enumerate(results, start=1):
+                print("\n" + "=" * 80)
+                print(f"Result {i}")
+                print(f"File: {chunk.file_path}")
+                print(f"Lines: {chunk.start_line}-{chunk.end_line}")
+                print(chunk.content[:500])
             print("Committed code chunks")
 
             print("Code chunks saved successfully.")
+            print("Code chunks committed successfully.")
 
+            verify_count = db.execute(
+                text(
+                    """
+                    SELECT COUNT(*)
+                    FROM code_chunks
+                    WHERE repository_id = :rid
+                    """
+                ),
+                {"rid": repository.id},
+            ).scalar()
+
+            print(f"VERIFY COUNT (same session) = {verify_count}")
+
+            total_count = db.execute(
+                text("SELECT COUNT(*) FROM code_chunks")
+            ).scalar()
+
+            print(f"TOTAL CHUNKS IN DB = {total_count}")
+
+        # except SQLAlchemyError as error:
+        #     db.rollback()
+        #     raise RepositoryServiceError(
+        #         "Unable to store repository analysis."
+        #     ) from error
         except SQLAlchemyError as error:
+            import traceback
+
+            traceback.print_exc()
+
+            print(f"\nSQLAlchemy Error: {error}")
+
             db.rollback()
-            raise RepositoryServiceError(
-                "Unable to store repository analysis."
-            ) from error
+
+            raise
 
         # try:
         #     graph_stats = self.graph_service.store_graph(
@@ -207,16 +265,14 @@ class RepositoryService:
         )
            print("Neo4j write successful")
 
-        except Exception:
-             import traceback
-             traceback.print_exc()
-             raise
-
-        # print("\n========== STEP 8 ==========")
-        # print("Saved graph to Neo4j")
+        # except Exception:
+        #      import traceback
+        #      traceback.print_exc()
+        #      raise
 
         except Neo4jGraphServiceError as error:
-            raise RepositoryServiceError(str(error)) from error
+                    traceback.print_exc()
+                    raise RepositoryServiceError(str(error)) from error
 
         print("\n========== STEP 9 ==========")
         print("Returning response")
@@ -261,7 +317,7 @@ class RepositoryService:
                 check=True,
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=600,
             )
         except FileNotFoundError as error:
             raise RepositoryServiceError(

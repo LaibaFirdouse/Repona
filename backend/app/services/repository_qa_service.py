@@ -14,6 +14,9 @@ from app.schemas.repository import TokenUsage
 from app.services.llm.base import BaseLLMProvider, LLMProviderError
 from app.services.llm.llm_factory import LLMFactory
 from app.services.neo4j_graph_service import Neo4jGraphService, Neo4jGraphServiceError
+from app.services.retrieval_service import RetrievalService
+import json
+from json import JSONDecoder
 import re
 
 
@@ -49,10 +52,14 @@ class RepositoryQAService:
         repository_crud: RepositoryCRUD | None = None,
         graph_service: Neo4jGraphService | None = None,
         llm_provider: BaseLLMProvider | None = None,
+        retrieval_service: RetrievalService | None = None,
     ) -> None:
         self.repository_crud = repository_crud or RepositoryCRUD()
         self.graph_service = graph_service or Neo4jGraphService()
         self.llm_provider = llm_provider or LLMFactory.create_provider()
+        self.retrieval_service = (
+            retrieval_service or RetrievalService()
+    )
 
     def answer_question(
         self,
@@ -71,6 +78,17 @@ class RepositoryQAService:
         )
         if analysis_report is None:
             raise RepositoryQAServiceError("Repository has no analysis report yet.")
+        retrieved_chunks = self.retrieval_service.retrieve_chunks(
+            repository_id=request.repository_id,
+            query=request.question,
+            db=db,
+        )
+        retrieved_context = "\n\n".join(
+            f"File: {chunk.file_path}\n{chunk.content}"
+            for chunk in retrieved_chunks
+        )
+        print(f"Retrieved chunks: {len(retrieved_chunks)}")
+        print(f"Retrieved context chars: {len(retrieved_context)}")
 
         graph_context_used = self.should_query_graph(request.question)
         graph_context = {}
@@ -109,8 +127,12 @@ class RepositoryQAService:
             analysis_report=analysis_report,
             graph_context=graph_context,
             graph_context_used=graph_context_used,
+            retrieved_context=retrieved_context,
         )
-
+        print(f"User prompt chars: {len(user_prompt)}")
+        print("\n========== RETRIEVED CODE ==========\n")
+        print(retrieved_context[:2000])  # print first 2000 characters
+        print("\n===================================\n")
         answer, token_usage = self.call_llm(system_prompt, user_prompt)
 
         return RepositoryQuestionResponse(
@@ -235,11 +257,20 @@ class RepositoryQAService:
         return None
 
     def build_system_prompt(self) -> str:
+        # return (
+        #     "You are a repository intelligence assistant. "
+        #     "Answer questions using only the retrieved repository context. "
+        #     "If the context is not enough, say what is missing. "
+        #     "Return only valid JSON. Do not include markdown."
+        # )
         return (
-            "You are a repository intelligence assistant. "
-            "Answer questions using only the retrieved repository context. "
-            "If the context is not enough, say what is missing. "
-            "Return only valid JSON. Do not include markdown."
+            "You are a repository question answering assistant.\n"
+            "Return EXACTLY one valid JSON object.\n"
+            "Do NOT wrap it in markdown.\n"
+            "Do NOT explain your answer.\n"
+            "Do NOT add any text before or after the JSON.\n"
+            "The first character of your response must be '{'.\n"
+            "The last character of your response must be '}'."
         )
 
     def build_user_prompt(
@@ -249,33 +280,39 @@ class RepositoryQAService:
         analysis_report,
         graph_context: dict,
         graph_context_used: bool,
+        retrieved_context: str,
     ) -> str:
+        # prompt_payload = {
+        #     "question": question,
+        #     "repository": {
+        #         "id": analysis_report.repository_id,
+        #         "url": repo_url,
+        #     },
+        #     "retrieved_context": {
+        #         "analysis_report": {
+        #             "status": analysis_report.status,
+        #             "file_count": analysis_report.file_count,
+        #             "directory_count": analysis_report.directory_count,
+        #             "technologies": analysis_report.technologies,
+        #             "summary": analysis_report.summary,
+        #             "directory_structure_sample": analysis_report.directory_structure[
+        #                 :30
+        #             ],
+        #         },
+        #         "graph_context_used": graph_context_used,
+        #         "graph_context": graph_context,
+        #         "retrieved_code": retrieved_context,
+        #     },
+        #     "required_json_shape": {
+        #         "answer": "direct answer to the question",
+        #         "confidence": "high, medium, or low",
+        #         "sources": ["specific metadata, report, or graph context used"],
+        #         "graph_context_used": graph_context_used,
+        #     },
+        # }
         prompt_payload = {
             "question": question,
-            "repository": {
-                "id": analysis_report.repository_id,
-                "url": repo_url,
-            },
-            "retrieved_context": {
-                "analysis_report": {
-                    "status": analysis_report.status,
-                    "file_count": analysis_report.file_count,
-                    "directory_count": analysis_report.directory_count,
-                    "technologies": analysis_report.technologies,
-                    "summary": analysis_report.summary,
-                    "directory_structure_sample": analysis_report.directory_structure[
-                        :30
-                    ],
-                },
-                "graph_context_used": graph_context_used,
-                "graph_context": graph_context,
-            },
-            "required_json_shape": {
-                "answer": "direct answer to the question",
-                "confidence": "high, medium, or low",
-                "sources": ["specific metadata, report, or graph context used"],
-                "graph_context_used": graph_context_used,
-            },
+            "retrieved_code": retrieved_context
         }
         return json.dumps(prompt_payload, indent=2)
     
@@ -284,9 +321,27 @@ class RepositoryQAService:
         system_prompt: str,
         user_prompt: str,
     ) -> tuple[RepositoryQuestionAnswer, TokenUsage]:
-        combined_prompt = self.build_provider_prompt(system_prompt, user_prompt)
+        # combined_prompt = self.build_provider_prompt(system_prompt, user_prompt)
+        # combined_prompt = "Say hello."
+        combined_prompt = """
+        Return ONLY valid JSON.
+
+        {
+        "answer": "Say hello.",
+        "confidence": "high",
+        "sources": [],
+        "graph_context_used": false
+        }
+        """
+
+        print(f"Combined prompt chars: {len(combined_prompt)}")
+
         try:
+            
             response_content = self.llm_provider.generate(combined_prompt)
+            print("\n========== RAW LLM RESPONSE ==========\n")
+            print(response_content)
+            print("\n=====================================\n")
         except LLMProviderError as error:
             raise RepositoryQAServiceError(str(error)) from error
 
@@ -299,7 +354,20 @@ class RepositoryQAService:
 
     def parse_answer(self, response_content: str) -> RepositoryQuestionAnswer:
         try:
-            answer_payload = json.loads(response_content)
+            response_content = response_content.strip()
+
+            if response_content.startswith("```json"):
+                response_content = response_content.removeprefix("```json").strip()
+
+            if response_content.startswith("```"):
+                response_content = response_content.removeprefix("```").strip()
+
+            if response_content.endswith("```"):
+                response_content = response_content.removesuffix("```").strip()
+            # answer_payload = json.loads(response_content)
+            decoder = JSONDecoder()
+
+            data, end = decoder.raw_decode(response_content)
         except json.JSONDecodeError as error:
             raise RepositoryQAServiceError("LLM returned invalid JSON.") from error
 
