@@ -109,17 +109,17 @@ Because the rest of the application depends on the abstraction, no major refacto
 
 ### New files
 
-- [backend/app/services/llm/base.py](../backend/app/services/llm/base.py) — shared provider interface and error type
-- [backend/app/services/llm/ollama_provider.py](../backend/app/services/llm/ollama_provider.py) — Ollama implementation using the local generation endpoint
-- [backend/app/services/llm/openai_provider.py](../backend/app/services/llm/openai_provider.py) — existing OpenAI behavior wrapped behind the same interface
-- [backend/app/services/llm/llm_factory.py](../backend/app/services/llm/llm_factory.py) — provider selection based on environment variables
-- [backend/tests/test_llm_factory.py](../backend/tests/test_llm_factory.py) — regression tests for provider selection
-- [docs/llm-provider-abstraction.md](llm-provider-abstraction.md) — this architecture guide
+- [backend/app/services/llm/base.py](../backend/app/services/llm/base.py) - shared provider interface and error type
+- [backend/app/services/llm/ollama_provider.py](../backend/app/services/llm/ollama_provider.py) - Ollama implementation using the local generation endpoint
+- [backend/app/services/llm/openai_provider.py](../backend/app/services/llm/openai_provider.py) - existing OpenAI behavior wrapped behind the same interface
+- [backend/app/services/llm/llm_factory.py](../backend/app/services/llm/llm_factory.py) - provider selection based on environment variables
+- [backend/tests/test_llm_factory.py](../backend/tests/test_llm_factory.py) - regression tests for provider selection
+- [docs/llm-provider-abstraction.md](llm-provider-abstraction.md) - this architecture guide
 
 ### Updated files
 
-- [backend/app/core/config.py](../backend/app/core/config.py) — added provider and Ollama environment settings
-- [backend/app/services/openai_summary_service.py](../backend/app/services/openai_summary_service.py) — now uses the provider abstraction
-- [backend/app/services/repository_qa_service.py](../backend/app/services/repository_qa_service.py) — now uses the provider abstraction
-- [docker-compose.yml](../docker-compose.yml) — passes provider settings into the API container
-- [.env.example](../.env.example) — documents the new environment variables
+- [backend/app/core/config.py](../backend/app/core/config.py) - added provider and Ollama environment settings
+- [backend/app/services/openai_summary_service.py](../backend/app/services/openai_summary_service.py) - now uses the provider abstraction
+- [backend/app/services/repository_qa_service.py](../backend/app/services/repository_qa_service.py) - now uses the provider abstraction
+- [docker-compose.yml](../docker-compose.yml) - passes provider settings into the API container
+- [.env.example](../.env.example) - documents the new environment variables
