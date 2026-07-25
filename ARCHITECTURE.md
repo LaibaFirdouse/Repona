@@ -204,35 +204,54 @@ All request/response models are JSON. FastAPI provides schemas and example paylo
 
 ---
 
-## Direct Database Queries
+## Database Models
+### Neo4j (Cypher) 
 
-### Neo4j (Cypher)
+### `Repository` (node)
 
-```cypher
-// Count all files in the repository
-MATCH (f:File)
-RETURN count(f) AS total_files;
+| Property | Type |
+|---|---|
+| `id` | `str` |
+| `url` | `str` |
 
-// List all directory paths
-MATCH (d:Directory)
-RETURN d.path;
+### `File` (node)
 
-// Find all files in a specific directory (e.g. "components")
-MATCH (d:Directory {path:"components"})-[:CONTAINS]->(f:File)
-RETURN f.name;
+| Property | Type |
+|---|---|
+| `repository_id` | `str` |
+| `path` | `str` |
+| `name` | `str` |
+| `module` | `str` |
+| `is_service` | `bool` |
 
-// Show which modules a file imports
-MATCH (f:File)-[:IMPORTS]->(m:Module)
-RETURN f.name AS file, m.name AS imported_module;
+### `Module` (node)
 
-// Find all dependencies of a component (any relationship)
-MATCH (f:File {name:"Sidebar.tsx"})-[r]->(n)
-RETURN type(r) AS rel, n;
+| Property | Type |
+|---|---|
+| `repository_id` | `str` |
+| `name` | `str` |
 
-// Repository statistics (count nodes by label)
-MATCH (n)
-RETURN labels(n) AS label, count(*) AS count;
-```
+### `Service` (node)
+
+| Property | Type |
+|---|---|
+| `repository_id` | `str` |
+| `path` | `str` |
+| `name` | `str` |
+
+### Relationships
+
+| Relationship | From → To |
+|---|---|
+| `CONTAINS` | `Repository → File` |
+| `CONTAINS` | `Repository → Module` |
+| `CONTAINS` | `Module → File` |
+| `IMPORTS` | `File → File` |
+| `USES` | `Module → Module` |
+| `IMPLEMENTED_IN` | `Service → File` |
+
+Want me to add this as a "Neo4j Graph Schema" section in `ARCHITECTURE.md`, right after the Postgres tables?
+
 
 ### PostgreSQL (SQL)
 
@@ -301,14 +320,6 @@ print(f"Done: {payload_response.get('done')}, Done reason: {payload_response.get
 - **Model Behavior** - If the LLM repeats or refuses to answer, adjust stop sequences or tighten the system prompt's JSON instructions.
 - **Schema Errors** - If Pydantic raises validation errors on the JSON, inspect which field is malformed; ensure it matches the expected keys (`answer`/`confidence`/`sources`/...).
 
-> The first step is always to verify the retrieval (database) and prompt-building are correct before blaming the LLM.
+
 
 ---
-
-## Changelog
-
-- `feat`: Integrated retrieval-based QA with code embedding search and Neo4j context.
-- `fix`: Robust JSON parsing - strip markdown fences and use `JSONDecoder.raw_decode()`.
-- `fix`: Add Ollama stop sequences to prevent extra output.
-- `chore`: Added detailed debug logging (raw HTTP response, payload parsing).
-- `docs`: Expanded README with examples, queries, and troubleshooting instructions.
