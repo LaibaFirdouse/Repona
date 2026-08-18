@@ -102,7 +102,6 @@ class OllamaProvider(BaseLLMProvider):
             "stream": False,
             "options": {
                 "stop": [
-                    "```",
                     "\n\nHuman:",
                     "\n\nUser:",
                 ]
