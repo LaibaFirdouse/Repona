@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+from json import JSONDecoder
 
 from sqlalchemy.orm import Session
 
@@ -15,9 +17,6 @@ from app.services.llm.base import BaseLLMProvider, LLMProviderError
 from app.services.llm.llm_factory import LLMFactory
 from app.services.neo4j_graph_service import Neo4jGraphService, Neo4jGraphServiceError
 from app.services.retrieval_service import RetrievalService
-import json
-from json import JSONDecoder
-import re
 
 
 class RepositoryQAServiceError(Exception):
@@ -59,7 +58,7 @@ class RepositoryQAService:
         self.llm_provider = llm_provider or LLMFactory.create_provider()
         self.retrieval_service = (
             retrieval_service or RetrievalService()
-    )
+        )
 
     def answer_question(
         self,
@@ -113,14 +112,6 @@ class RepositoryQAService:
             )
 
         system_prompt = self.build_system_prompt()
-        # user_prompt = self.build_user_prompt(
-        #     question=request.question,
-        #     repo_url=repository.repo_url,
-        #     analysis_report=analysis_report,
-        #     graph_context=graph_context,
-        #     graph_context_used=graph_context_used,
-        # )
-        # answer, token_usage = self.call_llm(system_prompt, user_prompt)
         user_prompt = self.build_user_prompt(
             question=request.question,
             repo_url=repository.repo_url,
@@ -282,62 +273,22 @@ class RepositoryQAService:
         graph_context_used: bool,
         retrieved_context: str,
     ) -> str:
-        # prompt_payload = {
-        #     "question": question,
-        #     "repository": {
-        #         "id": analysis_report.repository_id,
-        #         "url": repo_url,
-        #     },
-        #     "retrieved_context": {
-        #         "analysis_report": {
-        #             "status": analysis_report.status,
-        #             "file_count": analysis_report.file_count,
-        #             "directory_count": analysis_report.directory_count,
-        #             "technologies": analysis_report.technologies,
-        #             "summary": analysis_report.summary,
-        #             "directory_structure_sample": analysis_report.directory_structure[
-        #                 :30
-        #             ],
-        #         },
-        #         "graph_context_used": graph_context_used,
-        #         "graph_context": graph_context,
-        #         "retrieved_code": retrieved_context,
-        #     },
-        #     "required_json_shape": {
-        #         "answer": "direct answer to the question",
-        #         "confidence": "high, medium, or low",
-        #         "sources": ["specific metadata, report, or graph context used"],
-        #         "graph_context_used": graph_context_used,
-        #     },
-        # }
         prompt_payload = {
             "question": question,
-            "retrieved_code": retrieved_context
+            "retrieved_code": retrieved_context,
         }
         return json.dumps(prompt_payload, indent=2)
-    
+
     def call_llm(
         self,
         system_prompt: str,
         user_prompt: str,
     ) -> tuple[RepositoryQuestionAnswer, TokenUsage]:
-        # combined_prompt = self.build_provider_prompt(system_prompt, user_prompt)
-        # combined_prompt = "Say hello."
-        combined_prompt = """
-        Return ONLY valid JSON.
-
-        {
-        "answer": "Say hello.",
-        "confidence": "high",
-        "sources": [],
-        "graph_context_used": false
-        }
-        """
+        combined_prompt = self.build_provider_prompt(system_prompt, user_prompt)
 
         print(f"Combined prompt chars: {len(combined_prompt)}")
 
         try:
-            
             response_content = self.llm_provider.generate(combined_prompt)
             print("\n========== RAW LLM RESPONSE ==========\n")
             print(response_content)
@@ -364,15 +315,14 @@ class RepositoryQAService:
 
             if response_content.endswith("```"):
                 response_content = response_content.removesuffix("```").strip()
-            # answer_payload = json.loads(response_content)
             decoder = JSONDecoder()
 
-            data, end = decoder.raw_decode(response_content)
+            data, _ = decoder.raw_decode(response_content)
         except json.JSONDecodeError as error:
             raise RepositoryQAServiceError("LLM returned invalid JSON.") from error
 
         try:
-            return RepositoryQuestionAnswer(**answer_payload)
+            return RepositoryQuestionAnswer(**data)
         except ValueError as error:
             raise RepositoryQAServiceError(
                 "OpenAI answer did not match the expected shape."
