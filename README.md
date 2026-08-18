@@ -2,7 +2,7 @@
 
 A high-performance REST API for indexing and natural-language querying of code repositories. This system combines **Retrieval-Augmented Generation (RAG)** with a **Neo4j knowledge graph** and a **PostgreSQL vector store** to answer developer questions about code.
 
-Given a GitHub URL, the backend clones the repo, extracts metadata and a code knowledge graph, chunks and embeds the source code, and persists it. When asked a question (e.g. *"How is SidebarProvider implemented?"*), it generates a query embedding, retrieves relevant code snippets and graph context, constructs a prompt, and invokes a local LLM (Ollama, using the `phi3:mini` model) to produce a structured JSON answer including explanation, confidence, and sources.
+Given a GitHub URL, the backend clones the repo, extracts metadata and a code knowledge graph, chunks and embeds the source code, and persists it. When asked a question (e.g. *"How is SidebarProvider implemented?"*), it generates a query embedding, retrieves relevant code snippets and graph context, constructs a prompt, and invokes a local LLM (Ollama, using the `qwen2.5:1.5b` model) to produce a structured JSON answer including explanation, confidence, and sources.
 
 > For a deep dive into internals - architecture diagrams, project structure, RAG pipeline, prompt construction, and database queries - see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
@@ -22,7 +22,7 @@ Given a GitHub URL, the backend clones the repo, extracts metadata and a code kn
 
 - **Language & Frameworks**: Python 3.12, FastAPI, Uvicorn
 - **Databases**: PostgreSQL (vector store), Neo4j (code knowledge graph)
-- **ML / AI**: Sentence-Transformers (`all-MiniLM-L6-v2`) for embeddings, Ollama (`phi3:mini`) for generation
+- **ML / AI**: Sentence-Transformers (`all-MiniLM-L6-v2`) for embeddings, Ollama (`qwen2.5:1.5b`) for generation
 - **Infrastructure**: Docker & Docker Compose
 
 ---
@@ -51,14 +51,15 @@ Create a `.env` file in the project root:
 | `NEO4J_URI` | Neo4j Bolt URI | `bolt://neo4j:7687` |
 | `NEO4J_USERNAME` | Neo4j admin username | `neo4j` |
 | `NEO4J_PASSWORD` | Neo4j admin password | `password` |
-| `OLLAMA_BASE_URL` | Base URL for Ollama API | `http://host.docker.internal:11434` |
-| `OLLAMA_MODEL` | Ollama model to use | `phi3:mini` |
+| `OLLAMA_BASE_URL` | Base URL for Ollama API | `http://localhost:11434` |
+| `OLLAMA_MODEL` | Ollama model to use | `qwen2.5:1.5b` |
+| `OLLAMA_TIMEOUT` | (Optional) Generation timeout in seconds | `180` |
 | `EMBEDDING_MODEL` | (Optional) SentenceTransformer model | `all-MiniLM-L6-v2` |
 
 ### 3. Pull the Ollama model & start the daemon
 
 ```bash
-ollama pull phi3:mini
+ollama pull qwen2.5:1.5b
 ollama serve
 ```
 
@@ -68,7 +69,7 @@ ollama serve
 docker compose up --build
 ```
 
-This starts the FastAPI app, PostgreSQL, Neo4j, and Ollama. The API binds to `0.0.0.0:8000` by default.
+This starts the FastAPI app, PostgreSQL, and Neo4j. Ollama is expected to run on the host (`ollama serve`); the API container reaches it at `http://host.docker.internal:11434` via the host-gateway mapping. The API binds to `0.0.0.0:8000` by default.
 
 ### 5. Explore the API
 
@@ -145,7 +146,7 @@ curl -X POST http://localhost:8000/api/v1/ask \
 
 ## Troubleshooting
 
-- **Slow responses / timeouts** - Default HTTP timeout is 120s; large repos may need 300s+. `phi3:mini` is used specifically to keep generation fast.
+- **Slow responses / timeouts** - Generation timeout defaults to 180s (tune via `OLLAMA_TIMEOUT`). Unreachable Ollama URLs are probed with a short connect timeout and skipped quickly, so a bad `OLLAMA_BASE_URL` no longer blocks for minutes. `qwen2.5:1.5b` is used by default to keep generation fast on modest hardware; on faster machines `phi3:mini` also works well.
 - **"Connection refused"** - Make sure `OLLAMA_BASE_URL` is correct and Ollama is running (`ollama serve`). Test with `curl http://localhost:11434/api/chat`.
 - **Invalid or empty answers** - Check container logs; the app logs the raw LLM response before parsing to help pinpoint the issue.
 

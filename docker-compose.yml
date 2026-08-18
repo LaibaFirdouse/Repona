@@ -12,8 +12,11 @@ services:
       DEBUG: "true"
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/repo_intelligence
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-phi3:mini}
+      # Ollama runs on the host; host.docker.internal resolves to the host
+      # via the extra_hosts host-gateway entry below.
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:1.5b}
+      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-180}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.2}

@@ -42,9 +42,10 @@ class Settings:
     llm_provider: str = os.getenv("LLM_PROVIDER", "openai").strip().lower()
     ollama_base_url: str = os.getenv(
         "OLLAMA_BASE_URL",
-        "http://host.docker.internal:11434",
+        "http://localhost:11434",
     )
-    ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen3:4b")
+    ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b")
+    ollama_timeout: int = _get_int_env("OLLAMA_TIMEOUT", 180)
     openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     openai_temperature: float = _get_float_env("OPENAI_TEMPERATURE", 0.2)
