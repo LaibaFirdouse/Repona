@@ -248,15 +248,15 @@ class RepositoryQAService:
         return None
 
     def build_system_prompt(self) -> str:
-        # return (
-        #     "You are a repository intelligence assistant. "
-        #     "Answer questions using only the retrieved repository context. "
-        #     "If the context is not enough, say what is missing. "
-        #     "Return only valid JSON. Do not include markdown."
-        # )
         return (
             "You are a repository question answering assistant.\n"
-            "Return EXACTLY one valid JSON object.\n"
+            "Answer the user's question using the retrieved repository code.\n"
+            "Return EXACTLY one valid JSON object with EXACTLY these keys:\n"
+            "- \"answer\": a string, the direct answer to the question\n"
+            "- \"confidence\": one of \"high\", \"medium\", or \"low\"\n"
+            "- \"sources\": a list of strings naming the files or context used\n"
+            "- \"graph_context_used\": a boolean, true or false\n"
+            "Do NOT include any other keys.\n"
             "Do NOT wrap it in markdown.\n"
             "Do NOT explain your answer.\n"
             "Do NOT add any text before or after the JSON.\n"
@@ -276,6 +276,12 @@ class RepositoryQAService:
         prompt_payload = {
             "question": question,
             "retrieved_code": retrieved_context,
+            "required_json_shape": {
+                "answer": "string: the direct answer to the question",
+                "confidence": "string: one of 'high', 'medium', or 'low'",
+                "sources": "list of strings: files or context used",
+                "graph_context_used": "boolean: true or false",
+            },
         }
         return json.dumps(prompt_payload, indent=2)
 
