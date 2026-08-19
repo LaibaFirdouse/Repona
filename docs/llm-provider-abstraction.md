@@ -64,7 +64,7 @@ Additional provider-specific configuration is available in:
 ```env
 LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://host.docker.internal:11434
-OLLAMA_MODEL=qwen3:4b
+OLLAMA_MODEL=qwen2.5:1.5b
 ```
 
 ### OpenAI

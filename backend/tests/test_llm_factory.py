@@ -14,7 +14,7 @@ class LLMFactoryTests(unittest.TestCase):
             {
                 "LLM_PROVIDER": "ollama",
                 "OLLAMA_BASE_URL": "http://example.test",
-                "OLLAMA_MODEL": "qwen3:4b",
+                "OLLAMA_MODEL": "qwen2.5:1.5b",
             },
             clear=False,
         ):
@@ -22,7 +22,7 @@ class LLMFactoryTests(unittest.TestCase):
 
             self.assertIsInstance(provider, OllamaProvider)
             self.assertEqual(provider.base_url, "http://example.test")
-            self.assertEqual(provider.model, "qwen3:4b")
+            self.assertEqual(provider.model, "qwen2.5:1.5b")
 
     def test_factory_uses_openai_provider_when_configured(self) -> None:
         with patch.dict(
