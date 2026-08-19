@@ -46,7 +46,7 @@ flowchart LR
     EB -->|similarity search| Postgres[(PostgreSQL)]
     API -->|graph lookup| Neo4j[(Neo4j)]
     API -->|build prompt| PB[Prompt Builder]
-    PB -->|LLM call| LLM[Ollama LLM - phi3:mini]
+    PB -->|LLM call| LLM[Ollama LLM - qwen2.5:1.5b]
     LLM -->|JSON answer| API
     API -->|JSON response| U[User]
   end
@@ -59,7 +59,7 @@ flowchart LR
 4. The query is embedded (via `all-MiniLM-L6-v2`) and a vector search finds the top-K chunks by cosine similarity in PostgreSQL.
 5. Retrieved code snippets (plus metadata/graph context) are combined with the question into a single prompt.
 6. A strict system prompt instructs the LLM to output JSON only.
-7. The prompt is sent to Ollama (`phi3:mini`) via HTTP, with stop sequences (e.g. triple backticks) so the model halts after the JSON.
+7. The prompt is sent to Ollama (`qwen2.5:1.5b`) via HTTP, with stop sequences (e.g. triple backticks) so the model halts after the JSON.
 8. The backend parses the JSON answer (stripping code fences, extracting the first JSON object with `JSONDecoder.raw_decode`) and returns it to the user.
 
 ---
@@ -137,16 +137,18 @@ def build_system_prompt(self) -> str:
 
 ### Sending to Ollama (`ollama_provider.py`)
 
-A stop sequence prevents extra text after the JSON:
+Stop sequences keep the model from rambling after the JSON, and `num_predict`
+bounds the maximum output length so slow machines finish within the timeout:
 
 ```python
 # ollama_provider.py
 payload = {
-    "model": self.model,  # e.g. "phi3:mini"
+    "model": self.model,  # e.g. "qwen2.5:1.5b"
     "prompt": combined_prompt,
     "stream": False,
     "options": {
-        "stop": ["```"]  # Stop if model emits a markdown fence
+        "num_predict": self.num_predict,  # e.g. 800 max output tokens
+        "stop": ["\n\nHuman:", "\n\nUser:"]
     }
 }
 ```
@@ -297,7 +299,7 @@ Want me to add this as a "Neo4j Graph Schema" section in `ARCHITECTURE.md`, righ
 
 ## Debugging & Troubleshooting (Internals)
 
-- **Timeouts / Performance** - Large prompts (hundreds of KB of code + metadata) can take time. Default HTTP timeout is 120s; increase to 300s+ during development. Use `phi3:mini` (smaller/faster) to verify the pipeline works. Logs showing prompt lengths and fetch times help diagnose bottlenecks.
+- **Timeouts / Performance** - Large prompts (hundreds of KB of code + metadata) can take time. Default HTTP timeout is 120s; increase to 300s+ during development. Use `qwen2.5:1.5b` (smaller/faster) to verify the pipeline works. Logs showing prompt lengths and fetch times help diagnose bottlenecks.
 - **Connection Issues** - If you see "Connection refused," ensure `OLLAMA_BASE_URL` is correct and Ollama is running (`ollama serve`). Quick test: `curl http://localhost:11434/api/chat` (should return a schema or error JSON).
 - **Invalid / Empty JSON** - Inspect the raw response. Debug prints in `ollama_provider.py` after the HTTP call:
 
