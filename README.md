@@ -53,7 +53,8 @@ Create a `.env` file in the project root:
 | `NEO4J_PASSWORD` | Neo4j admin password | `password` |
 | `OLLAMA_BASE_URL` | Base URL for Ollama API | `http://localhost:11434` |
 | `OLLAMA_MODEL` | Ollama model to use | `qwen2.5:1.5b` |
-| `OLLAMA_TIMEOUT` | (Optional) Generation timeout in seconds | `180` |
+| `OLLAMA_TIMEOUT` | (Optional) Generation timeout in seconds | `600` |
+| `OLLAMA_NUM_PREDICT` | (Optional) Max tokens Ollama generates per answer | `800` |
 | `EMBEDDING_MODEL` | (Optional) SentenceTransformer model | `all-MiniLM-L6-v2` |
 
 ### 3. Pull the Ollama model & start the daemon
@@ -146,7 +147,7 @@ curl -X POST http://localhost:8000/api/v1/ask \
 
 ## Troubleshooting
 
-- **Slow responses / timeouts** - Generation timeout defaults to 180s (tune via `OLLAMA_TIMEOUT`). Unreachable Ollama URLs are probed with a short connect timeout and skipped quickly, so a bad `OLLAMA_BASE_URL` no longer blocks for minutes. `qwen2.5:1.5b` is used by default to keep generation fast on modest hardware; on faster machines `phi3:mini` also works well.
+- **Slow responses / timeouts** - Generation timeout defaults to 600s (tune via `OLLAMA_TIMEOUT`), and each answer is capped at `OLLAMA_NUM_PREDICT` (default 800) tokens so slow hardware still finishes. Unreachable Ollama URLs are probed with a short connect timeout and skipped quickly, so a bad `OLLAMA_BASE_URL` no longer blocks for minutes. `qwen2.5:1.5b` is used by default to keep generation fast on modest hardware; on faster machines `phi3:mini` also works well.
 - **"Connection refused"** - Make sure `OLLAMA_BASE_URL` is correct and Ollama is running (`ollama serve`). Test with `curl http://localhost:11434/api/chat`.
 - **Invalid or empty answers** - Check container logs; the app logs the raw LLM response before parsing to help pinpoint the issue.
 

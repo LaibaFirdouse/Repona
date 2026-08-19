@@ -137,7 +137,8 @@ def build_system_prompt(self) -> str:
 
 ### Sending to Ollama (`ollama_provider.py`)
 
-A stop sequence prevents extra text after the JSON:
+Stop sequences keep the model from rambling after the JSON, and `num_predict`
+bounds the maximum output length so slow machines finish within the timeout:
 
 ```python
 # ollama_provider.py
@@ -146,7 +147,8 @@ payload = {
     "prompt": combined_prompt,
     "stream": False,
     "options": {
-        "stop": ["```"]  # Stop if model emits a markdown fence
+        "num_predict": self.num_predict,  # e.g. 800 max output tokens
+        "stop": ["\n\nHuman:", "\n\nUser:"]
     }
 }
 ```

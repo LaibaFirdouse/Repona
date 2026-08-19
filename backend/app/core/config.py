@@ -46,6 +46,7 @@ class Settings:
     )
     ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b")
     ollama_timeout: int = _get_int_env("OLLAMA_TIMEOUT", 180)
+    ollama_num_predict: int = _get_int_env("OLLAMA_NUM_PREDICT", 800)
     openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     openai_temperature: float = _get_float_env("OPENAI_TEMPERATURE", 0.2)

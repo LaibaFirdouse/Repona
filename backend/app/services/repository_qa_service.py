@@ -86,6 +86,19 @@ class RepositoryQAService:
             f"File: {chunk.file_path}\n{chunk.content}"
             for chunk in retrieved_chunks
         )
+        # Cap the context sent to the LLM so prompt prefill stays fast on
+        # modest hardware; oversized contexts just make generation slower
+        # without improving the answer.
+        max_context_chars = 12000
+        if len(retrieved_context) > max_context_chars:
+            print(
+                f"Truncating retrieved context: "
+                f"{len(retrieved_context)} -> {max_context_chars} chars"
+            )
+            retrieved_context = (
+                retrieved_context[:max_context_chars]
+                + "\n[...retrieved context truncated...]"
+            )
         print(f"Retrieved chunks: {len(retrieved_chunks)}")
         print(f"Retrieved context chars: {len(retrieved_context)}")
 

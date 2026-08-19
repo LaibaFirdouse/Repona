@@ -29,6 +29,7 @@ class OllamaProvider(BaseLLMProvider):
         base_url: str | None = None,
         model: str | None = None,
         timeout: float | None = None,
+        num_predict: int | None = None,
         connect_timeout: float = 3.0,
     ) -> None:
         self.base_url = (
@@ -39,6 +40,14 @@ class OllamaProvider(BaseLLMProvider):
             timeout
             if timeout is not None
             else (os.getenv("OLLAMA_TIMEOUT") or settings.ollama_timeout)
+        )
+        # Bound the number of tokens Ollama may generate so a slow or
+        # rambling model terminates well within the request timeout instead
+        # of generating until the context window fills.
+        self.num_predict = int(
+            num_predict
+            if num_predict is not None
+            else (os.getenv("OLLAMA_NUM_PREDICT") or settings.ollama_num_predict)
         )
         # Short timeout used only to probe whether a candidate URL is reachable,
         # so dead endpoints (e.g. host.docker.internal on a Linux host) fail fast
@@ -101,6 +110,7 @@ class OllamaProvider(BaseLLMProvider):
             "prompt": prompt,
             "stream": False,
             "options": {
+                "num_predict": self.num_predict,
                 "stop": [
                     "\n\nHuman:",
                     "\n\nUser:",
