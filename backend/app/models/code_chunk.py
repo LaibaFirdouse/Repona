@@ -76,6 +76,4 @@ class CodeChunk(Base):
         nullable=False,
     )
 
-    repository: Mapped["Repository"] = relationship(
-        back_populates="chunks",
-    )
+    repository: Mapped["Repository"] = relationship()

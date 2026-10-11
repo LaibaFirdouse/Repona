@@ -127,7 +127,7 @@ class RepositoryQAService:
         system_prompt = self.build_system_prompt()
         user_prompt = self.build_user_prompt(
             question=request.question,
-            repo_url=repository.repo_url,
+            repo_url=repository.normalized_url,
             analysis_report=analysis_report,
             graph_context=graph_context,
             graph_context_used=graph_context_used,

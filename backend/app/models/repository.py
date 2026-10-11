@@ -18,7 +18,6 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.analysis_report import AnalysisReport
     from app.models.catalog import Chunk
-    from app.models.code_chunk import CodeChunk
 
 
 class Repository(Base):
@@ -72,15 +71,7 @@ class Repository(Base):
         back_populates="repository",
         cascade="all, delete-orphan",
     )
-    chunks: Mapped[list["CodeChunk"]] = relationship(
-        back_populates="repository",
-        cascade="all, delete-orphan",
-    )
-    indexed_chunks: Mapped[list["Chunk"]] = relationship(back_populates="repository")
-
-    @property
-    def repo_url(self) -> str:
-        return self.normalized_url
+    chunks: Mapped[list["Chunk"]] = relationship(back_populates="repository")
 
 
 class User(Base):

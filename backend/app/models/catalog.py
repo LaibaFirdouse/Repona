@@ -240,7 +240,7 @@ class Chunk(Base):
     end_line: Mapped[int | None] = mapped_column(Integer, nullable=True)
     span_hash: Mapped[str] = mapped_column(String(64), nullable=False)
 
-    repository: Mapped["Repository"] = relationship(back_populates="indexed_chunks")
+    repository: Mapped["Repository"] = relationship(back_populates="chunks")
 
 
 class GenerationFile(Base):
