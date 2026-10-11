@@ -6,3 +6,7 @@ sqlalchemy
 uvicorn[standard]
 sentence-transformers
 numpy
+tree-sitter>=0.24
+tree-sitter-python
+tree-sitter-javascript
+tree-sitter-typescript
