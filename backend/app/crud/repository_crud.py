@@ -1,7 +1,10 @@
+from urllib.parse import urlsplit
+
 from sqlalchemy.orm import Session
 
 from app.models.analysis_report import AnalysisReport
 from app.models.repository import Repository
+from app.storage.identity import normalize_repository_url, repository_id
 
 
 class RepositoryCRUD:
@@ -11,7 +14,8 @@ class RepositoryCRUD:
         return db.query(Repository).filter(Repository.id == repository_id).first()
 
     def get_repository_by_url(self, db: Session, repo_url: str) -> Repository | None:
-        return db.query(Repository).filter(Repository.repo_url == repo_url).first()
+        normalized = normalize_repository_url(repo_url)
+        return db.query(Repository).filter(Repository.normalized_url == normalized).first()
 
     def get_latest_analysis_report(
         self,
@@ -26,11 +30,21 @@ class RepositoryCRUD:
         )
 
     def get_or_create_repository(self, db: Session, repo_url: str) -> Repository:
-        repository = self.get_repository_by_url(db, repo_url)
+        normalized = normalize_repository_url(repo_url)
+        repository = self.get_repository_by_url(db, normalized)
         if repository is not None:
             return repository
 
-        repository = Repository(repo_url=repo_url)
+        repo_uuid = repository_id(normalized)
+        host = urlsplit(normalized).hostname or ""
+        provider = "gitlab" if "gitlab" in host else "github"
+        repository = Repository(
+            id=str(repo_uuid),
+            normalized_url=normalized,
+            provider=provider,
+            tracked_branch="HEAD",
+            git_dir=f"data/git/{repo_uuid}",
+        )
         db.add(repository)
         db.flush()
         return repository
