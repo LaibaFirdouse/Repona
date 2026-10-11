@@ -5,6 +5,7 @@ from app.db.session import get_db
 from app.schemas.qa import RepositoryQuestionRequest, RepositoryQuestionResponse
 from app.services.refresh_service import RefreshError, RefreshService
 from app.retrieval.answer import AnswerService, Cancelled, RetrievalError
+from app.services.llm.base import LLMProviderError
 
 router = APIRouter(tags=["repository qa"])
 refresh_service = RefreshService()
@@ -21,6 +22,8 @@ def ask_repository_question(
         answered = None
         if outcome.action == "serve":
             answered = answer_service.answer(db, request.question, outcome)
+    except LLMProviderError as error:
+        raise HTTPException(status_code=503, detail="the model provider is unavailable") from error
     except RefreshError as error:
         raise HTTPException(status_code=error.status_code, detail=error.detail) from error
     except RetrievalError as error:

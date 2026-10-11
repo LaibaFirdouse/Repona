@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from app.retrieval.answer import parse_claims
+from app.retrieval.model_call import parse_claims
 from app.retrieval.fusion import (
     ChunkChoice,
     GraphEdge,
@@ -102,8 +102,22 @@ class PacketTests(unittest.TestCase):
 
     def test_no_citations_are_not_valid(self) -> None:
         kept, valid = review_claims([{"kind": "suggestion", "text": "rename it", "evidence_ids": []}], {"chunk-1"})
+        self.assertEqual(kept, [])
         self.assertFalse(valid)
-        self.assertEqual(kept[0]["kind"], "suggestion")
+
+    def test_an_inference_needs_a_packet_id(self) -> None:
+        kept, valid = review_claims(
+            [{"kind": "inference", "text": "Login delegates to the session store.", "evidence_ids": ["chunk-1"]}],
+            {"chunk-1"},
+        )
+        self.assertTrue(valid)
+        self.assertEqual(kept[0]["kind"], "inference")
+        dropped, dropped_valid = review_claims(
+            [{"kind": "suggestion", "text": "rename it", "evidence_ids": ["missing"]}],
+            {"chunk-1"},
+        )
+        self.assertEqual(dropped, [])
+        self.assertFalse(dropped_valid)
 
     def test_one_valid_citation_is_accepted(self) -> None:
         kept, valid = review_claims(
@@ -149,7 +163,7 @@ class PacketTests(unittest.TestCase):
 
     def test_model_json_is_parsed_from_a_fence(self) -> None:
         raw = '```json\n' + json.dumps({"claims": [{"kind": "observed", "text": "yes", "evidence_ids": ["c"]}]}) + "\n```"
-        self.assertEqual(parse_claims(raw)[0]["text"], "yes")
+        self.assertEqual(parse_claims(raw).claims[0]["text"], "yes")
 
 
 if __name__ == "__main__":

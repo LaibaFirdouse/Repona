@@ -77,27 +77,21 @@ def estimate_tokens(text: str) -> int:
 
 
 def review_claims(claims: list[dict], valid_ids: set[str]) -> tuple[list[dict], bool]:
-    """Keep a claim that still has one valid id. Do not treat that id as semantic support."""
+    """Keep a claim that still has one packet id. That id is not semantic support."""
     saw_invalid = False
-    saw_any_id = False
     kept: list[dict] = []
     for claim in claims:
         kind = claim.get("kind")
         if kind not in {"observed", "inference", "suggestion"}:
             continue
         raw_ids = [str(item) for item in claim.get("evidence_ids") or []]
-        if raw_ids:
-            saw_any_id = True
         if any(item not in valid_ids for item in raw_ids):
             saw_invalid = True
         good = [item for item in raw_ids if item in valid_ids]
-        if kind == "observed" and not good:
-            continue
-        if kind != "observed" and raw_ids and not good:
+        if not good:
             continue
         kept.append({"kind": kind, "text": str(claim.get("text") or ""), "evidence_ids": good})
-    observed_ok = all(claim["evidence_ids"] for claim in kept if claim["kind"] == "observed")
-    citations_valid = bool(kept) and saw_any_id and not saw_invalid and observed_ok
+    citations_valid = bool(kept) and not saw_invalid
     return kept, citations_valid
 
 

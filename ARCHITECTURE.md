@@ -137,19 +137,21 @@ def build_system_prompt(self) -> str:
 
 ### Sending to Ollama (`ollama_provider.py`)
 
-Stop sequences keep the model from rambling after the JSON, and `num_predict`
-bounds the maximum output length so slow machines finish within the timeout:
+`num_predict` is the output-token limit passed into `generate`. The ask path
+uses the same value that was reserved when the evidence packet was packed
+(`OPENAI_MAX_OUTPUT_TOKENS`):
 
 ```python
 # ollama_provider.py
 payload = {
     "model": self.model,  # e.g. "qwen2.5:1.5b"
-    "prompt": combined_prompt,
+    "messages": [
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": user_message},
+    ],
     "stream": False,
-    "options": {
-        "num_predict": self.num_predict,  # e.g. 800 max output tokens
-        "stop": ["\n\nHuman:", "\n\nUser:"]
-    }
+    "format": "json",
+    "options": {"num_predict": max_output_tokens},
 }
 ```
 

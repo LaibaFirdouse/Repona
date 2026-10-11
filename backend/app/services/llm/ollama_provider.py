@@ -29,7 +29,6 @@ class OllamaProvider(BaseLLMProvider):
         base_url: str | None = None,
         model: str | None = None,
         timeout: float | None = None,
-        num_predict: int | None = None,
         connect_timeout: float = 3.0,
     ) -> None:
         self.base_url = (
@@ -41,25 +40,12 @@ class OllamaProvider(BaseLLMProvider):
             if timeout is not None
             else (os.getenv("OLLAMA_TIMEOUT") or settings.ollama_timeout)
         )
-        # Bound the number of tokens Ollama may generate so a slow or
-        # rambling model terminates well within the request timeout instead
-        # of generating until the context window fills.
-        self.num_predict = int(
-            num_predict
-            if num_predict is not None
-            else (os.getenv("OLLAMA_NUM_PREDICT") or settings.ollama_num_predict)
-        )
-        # Short timeout used only to probe whether a candidate URL is reachable,
-        # so dead endpoints (e.g. host.docker.internal on a Linux host) fail fast
-        # instead of blocking for the full generation timeout.
         self.connect_timeout = connect_timeout
 
     def _candidate_base_urls(self) -> list[str]:
         configured = self.base_url.rstrip("/")
         candidates = [configured]
         if _is_running_in_docker():
-            # Inside a container host.docker.internal resolves to the host via
-            # the host-gateway; loopback addresses only reach the container.
             fallbacks = [
                 "http://host.docker.internal:11434",
                 "http://172.17.0.1:11434",
@@ -67,9 +53,6 @@ class OllamaProvider(BaseLLMProvider):
                 "http://127.0.0.1:11434",
             ]
         else:
-            # On a native Linux host host.docker.internal does not resolve and
-            # the default bridge gateway is usually not where Ollama listens;
-            # prefer loopback addresses so unreachable URLs fail fast.
             fallbacks = [
                 "http://localhost:11434",
                 "http://127.0.0.1:11434",
@@ -83,53 +66,40 @@ class OllamaProvider(BaseLLMProvider):
     def _find_reachable_base_url(self) -> str | None:
         """Return the first candidate that answers within connect_timeout."""
         for base_url in self._candidate_base_urls():
-            print(f"Trying URL: {base_url}")
             request = urllib.request.Request(
                 f"{base_url}/api/tags",
                 headers={"Content-Type": "application/json"},
                 method="GET",
             )
             try:
-                with urllib.request.urlopen(
-                    request, timeout=self.connect_timeout
-                ) as response:
+                with urllib.request.urlopen(request, timeout=self.connect_timeout) as response:
                     response.read()
             except Exception:
                 continue
             return base_url
         return None
 
-    def generate(self, prompt: str) -> str:
-        if not prompt.strip():
-            raise LLMProviderError("Prompt cannot be empty.")
-        print(f"Model = {self.model}")
-        print(f"Base URL = {self.base_url}")
-
-        payload = {
-            "model": self.model,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "num_predict": self.num_predict,
-                "stop": [
-                    "\n\nHuman:",
-                    "\n\nUser:",
-                ]
-            },
-        }
-        request_data = json.dumps(payload).encode("utf-8")
+    def generate(self, system_message: str, user_message: str, max_output_tokens: int) -> str:
+        if not user_message.strip() or max_output_tokens < 1:
+            raise LLMProviderError("the model provider is unavailable")
 
         reachable_base_url = self._find_reachable_base_url()
         if reachable_base_url is None:
-            raise LLMProviderError(
-                "Could not reach Ollama at any candidate URL: "
-                + ", ".join(self._candidate_base_urls())
-            )
-        print(f"Using reachable URL: {reachable_base_url}")
+            raise LLMProviderError("the model provider is unavailable")
 
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message},
+            ],
+            "stream": False,
+            "format": "json",
+            "options": {"num_predict": max_output_tokens},
+        }
         request = urllib.request.Request(
-            f"{reachable_base_url}/api/generate",
-            data=request_data,
+            f"{reachable_base_url}/api/chat",
+            data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
@@ -137,18 +107,15 @@ class OllamaProvider(BaseLLMProvider):
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 raw_response = response.read().decode("utf-8")
         except (urllib.error.URLError, TimeoutError, OSError) as error:
-            raise LLMProviderError(
-                f"Ollama request to {reachable_base_url} failed after "
-                f"{self.timeout}s: {error}"
-            ) from error
+            raise LLMProviderError("the model provider is unavailable") from error
 
         try:
             payload_response = json.loads(raw_response)
         except json.JSONDecodeError as error:
-            raise LLMProviderError("Ollama returned invalid JSON.") from error
+            raise LLMProviderError("the model provider is unavailable") from error
 
-        content = payload_response.get("response", "")
+        message = payload_response.get("message") if isinstance(payload_response, dict) else None
+        content = message.get("content") if isinstance(message, dict) else None
         if not isinstance(content, str) or not content.strip():
-            raise LLMProviderError("Ollama returned an empty response.")
-
+            raise LLMProviderError("the model provider is unavailable")
         return content

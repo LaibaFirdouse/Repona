@@ -6,5 +6,5 @@ class LLMProviderError(Exception):
 
 
 class BaseLLMProvider:
-    def generate(self, prompt: str) -> str:
+    def generate(self, system_message: str, user_message: str, max_output_tokens: int) -> str:
         raise NotImplementedError

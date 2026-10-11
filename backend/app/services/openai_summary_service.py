@@ -9,7 +9,8 @@ from app.schemas.repository import (
     RepositorySummaryResult,
     TokenUsage,
 )
-from app.services.llm.base import BaseLLMProvider, LLMProviderError
+from app.core.config import settings
+from app.services.llm.base import BaseLLMProvider
 from app.services.llm.llm_factory import LLMFactory
 
 
@@ -93,18 +94,10 @@ class OpenAISummaryService:
 
     
     def call_llm(self, system_prompt: str, user_prompt: str) -> str:
-           prompt = self.build_provider_prompt(system_prompt, user_prompt)
-           print("=" * 80)
-           print("PROMPT LENGTH:", len(prompt))
-           print(prompt[:1000])   # only first 1000 chars
-           print("=" * 80)
-
-           try:
-             return self.llm_provider.generate(prompt)
-           except Exception as error:
-             import traceback
-             traceback.print_exc()
-             raise OpenAISummaryServiceError(str(error)) from error
+        try:
+            return self.llm_provider.generate(system_prompt, user_prompt, settings.openai_max_output_tokens)
+        except Exception as error:
+            raise OpenAISummaryServiceError("the model provider is unavailable") from error
         
 
     def build_provider_prompt(self, system_prompt: str, user_prompt: str) -> str:

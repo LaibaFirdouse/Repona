@@ -9,13 +9,6 @@ class RepositoryQuestionRequest(BaseModel):
     question: str = Field(..., min_length=3, max_length=2000)
 
 
-class RepositoryQuestionAnswer(BaseModel):
-    answer: str
-    confidence: str
-    sources: list[str]
-    graph_context_used: bool
-
-
 class Claim(BaseModel):
     kind: Literal["observed", "inference", "suggestion"]
     text: str
