@@ -76,6 +76,19 @@ def estimate_tokens(text: str) -> int:
     return max(1, len(text.encode("utf-8")) // 4)
 
 
+def render_answer(claims: list[dict]) -> str:
+    """Turn kept claims into the sentences a person reads."""
+    sentences = []
+    for claim in claims:
+        text = str(claim.get("text") or "").strip()
+        if not text:
+            continue
+        if text[-1] not in ".?!":
+            text += "."
+        sentences.append(text)
+    return " ".join(sentences) if sentences else NO_CITED_CLAIM
+
+
 def review_claims(claims: list[dict], valid_ids: set[str]) -> tuple[list[dict], bool]:
     """Keep a claim that still has one packet id. That id is not semantic support."""
     saw_invalid = False

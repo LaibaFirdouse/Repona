@@ -6,10 +6,10 @@ from pydantic import BaseModel, Field, HttpUrl
 
 
 class RepositoryCreateRequest(BaseModel):
-    repo_url: HttpUrl = Field(..., description="URL of the repository to analyze")
-    tracked_branch: str = Field(..., min_length=1, max_length=255)
+    repo_url: HttpUrl = Field(..., description="Public GitHub URL, or a private URL with an access token")
+    tracked_branch: str | None = Field(default=None, max_length=255)
     user_id: str = Field(..., min_length=1, max_length=36)
-    access_token: str = Field(..., min_length=1)
+    access_token: str | None = Field(default=None, max_length=2048)
 
 
 class DirectoryEntry(BaseModel):

@@ -2,17 +2,20 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+AskProviderName = Literal["cursor", "claude", "codex", "ollama", "opencode", "zai", "copilot"]
+ASK_PROVIDERS = frozenset(("cursor", "claude", "codex", "ollama", "opencode", "zai", "copilot"))
+
 
 class RepositoryQuestionRequest(BaseModel):
     repository_id: str = Field(..., min_length=1)
     user_id: str = Field(..., min_length=1, max_length=36)
     question: str = Field(..., min_length=3, max_length=2000)
-
-
-class Claim(BaseModel):
-    kind: Literal["observed", "inference", "suggestion"]
-    text: str
-    evidence_ids: list[str]
+    provider: AskProviderName | None = None
+    model: str | None = Field(
+        default=None,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,80}(/[A-Za-z0-9][A-Za-z0-9._-]{0,80})?$",
+        description="Model id for the chosen provider. OpenCode uses provider/model. Omit it to use that provider's default.",
+    )
 
 
 class Citation(BaseModel):
@@ -22,18 +25,6 @@ class Citation(BaseModel):
     end_line: int | None
 
 
-class GraphFact(BaseModel):
-    edge_id: str
-    relationship_type: str
-    direction: Literal["outgoing", "incoming"]
-    source_id: str
-    target_id: str
-    source_name: str
-    target_name: str
-    mentioned_name: str
-    resolution: str
-
-
 class RepositoryQuestionResponse(BaseModel):
     repository_id: str
     question: str
@@ -41,7 +32,7 @@ class RepositoryQuestionResponse(BaseModel):
     generation_id: str | None = None
     commit_sha: str | None = None
     message: str
-    claims: list[Claim] = Field(default_factory=list)
+    answer: str = ""
     citations: list[Citation] = Field(default_factory=list)
-    graph_facts: list[GraphFact] = Field(default_factory=list)
-    citations_valid: bool = False
+    provider: AskProviderName | None = None
+    model: str | None = None

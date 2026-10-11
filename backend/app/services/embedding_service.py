@@ -37,9 +37,22 @@ class EmbeddingService:
         embedding = self.model.encode(
             text,
             convert_to_numpy=True,
+            show_progress_bar=False,
         )
 
         return embedding.tolist()
+
+    def generate_text_embeddings(self, texts: list[str]) -> list[list[float]]:
+        """Embed many texts with the same model and the same settings as one text."""
+        if not texts:
+            return []
+        encoded = self.model.encode(
+            texts,
+            convert_to_numpy=True,
+            batch_size=32,
+            show_progress_bar=False,
+        )
+        return [row.tolist() for row in encoded]
 
     def generate_embedding(
         self,

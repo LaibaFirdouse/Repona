@@ -15,6 +15,10 @@ class VectorStoreError(RuntimeError):
     pass
 
 
+_POINT_BATCH = 64
+_LOOKUP_BATCH = 256
+
+
 def collection_config(base_url: str, name: str) -> tuple[int, str]:
     existing = _request(base_url, f"/collections/{name}", method="GET", required=True)
     vectors = existing["result"]["config"]["params"]["vectors"]
@@ -46,10 +50,12 @@ def upsert_missing_points(
     fingerprint: str,
     vectors: dict[str, list[float]],
 ) -> None:
+    symbols = {item.id: item for item in draft.symbols}
+    files = {item.id: item for item in draft.files}
     points = []
     for chunk in draft.chunks:
-        symbol = next((item for item in draft.symbols if item.id == chunk.symbol_id), None)
-        file = next(item for item in draft.files if item.id == chunk.file_id)
+        symbol = symbols.get(chunk.symbol_id)
+        file = files[chunk.file_id]
         identifier = str(point_id(chunk.id, chunk.embedding_input_hash, fingerprint))
         payload = _payload(chunk, file, symbol, repository_id, fingerprint)
         points.append((identifier, chunk, payload))
@@ -65,15 +71,15 @@ def upsert_missing_points(
             continue
         if current.get("chunk_id") != chunk.id or current.get("span_hash") != chunk.span_hash:
             raise VectorStoreError(f"point {identifier} does not match chunk {chunk.id}")
-    if not fresh:
-        return
-    _request(
-        base_url,
-        f"/collections/{collection}/points?wait=true",
-        method="PUT",
-        payload={"points": fresh},
-        required=True,
-    )
+    for start in range(0, len(fresh), _POINT_BATCH):
+        _request(
+            base_url,
+            f"/collections/{collection}/points?wait=true",
+            method="PUT",
+            payload={"points": fresh[start : start + _POINT_BATCH]},
+            required=True,
+            timeout=120,
+        )
 
 
 def _payload(chunk: ChunkRecord, file, symbol, repository_id: str, fingerprint: str) -> dict:
@@ -121,22 +127,22 @@ def fetch_point_payloads(base_url: str, collection: str, identifiers: list[str])
 
 
 def _existing_points(base_url: str, collection: str, identifiers: list[str]) -> dict[str, dict]:
-    if not identifiers:
-        return {}
-    body = _request(
-        base_url,
-        f"/collections/{collection}/points",
-        method="POST",
-        payload={"ids": identifiers, "with_payload": True, "with_vector": False},
-        required=True,
-    )
-    found = {}
-    for point in body["result"]:
-        found[str(point["id"])] = point.get("payload") or {}
+    found: dict[str, dict] = {}
+    for start in range(0, len(identifiers), _LOOKUP_BATCH):
+        batch = identifiers[start : start + _LOOKUP_BATCH]
+        body = _request(
+            base_url,
+            f"/collections/{collection}/points",
+            method="POST",
+            payload={"ids": batch, "with_payload": True, "with_vector": False},
+            required=True,
+        )
+        for point in body["result"]:
+            found[str(point["id"])] = point.get("payload") or {}
     return found
 
 
-def _request(base_url: str, path: str, method: str, payload: dict | None = None, required: bool = False):
+def _request(base_url: str, path: str, method: str, payload: dict | None = None, required: bool = False, timeout: int = 30):
     data = None if payload is None else json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
         base_url.rstrip("/") + path,
@@ -145,7 +151,7 @@ def _request(base_url: str, path: str, method: str, payload: dict | None = None,
         method=method,
     )
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             raw = response.read().decode("utf-8")
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as exc:

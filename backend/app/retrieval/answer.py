@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
+from time import perf_counter
 
 from sqlalchemy import case, desc, func, or_
 from sqlalchemy.orm import Session
@@ -46,7 +47,7 @@ from app.retrieval.fusion import (
     select_edges,
 )
 from app.retrieval.model_call import collect_model_claims
-from app.retrieval.packet import NO_CITED_CLAIM, estimate_tokens, pack_evidence, review_claims
+from app.retrieval.packet import NO_CITED_CLAIM, estimate_tokens, pack_evidence, render_answer, review_claims
 from app.services.llm.llm_factory import LLMFactory
 from app.services.refresh_service import RefreshOutcome, _absolute, _embed
 from app.storage.identity import content_hash
@@ -88,12 +89,14 @@ class Answer:
         self.graph_facts = graph_facts
         self.citations_valid = citations_valid
         self.message = message
+        self.answer = render_answer(claims) if claims else message
 
 
 class AnswerService:
     def __init__(self, embed=None, search=None, complete=None, graph_session_factory=None, qdrant_url: str | None = None) -> None:
         self.embed = embed or _embed
         self.search = search or search_points
+        self._owns_complete = complete is None
         self.complete = complete or (
             lambda system_message, user_message, max_output_tokens: LLMFactory.create_provider().generate(
                 system_message, user_message, max_output_tokens
@@ -102,7 +105,16 @@ class AnswerService:
         self.graph_session_factory = graph_session_factory
         self.qdrant_url = settings.qdrant_url if qdrant_url is None else qdrant_url
 
-    def answer(self, db: Session, question: str, outcome: RefreshOutcome) -> Answer:
+    def answer(
+        self,
+        db: Session,
+        question: str,
+        outcome: RefreshOutcome,
+        trace: dict | None = None,
+        model: str | None = None,
+        provider: str | None = None,
+    ) -> Answer:
+        started = perf_counter()
         if outcome.pin_id is None or outcome.generation_id is None:
             raise RetrievalError(409, "the question has no pinned generation")
         self._ensure_open(db, outcome.pin_id)
@@ -159,13 +171,39 @@ class AnswerService:
             packet += f"\ntechnology {item['id']} {item['name']} {item['evidence_text']}"
         if estimate_tokens(SYSTEM_PROMPT + "\n" + packet) + settings.openai_max_output_tokens > settings.llm_context_tokens:
             raise RetrievalError(409, "the evidence does not fit the model context")
-        model_claims = collect_model_claims(
-            SYSTEM_PROMPT,
-            packet,
-            settings.openai_max_output_tokens,
-            self.complete,
-            lambda: self._require_pin(db, outcome.pin_id),
-        )
+        if trace is not None:
+            trace["retrieval_seconds"] = perf_counter() - started
+            trace["packet_spans"] = [
+                {
+                    "chunk_id": span["chunk_id"],
+                    "qualified_name": span["qualified_name"],
+                    "chunk_kind": span["chunk_kind"],
+                    "text": span["text"],
+                }
+                for span in packed.spans
+            ]
+            trace["packet_technologies"] = [
+                {"id": item["id"], "name": item["name"]} for item in packed.technologies
+            ]
+        complete = self.complete
+        if self._owns_complete and (model or provider):
+            chosen_model = model
+            chosen_provider = provider
+            complete = lambda system_message, user_message, max_output_tokens: LLMFactory.create_provider(
+                chosen_model, chosen_provider
+            ).generate(system_message, user_message, max_output_tokens)
+        model_started = perf_counter()
+        try:
+            model_claims = collect_model_claims(
+                SYSTEM_PROMPT,
+                packet,
+                settings.openai_max_output_tokens,
+                complete,
+                lambda: self._require_pin(db, outcome.pin_id),
+            )
+        finally:
+            if trace is not None:
+                trace["model_seconds"] = perf_counter() - model_started
         valid_ids = {span["chunk_id"] for span in packed.spans}
         valid_ids.update(edge.edge_id for edge in packed.edges)
         valid_ids.update(item["id"] for item in packed.technologies)

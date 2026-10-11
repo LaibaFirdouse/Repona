@@ -28,10 +28,10 @@ class TechnologyTests(unittest.TestCase):
         self.assertNotIn("name", [row.name for row in package])
         pyproject = technologies_for_manifest(
             "pyproject.toml",
-            b'[project]\ndependencies = ["sqlalchemy>=2"]\n[tool.poetry.dependencies]\npython = "^3.12"\nrequests = "^2"\n',
+            b'[project]\ndependencies = ["sqlalchemy>=2"]\n[project.optional-dependencies]\ndocs = ["sphinx"]\n[dependency-groups]\ndev = ["ruff"]\n[tool.poetry.dependencies]\npython = "^3.12"\nrequests = "^2"\n',
             "file-3",
         )
-        self.assertEqual({row.name for row in pyproject}, {"sqlalchemy", "requests"})
+        self.assertEqual({row.name for row in pyproject}, {"sqlalchemy", "sphinx", "ruff", "requests"})
 
 
 class CoordinationTests(unittest.TestCase):

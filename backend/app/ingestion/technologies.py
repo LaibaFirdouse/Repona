@@ -58,20 +58,42 @@ def _pyproject(payload: bytes, file_id: str) -> list[TechnologyRecord]:
         document = tomllib.loads(payload.decode("utf-8", errors="replace"))
     except tomllib.TOMLDecodeError:
         return []
-    rows = []
     project = document.get("project") or {}
-    for entry in project.get("dependencies") or []:
-        text = str(entry).strip()
-        package = text.split(";", 1)[0]
-        for separator in ("==", ">=", "<=", "~=", "!=", ">", "<"):
-            package = package.split(separator, 1)[0]
-        package = package.split("[", 1)[0].strip().strip("'\"")
-        if package:
-            rows.append(TechnologyRecord(package, file_id, text))
+    rows = _requirement_rows(project.get("dependencies"), file_id)
+    rows.extend(_group_rows(project.get("optional-dependencies"), file_id))
+    rows.extend(_group_rows(document.get("dependency-groups"), file_id))
     poetry = ((document.get("tool") or {}).get("poetry") or {}).get("dependencies") or {}
     if isinstance(poetry, dict):
         for package, spec in poetry.items():
-            if package == "python":
+            if str(package).lower() == "python":
                 continue
             rows.append(TechnologyRecord(str(package), file_id, f"{package} = {spec}"))
     return rows
+
+
+def _group_rows(groups: object, file_id: str) -> list[TechnologyRecord]:
+    if not isinstance(groups, dict):
+        return []
+    rows: list[TechnologyRecord] = []
+    for entries in groups.values():
+        rows.extend(_requirement_rows(entries, file_id))
+    return rows
+
+
+def _requirement_rows(entries: object, file_id: str) -> list[TechnologyRecord]:
+    if not isinstance(entries, list):
+        return []
+    rows = []
+    for entry in entries:
+        text = str(entry).strip()
+        package = _package_name(text)
+        if package and package.lower() != "python":
+            rows.append(TechnologyRecord(package, file_id, text))
+    return rows
+
+
+def _package_name(text: str) -> str:
+    package = text.split(";", 1)[0]
+    for separator in ("==", ">=", "<=", "~=", "!=", ">", "<"):
+        package = package.split(separator, 1)[0]
+    return package.split("[", 1)[0].strip().strip("'\"")

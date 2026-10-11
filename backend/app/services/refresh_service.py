@@ -19,11 +19,11 @@ from app.ingestion.persist import GenerationWriteError
 from app.ingestion.pipeline import complete_owned_refresh, ingest_commit
 from app.ingestion.refresh import question_plan, versions_match
 from app.ingestion.secrets import open_token, seal_token
-from app.ingestion.upstream import fetch_branch, ls_remote
+from app.ingestion.upstream import fetch_branch, ls_remote, ls_remote_head
 from app.ingestion.validation import ChecklistError, validate_worktree_bytes
 from app.models.catalog import IndexGeneration, SourceRevision
 from app.models.repository import Repository, RepositoryCredential, RepositoryMember, User
-from app.storage.identity import embedding_config_fingerprint, normalize_repository_url, repository_id
+from app.storage.identity import IdentityError, embedding_config_fingerprint, normalize_repository_url, repository_id
 from urllib.parse import urlsplit
 
 
@@ -55,6 +55,7 @@ class RefreshService:
     def __init__(
         self,
         probe=None,
+        probe_head=None,
         fetch=None,
         ingest=None,
         complete=None,
@@ -65,6 +66,7 @@ class RefreshService:
         snapshot_root: Path | None = None,
     ) -> None:
         self.probe = probe or ls_remote
+        self.probe_head = probe_head or ls_remote_head
         self.fetch = fetch or fetch_branch
         self.ingest = ingest or ingest_commit
         self.complete = complete or complete_owned_refresh
@@ -74,22 +76,41 @@ class RefreshService:
         self.credential_key = settings.credential_key if credential_key is None else credential_key
         self.snapshot_root = snapshot_root or (PROJECT_ROOT / "data" / "snapshots")
 
-    def index(self, db: Session, repo_url: str, tracked_branch: str, user_id: str, access_token: str) -> RefreshOutcome:
-        if not access_token:
-            raise RefreshError(400, "an access token is required")
-        normalized = normalize_repository_url(repo_url)
+    def index(
+        self,
+        db: Session,
+        repo_url: str,
+        tracked_branch: str | None,
+        user_id: str,
+        access_token: str | None = None,
+    ) -> RefreshOutcome:
+        token = (access_token or "").strip()
+        try:
+            normalized = normalize_repository_url(repo_url)
+        except IdentityError as error:
+            raise RefreshError(400, "the repository URL must be https") from error
+        requested_branch = (tracked_branch or "").strip()
+        if requested_branch:
+            result = self.probe(normalized, requested_branch, token)
+            branch = requested_branch
+        else:
+            result = self.probe_head(normalized, token)
+            branch = result.branch or ""
         repository = db.query(Repository).filter(Repository.normalized_url == normalized).one_or_none()
-        if repository is not None and repository.tracked_branch != tracked_branch:
-            raise RefreshError(400, "this repository is tracked on a different branch")
-        result = self.probe(normalized, tracked_branch, access_token)
         if result.upstream == "unauthorized":
             if repository is not None:
                 self._revoke(db, user_id, repository.id)
-            raise RefreshError(403, "the access token cannot read this repository")
-        if result.upstream != "authorized":
+            if token:
+                raise RefreshError(403, "the access token cannot read this repository")
+            raise RefreshError(403, "this repository is not public")
+        if result.upstream != "authorized" or not result.sha:
             raise RefreshError(503, "the repository host is unavailable")
-        repository = self._join(db, normalized, tracked_branch, user_id, access_token)
-        return self._apply(db, repository, user_id, access_token, result.sha)
+        if not branch:
+            raise RefreshError(400, "this repository has no default branch")
+        if repository is not None and repository.tracked_branch != branch:
+            raise RefreshError(400, "this repository is tracked on a different branch")
+        repository = self._join(db, normalized, branch, user_id, token)
+        return self._apply(db, repository, user_id, token, result.sha)
 
     def ask(self, db: Session, repository_id_value: str, user_id: str) -> RefreshOutcome:
         repository = db.get(Repository, repository_id_value)
@@ -106,13 +127,13 @@ class RefreshService:
             )
             .one_or_none()
         )
-        if credential is None:
-            raise RefreshError(403, "this user has no credential for this repository")
-        token = open_token(credential.token_ciphertext, self._key())
+        token = "" if credential is None else open_token(credential.token_ciphertext, self._key())
         result = self.probe(repository.normalized_url, repository.tracked_branch, token)
         if result.upstream == "unauthorized":
             self._revoke(db, user_id, repository.id)
-            raise RefreshError(403, "the access token cannot read this repository")
+            if token:
+                raise RefreshError(403, "the access token cannot read this repository")
+            raise RefreshError(403, "this repository is not public")
         if result.upstream != "authorized":
             raise RefreshError(503, "the repository host is unavailable")
         return self._apply(db, repository, user_id, token, result.sha)
@@ -263,7 +284,6 @@ class RefreshService:
         else:
             member.status = "active"
             member.revoked_at = None
-        sealed = seal_token(access_token, self._key())
         credential = (
             db.query(RepositoryCredential)
             .filter(
@@ -272,17 +292,21 @@ class RefreshService:
             )
             .one_or_none()
         )
-        if credential is None:
-            db.add(
-                RepositoryCredential(
-                    user_id=user_id,
-                    repository_id=repository.id,
-                    provider=repository.provider,
-                    token_ciphertext=sealed,
+        if access_token:
+            sealed = seal_token(access_token, self._key())
+            if credential is None:
+                db.add(
+                    RepositoryCredential(
+                        user_id=user_id,
+                        repository_id=repository.id,
+                        provider=repository.provider,
+                        token_ciphertext=sealed,
+                    )
                 )
-            )
-        else:
-            credential.token_ciphertext = sealed
+            else:
+                credential.token_ciphertext = sealed
+        elif credential is not None:
+            db.delete(credential)
         db.commit()
         db.refresh(repository)
         return repository
@@ -366,3 +390,16 @@ def _embed(text: str) -> list[float]:
         service = EmbeddingService(EMBEDDING_MODEL)
         setattr(_embed, "service", service)
     return service.generate_text_embedding(text)
+
+
+def _embed_many(texts: list[str]) -> list[list[float]]:
+    from app.services.embedding_service import EmbeddingService
+
+    service = getattr(_embed, "service", None)
+    if service is None:
+        service = EmbeddingService(EMBEDDING_MODEL)
+        setattr(_embed, "service", service)
+    return service.generate_text_embeddings(texts)
+
+
+_embed.many = _embed_many

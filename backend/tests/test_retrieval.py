@@ -14,7 +14,7 @@ from app.retrieval.fusion import (
     neighbor_chunk,
     select_edges,
 )
-from app.retrieval.packet import pack_evidence, review_claims
+from app.retrieval.packet import pack_evidence, render_answer, review_claims
 
 
 class FusionTests(unittest.TestCase):
@@ -112,6 +112,10 @@ class PacketTests(unittest.TestCase):
         )
         self.assertTrue(valid)
         self.assertEqual(kept[0]["kind"], "inference")
+        self.assertEqual(
+            render_answer(kept),
+            "Login delegates to the session store.",
+        )
         dropped, dropped_valid = review_claims(
             [{"kind": "suggestion", "text": "rename it", "evidence_ids": ["missing"]}],
             {"chunk-1"},

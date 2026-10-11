@@ -78,6 +78,10 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(line_labels(ended, 0, 3), (1, 1))
         self.assertEqual(line_labels(ended, 0, 4), (1, 1))
         self.assertEqual(line_count(b"abc\n\n"), 2)
+        lines = b"ab\ncd\nef\n"
+        self.assertEqual(line_labels(lines, 3, 5), (2, 2))
+        self.assertEqual(line_labels(lines, 1, 4), (1, 2))
+        self.assertEqual(line_labels(lines, 6, 6), (None, None))
 
     def test_lexical_input_replaces_invalid_utf8(self) -> None:
         encoded = lexical_input("pkg.read", b"a\xffb")

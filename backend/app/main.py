@@ -1,8 +1,11 @@
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 
 from app.api.v1.router import api_router
-from app.core.config import settings
+from app.core.config import PROJECT_ROOT, settings
 from app.db.session import create_database_tables
+
+PAGE = PROJECT_ROOT / "frontend" / "index.html"
 
 
 def create_app() -> FastAPI:
@@ -12,6 +15,10 @@ def create_app() -> FastAPI:
         debug=settings.debug,
     )
     app.include_router(api_router, prefix=settings.api_v1_prefix)
+
+    @app.get("/", include_in_schema=False)
+    def home() -> FileResponse:
+        return FileResponse(PAGE)
 
     @app.on_event("startup")
     def on_startup() -> None:

@@ -4,7 +4,8 @@ from datetime import datetime
 
 from app.ingestion.refresh import question_plan, versions_match
 from app.ingestion.secrets import open_token, seal_token
-from app.ingestion.upstream import ls_remote
+from app.ingestion.upstream import ls_remote, ls_remote_head
+from app.schemas.repository import RepositoryCreateRequest
 from app.ingestion.versions import (
     CHUNKING_VERSION,
     INCLUSION_RULES_VERSION,
@@ -83,6 +84,57 @@ class UpstreamTests(unittest.TestCase):
         self.assertIn("credential.helper=", seen[0])
         self.assertTrue(any(part.startswith("http.extraHeader=Authorization: Bearer ") for part in seen[0]))
 
+    def test_public_url_is_fetched_without_a_token(self) -> None:
+        seen = []
+
+        def runner(command, check, capture_output, timeout):
+            seen.append(command)
+            stdout = b"ref: refs/heads/main\tHEAD\n" + b"cd" * 20 + b"\tHEAD\n"
+            return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr=b"")
+
+        probe = ls_remote_head("https://github.com/org/repo", "", runner=runner)
+        self.assertEqual(probe.upstream, "authorized")
+        self.assertEqual(probe.branch, "main")
+        self.assertEqual(probe.sha, "cd" * 20)
+        self.assertFalse(any("Authorization" in part for part in seen[0]))
+        self.assertIn("--symref", seen[0])
+
+    def test_fetch_takes_only_the_current_commit(self) -> None:
+        from pathlib import Path
+        import tempfile
+
+        from app.ingestion.upstream import fetch_branch
+
+        seen = []
+
+        def runner(command, check, capture_output, timeout):
+            seen.append(command)
+            if command[:2] == ["git", "init"]:
+                return subprocess.CompletedProcess(command, 0, stdout=b"", stderr=b"")
+            if "rev-parse" in command:
+                return subprocess.CompletedProcess(command, 0, stdout=b"ab" * 20 + b"\n", stderr=b"")
+            return subprocess.CompletedProcess(command, 0, stdout=b"", stderr=b"")
+
+        with tempfile.TemporaryDirectory() as directory:
+            sha = fetch_branch(Path(directory), "https://github.com/org/repo", "canary", "", runner=runner)
+        self.assertEqual(sha, "ab" * 20)
+        fetch = next(command for command in seen if "fetch" in command)
+        self.assertIn("--depth", fetch)
+        self.assertIn("1", fetch)
+        self.assertFalse(any("Authorization" in part for part in fetch))
+
+    def test_missing_public_repository_is_unauthorized(self) -> None:
+        def runner(command, check, capture_output, timeout):
+            return subprocess.CompletedProcess(
+                command,
+                128,
+                stdout=b"",
+                stderr=b"fatal: could not read Username for 'https://github.com': terminal prompts disabled",
+            )
+
+        probe = ls_remote("https://github.com/org/private", "main", "", runner=runner)
+        self.assertEqual(probe.upstream, "unauthorized")
+
     def test_authentication_failure_is_unauthorized(self) -> None:
         def runner(command, check, capture_output, timeout):
             return subprocess.CompletedProcess(command, 128, stdout=b"", stderr=b"Authentication failed")
@@ -97,6 +149,16 @@ class UpstreamTests(unittest.TestCase):
 
         probe = ls_remote("https://github.com/org/repo", "dev", "secret-token", runner=runner)
         self.assertEqual((probe.upstream, probe.sha), ("unavailable", None))
+
+
+class PublicRepositoryRequestTests(unittest.TestCase):
+    def test_a_public_github_url_does_not_require_a_token_or_branch(self) -> None:
+        request = RepositoryCreateRequest(
+            repo_url="https://github.com/pallets/itsdangerous",
+            user_id="local-user",
+        )
+        self.assertIsNone(request.access_token)
+        self.assertIsNone(request.tracked_branch)
 
 
 class SecretTests(unittest.TestCase):

@@ -2,10 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.qa import RepositoryQuestionRequest, RepositoryQuestionResponse
+from app.schemas.qa import ASK_PROVIDERS, RepositoryQuestionRequest, RepositoryQuestionResponse
 from app.services.refresh_service import RefreshError, RefreshService
 from app.retrieval.answer import AnswerService, Cancelled, RetrievalError
 from app.services.llm.base import LLMProviderError
+from app.services.llm.llm_factory import LLMFactory, provider_name
+
+def _answered_provider(requested: str | None) -> str | None:
+    selected = requested or provider_name()
+    if selected in ASK_PROVIDERS:
+        return selected
+    return None
+
 
 router = APIRouter(tags=["repository qa"])
 refresh_service = RefreshService()
@@ -21,7 +29,13 @@ def ask_repository_question(
         outcome = refresh_service.ask(db, request.repository_id, request.user_id)
         answered = None
         if outcome.action == "serve":
-            answered = answer_service.answer(db, request.question, outcome)
+            answered = answer_service.answer(
+                db,
+                request.question,
+                outcome,
+                model=request.model,
+                provider=request.provider,
+            )
     except LLMProviderError as error:
         raise HTTPException(status_code=503, detail="the model provider is unavailable") from error
     except RefreshError as error:
@@ -37,8 +51,8 @@ def ask_repository_question(
         generation_id=outcome.generation_id,
         commit_sha=outcome.commit_sha,
         message=answered.message if answered is not None else outcome.message,
-        claims=answered.claims if answered is not None else [],
+        answer=answered.answer if answered is not None else "",
         citations=answered.citations if answered is not None else [],
-        graph_facts=answered.graph_facts if answered is not None else [],
-        citations_valid=answered.citations_valid if answered is not None else False,
+        provider=_answered_provider(request.provider) if answered is not None else None,
+        model=(request.model or LLMFactory.configured_model(request.provider)) if answered is not None else None,
     )

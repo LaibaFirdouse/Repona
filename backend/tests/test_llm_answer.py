@@ -6,6 +6,8 @@ import urllib.request
 from contextlib import redirect_stdout
 from unittest.mock import patch
 
+from pydantic import ValidationError
+
 from openai import OpenAIError
 
 from app.api.v1.routes import ask as ask_route
@@ -15,6 +17,12 @@ from app.retrieval.model_call import collect_model_claims, parse_claims
 from app.retrieval.packet import review_claims
 from app.schemas.qa import RepositoryQuestionRequest
 from app.services.llm.base import LLMProviderError
+from app.services.llm.claude_provider import ClaudeProvider
+from app.services.llm.codex_provider import CodexProvider
+from app.services.llm.copilot_provider import CopilotProvider
+from app.services.llm.cursor_provider import CursorProvider
+from app.services.llm.opencode_provider import OpenCodeProvider
+from app.services.llm.zai_provider import ZaiProvider
 from app.services.llm.ollama_provider import OllamaProvider
 from app.services.llm.openai_provider import OpenAIProvider
 from app.services.refresh_service import RefreshOutcome
@@ -275,6 +283,125 @@ class ProviderTests(unittest.TestCase):
                 provider.generate("system", "user", 12)
         self.assertNotIn("secret.internal", str(caught.exception))
 
+    def test_cursor_returns_the_model_text_without_logging_the_prompt(self) -> None:
+        captured = {}
+
+        def runner(command, cwd, timeout):
+            captured["command"] = command
+            captured["cwd"] = cwd
+            captured["timeout"] = timeout
+            return json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": '{"claims": []}'})
+
+        provider = CursorProvider(model="composer-2.5-fast", timeout=9, executable="agent", runner=runner)
+        output = io.StringIO()
+        with redirect_stdout(output):
+            text = provider.generate("system text", "user text", 12)
+        self.assertEqual(text, '{"claims": []}')
+        self.assertEqual(captured["timeout"], 9)
+        self.assertEqual(captured["command"][0], "agent")
+        self.assertIn("--mode", captured["command"])
+        self.assertEqual(captured["command"][captured["command"].index("--model") + 1], "composer-2.5-fast")
+        self.assertIn("user text", captured["command"][-1])
+        self.assertNotIn("user text", output.getvalue())
+        self.assertTrue(captured["cwd"])
+
+    def test_cursor_failure_hides_the_prompt(self) -> None:
+        def runner(command, cwd, timeout):
+            raise OSError("user text leaked")
+
+        provider = CursorProvider(runner=runner)
+        with self.assertRaises(LLMProviderError) as caught:
+            provider.generate("system", "user text", 12)
+        self.assertNotIn("user text", str(caught.exception))
+
+    def test_claude_sends_the_system_prompt_with_tools_disabled(self) -> None:
+        captured = {}
+
+        def runner(command, cwd, timeout):
+            captured["command"] = command
+            return json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": '{"claims": []}'})
+
+        provider = ClaudeProvider(model="sonnet", timeout=9, executable="claude", runner=runner)
+        text = provider.generate("system text", "user text", 12)
+        self.assertEqual(text, '{"claims": []}')
+        self.assertEqual(captured["command"][captured["command"].index("--system-prompt") + 1], "system text")
+        self.assertEqual(captured["command"][captured["command"].index("--tools") + 1], "")
+        self.assertIn("--restricted", captured["command"])
+        self.assertIn("user text", captured["command"][-1])
+        self.assertNotIn("system text", captured["command"][-1])
+
+    def test_codex_uses_an_empty_read_only_directory(self) -> None:
+        captured = {}
+
+        def runner(command, cwd, timeout):
+            captured["command"] = command
+            captured["cwd"] = cwd
+            return '{"claims": []}'
+
+        provider = CodexProvider(model="gpt-5.6-luna", timeout=9, executable="codex", runner=runner)
+        text = provider.generate("system text", "user text", 12)
+        self.assertEqual(text, '{"claims": []}')
+        self.assertEqual(captured["command"][1], "exec")
+        self.assertIn("read-only", captured["command"])
+        self.assertEqual(captured["command"][captured["command"].index("--model") + 1], "gpt-5.6-luna")
+        self.assertEqual(captured["cwd"], captured["command"][captured["command"].index("-C") + 1])
+        self.assertIn("user text", captured["command"][-1])
+
+    def test_opencode_reads_text_events_from_an_empty_directory(self) -> None:
+        captured = {}
+
+        def runner(command, cwd, timeout):
+            captured["command"] = command
+            return "\n".join(
+                [
+                    json.dumps({"type": "step_start"}),
+                    json.dumps({"type": "text", "part": {"type": "text", "text": '{"claims": []}'}}),
+                ]
+            )
+
+        text = OpenCodeProvider(model="opencode/big-pickle", executable="opencode", runner=runner).generate(
+            "system text", "user text", 12
+        )
+        self.assertEqual(text, '{"claims": []}')
+        self.assertIn("--pure", captured["command"])
+        self.assertNotIn("--auto", captured["command"])
+        self.assertEqual(captured["command"][captured["command"].index("--model") + 1], "opencode/big-pickle")
+
+    def test_copilot_stays_inside_an_empty_directory(self) -> None:
+        captured = {}
+
+        def runner(command, cwd, timeout):
+            captured["command"] = command
+            captured["cwd"] = cwd
+            return '{"claims": []}'
+
+        text = CopilotProvider(model="auto", executable="copilot", runner=runner).generate("system text", "user text", 12)
+        self.assertEqual(text, '{"claims": []}')
+        self.assertNotIn("--allow-all-paths", captured["command"])
+        self.assertEqual(captured["cwd"], captured["command"][captured["command"].index("-C") + 1])
+        self.assertIn("user text", captured["command"][-1])
+
+    def test_zai_sends_system_and_user_without_logging_the_key(self) -> None:
+        captured = {}
+
+        def urlopen(request, timeout=None):
+            captured["url"] = request.full_url
+            captured["payload"] = json.loads(request.data.decode())
+            body = json.dumps({"choices": [{"message": {"content": '{"claims": []}'}}]}).encode()
+            return _Body(body)
+
+        provider = ZaiProvider(model="glm-5.3", api_key="secret-key", base_url="https://api.z.ai/api/paas/v4", timeout=8)
+        output = io.StringIO()
+        with patch.object(urllib.request, "urlopen", urlopen), redirect_stdout(output):
+            text = provider.generate("system text", "user text", 12)
+        self.assertEqual(text, '{"claims": []}')
+        self.assertEqual(captured["payload"]["model"], "glm-5.3")
+        self.assertEqual(captured["payload"]["max_tokens"], 12)
+        self.assertEqual(captured["payload"]["messages"][0]["content"], "system text")
+        self.assertIn("user text", captured["payload"]["messages"][1]["content"])
+        self.assertNotIn("secret-key", output.getvalue())
+        self.assertNotIn("secret-key", captured["url"])
+
 
 class AskRouteTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -301,6 +428,59 @@ class AskRouteTests(unittest.TestCase):
             ask_route.ask_repository_question(_request(), db=object())
         self.assertEqual(caught.exception.status_code, 408)
 
+    def test_the_caller_chooses_the_model(self) -> None:
+        recorder = _RecordingAnswer()
+        ask_route.refresh_service = _Refresh()
+        ask_route.answer_service = recorder
+        response = ask_route.ask_repository_question(
+            RepositoryQuestionRequest(
+                repository_id="repo",
+                user_id="user-1",
+                question="Where is login?",
+                model="grok-4.7-high-fast",
+            ),
+            db=object(),
+        )
+        self.assertEqual(recorder.model, "grok-4.7-high-fast")
+        self.assertEqual(response.model, "grok-4.7-high-fast")
+
+    def test_the_caller_chooses_claude_or_codex(self) -> None:
+        recorder = _RecordingAnswer()
+        ask_route.refresh_service = _Refresh()
+        ask_route.answer_service = recorder
+        response = ask_route.ask_repository_question(
+            RepositoryQuestionRequest(
+                repository_id="repo",
+                user_id="user-1",
+                question="Where is login?",
+                provider="codex",
+                model="gpt-5.6-luna",
+            ),
+            db=object(),
+        )
+        self.assertEqual(recorder.provider, "codex")
+        self.assertEqual(response.provider, "codex")
+        self.assertEqual(response.model, "gpt-5.6-luna")
+
+    def test_an_opencode_model_id_may_contain_one_slash(self) -> None:
+        request = RepositoryQuestionRequest(
+            repository_id="repo",
+            user_id="user-1",
+            question="Where is login?",
+            provider="opencode",
+            model="opencode/big-pickle",
+        )
+        self.assertEqual(request.model, "opencode/big-pickle")
+
+    def test_a_model_id_cannot_be_a_flag(self) -> None:
+        with self.assertRaises(ValidationError):
+            RepositoryQuestionRequest(
+                repository_id="repo",
+                user_id="user-1",
+                question="Where is login?",
+                model="--force",
+            )
+
 
 class PromptTests(unittest.TestCase):
     def test_repository_content_is_untrusted_data(self) -> None:
@@ -313,11 +493,26 @@ class _Refresh:
         return RefreshOutcome("serve", repository_id, "https://example.test/repo", "main", "abc", "gen", "ready", "pin")
 
 
+class _RecordingAnswer:
+    def __init__(self) -> None:
+        self.model = None
+        self.provider = None
+
+    def answer(self, db, question, outcome, trace=None, model=None, provider=None):
+        self.model = model
+        self.provider = provider
+        return type(
+            "Answer",
+            (),
+            {"claims": [], "citations": [], "graph_facts": [], "citations_valid": False, "message": "ready", "answer": ""},
+        )()
+
+
 class _FailingAnswer:
     def __init__(self, error: Exception) -> None:
         self.error = error
 
-    def answer(self, db, question, outcome):
+    def answer(self, db, question, outcome, trace=None, model=None, provider=None):
         raise self.error
 
 

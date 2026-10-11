@@ -343,16 +343,32 @@ def line_count(payload: bytes) -> int:
     return len(line_spans(payload))
 
 
-def line_labels(payload: bytes, start_byte: int, end_byte: int) -> tuple[int | None, int | None]:
+def line_labels(
+    payload: bytes,
+    start_byte: int,
+    end_byte: int,
+    spans: list[LineSpan] | None = None,
+) -> tuple[int | None, int | None]:
     if end_byte < start_byte:
         raise IdentityError("end_byte is before start_byte")
     if start_byte == end_byte:
         return None, None
-    first: int | None = None
-    last: int | None = None
-    for number, span in enumerate(line_spans(payload), start=1):
-        if span.start_byte < end_byte and span.end_byte > start_byte:
-            if first is None:
-                first = number
-            last = number
+    if spans is None:
+        spans = line_spans(payload)
+    low = 0
+    high = len(spans)
+    while low < high:
+        mid = (low + high) // 2
+        if spans[mid].end_byte <= start_byte:
+            low = mid + 1
+        else:
+            high = mid
+    if low >= len(spans) or spans[low].start_byte >= end_byte:
+        return None, None
+    first = low + 1
+    last = first
+    index = low + 1
+    while index < len(spans) and spans[index].start_byte < end_byte:
+        last = index + 1
+        index += 1
     return first, last

@@ -40,6 +40,13 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(kinds["method"].parent_index, parsed.symbols.index(kinds["class"]))
         self.assertIsNone(kinds["class"].parent_index)
 
+    def test_parameter_name_is_not_a_reference(self) -> None:
+        parsed = parse_file("app.py", b"def greet(user):\n    return helper(user)\n")
+        references = [mention.mentioned_name for mention in parsed.mentions if mention.relationship == "REFERENCES"]
+        calls = [mention.mentioned_name for mention in parsed.mentions if mention.relationship == "CALLS"]
+        self.assertEqual(references, ["user"])
+        self.assertEqual(calls, ["helper"])
+
 
 class AssembleTests(unittest.TestCase):
     def test_resolved_call_and_import_become_one_edge_each(self) -> None:
@@ -87,6 +94,24 @@ class AssembleTests(unittest.TestCase):
         self.assertTrue(module_ids)
         self.assertFalse(any(chunk.symbol_id in module_ids for chunk in draft.chunks))
         self.assertTrue(any(chunk.kind == "symbol_body" for chunk in draft.chunks))
+
+    def test_parallel_parse_keeps_serial_ids(self) -> None:
+        blobs = [
+            blob(f"pkg/file_{index:02d}.py", f"def item_{index}():\n    return {index}\n")
+            for index in range(40)
+        ]
+        blobs.append(blob("pkg/use.py", "from pkg.file_01 import item_1\n\ndef run():\n    return item_1()\n"))
+        serial = assemble_generation(REPO, "d" * 40, blobs, "f" * 64, GENERATION, workers=1)
+        parallel = assemble_generation(REPO, "d" * 40, blobs, "f" * 64, GENERATION, workers=2)
+        self.assertEqual([item.id for item in serial.files], [item.id for item in parallel.files])
+        self.assertEqual([item.directory_id for item in serial.files], [item.directory_id for item in parallel.files])
+        self.assertEqual([item.id for item in serial.symbols], [item.id for item in parallel.symbols])
+        self.assertEqual([item.id for item in serial.chunks], [item.id for item in parallel.chunks])
+        self.assertEqual([item.edge_id for item in serial.edges], [item.edge_id for item in parallel.edges])
+        self.assertEqual(
+            [(item.name, item.evidence_file_id, item.evidence_text) for item in serial.technologies],
+            [(item.name, item.evidence_file_id, item.evidence_text) for item in parallel.technologies],
+        )
 
 
 if __name__ == "__main__":

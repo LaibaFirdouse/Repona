@@ -174,7 +174,9 @@ def _walk(relative_path: str, payload: bytes, language: str, root) -> ParsedFile
     def enclosing_symbol() -> int | None:
         return stack[-1] if stack else None
 
-    def visit(node) -> None:
+    def visit(node, parameter_depth: int = 0) -> None:
+        if node.type in {"parameters", "formal_parameters"}:
+            parameter_depth += 1
         if node.type in IMPORT_TYPES:
             import_nodes.append(node)
             for name in _import_names(payload, node):
@@ -214,7 +216,7 @@ def _walk(relative_path: str, payload: bytes, language: str, root) -> ParsedFile
                 )
                 stack.append(len(symbols) - 1)
                 for child in node.children:
-                    visit(child)
+                    visit(child, parameter_depth)
                 stack.pop()
                 return
         if node.type in CALL_TYPES:
@@ -231,9 +233,9 @@ def _walk(relative_path: str, payload: bytes, language: str, root) -> ParsedFile
                 )
         elif (
             node.type == "identifier"
+            and parameter_depth == 0
             and not _is_declaration_name(node)
             and not _is_call_function(node)
-            and not _inside_parameters(node)
         ):
             mentions.append(
                 RawMention(
@@ -245,7 +247,7 @@ def _walk(relative_path: str, payload: bytes, language: str, root) -> ParsedFile
                 )
             )
         for child in node.children:
-            visit(child)
+            visit(child, parameter_depth)
 
     visit(root)
     import_spans = _contiguous_import_spans(payload, import_nodes)
@@ -341,15 +343,6 @@ def _span_for(spans: list[tuple[int, int]], start: int) -> tuple[int, int] | Non
         if span[0] <= start < span[1]:
             return span
     return None
-
-
-def _inside_parameters(node) -> bool:
-    current = node.parent
-    while current is not None:
-        if current.type in {"parameters", "formal_parameters"}:
-            return True
-        current = current.parent
-    return False
 
 
 def _is_declaration_name(node) -> bool:

@@ -91,7 +91,6 @@ def ingest_commit(
     repository.refresh_state = "running"
     repository.refresh_epoch = epoch
     repository.refresh_owner = owner
-    repository.refresh_generation_id = generation_key
     repository.refresh_heartbeat_at = now
     repository.refresh_lease_expires_at = lease_deadline(now)
     revision = ensure_source_revision(
@@ -119,6 +118,7 @@ def ingest_commit(
         collection_name(embedding_model, vector_dimensions),
         attempt,
     )
+    repository.refresh_generation_id = generation_key
     db.commit()
     _finish_generation(
         db,
@@ -218,17 +218,25 @@ def _finish_generation(
         if snapshot_mode == "create":
             creating = Path(revision.creating_path)
             publish = Path(revision.publish_path)
-            write_detached_tree(git_dir, commit_sha, creating)
-            created_blobs = read_commit_blobs(git_dir, commit_sha)
+            created_blobs = write_detached_tree(git_dir, commit_sha, creating)
             validate_worktree_bytes(git_dir, commit_sha, creating, created_blobs)
             promote_tree(creating, publish)
             publish_snapshot_claim(revision, owner)
             db.commit()
             revision = db.get(SourceRevision, revision_key)
-        blobs = read_commit_blobs(git_dir, commit_sha)
+            blobs = created_blobs
+        else:
+            blobs = read_commit_blobs(git_dir, commit_sha)
         validate_worktree_bytes(git_dir, commit_sha, Path(revision.snapshot_path), blobs)
         _renew_lease(db, repository_id, owner, epoch, datetime.utcnow())
-        draft = assemble_generation(repository_id, commit_sha, blobs, fingerprint, generation_key)
+        draft = assemble_generation(
+            repository_id,
+            commit_sha,
+            blobs,
+            fingerprint,
+            generation_key,
+            on_progress=lambda: _renew_lease(db, repository_id, owner, epoch, datetime.utcnow()),
+        )
         write_draft(db, repository_id, generation_key, fingerprint, draft)
         _renew_lease(db, repository_id, owner, epoch, datetime.utcnow())
         if _lost_ownership(db, repository_id, owner, epoch):
@@ -248,7 +256,7 @@ def _finish_generation(
                 raise ChecklistError("qdrant is required when the generation has chunks")
             collection = collection_name(embedding_model, vector_dimensions)
             ensure_collection(qdrant_url, collection, vector_dimensions)
-            vectors = {chunk.id: embed(chunk.lexical_text) for chunk in draft.chunks}
+            vectors = _embed_chunks(embed, draft.chunks, lambda: _renew_lease(db, repository_id, owner, epoch, datetime.utcnow()))
             upsert_missing_points(qdrant_url, collection, repository_id, draft, fingerprint, vectors)
             _assert_points(qdrant_url, collection, repository_id, generation_key, fingerprint, vector_dimensions, draft, db)
         publish_graph_epoch(graph_session, generation_key, epoch)
@@ -263,6 +271,28 @@ def _finish_generation(
             db.commit()
         _fail_if_owner(db, repository_id, generation_key, owner, epoch)
         raise
+
+
+def _embed_chunks(embed, chunks, renew) -> dict[str, list[float]]:
+    """Embed chunk text with the same model. A batch is several texts, not a different model."""
+    many = getattr(embed, "many", None)
+    vectors: dict[str, list[float]] = {}
+    if many is None:
+        for index, chunk in enumerate(chunks):
+            if index and index % 100 == 0:
+                renew()
+            vectors[chunk.id] = [float(value) for value in embed(chunk.lexical_text)]
+        return vectors
+    for start in range(0, len(chunks), 32):
+        if start:
+            renew()
+        batch = chunks[start : start + 32]
+        encoded = many([chunk.lexical_text for chunk in batch])
+        if len(encoded) != len(batch):
+            raise ChecklistError("the embedding model returned a different number of vectors")
+        for chunk, vector in zip(batch, encoded, strict=True):
+            vectors[chunk.id] = [float(value) for value in vector]
+    return vectors
 
 
 def _next_attempt(db: Session, revision_key: str, fingerprint: str) -> int:

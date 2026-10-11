@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import multiprocessing
+import os
 import posixpath
+import time
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from dataclasses import dataclass, field
 
 from app.ingestion.chunking import Span, build_chunks
@@ -27,6 +31,7 @@ from app.storage.identity import (
     lexical_input,
     line_count,
     line_labels,
+    line_spans,
     logical_file_key,
     symbol_id,
 )
@@ -134,6 +139,8 @@ def assemble_generation(
     blobs: list[SourceBlob],
     embedding_fingerprint: str,
     index_generation: str,
+    on_progress=None,
+    workers: int | None = None,
 ) -> GenerationDraft:
     included = [blob for blob in blobs if is_included(blob.relative_path, blob.mode)]
     included.sort(key=lambda blob: blob.relative_path.encode("utf-8"))
@@ -142,36 +149,15 @@ def assemble_generation(
     symbols_by_file: dict[str, list[SymbolRecord]] = {}
     file_by_path: dict[str, FileRecord] = {}
     directories: dict[str, DirectoryRecord] = {}
+    products = _file_products(repository, included, embedding_fingerprint, on_progress, workers)
 
-    for blob in included:
-        digest = content_hash(blob.payload)
-        repo_uuid = repository
-        path = blob.relative_path
-        directory = _ensure_directories(repo_uuid, path, directories)
-        record = FileRecord(
-            id=str(file_id(repo_uuid, path, digest)),
-            directory_id=directory,
-            logical_file_key=str(logical_file_key(repo_uuid, path)),
-            relative_path=path,
-            language=_language_name(path),
-            extension=_extension(path),
-            line_count=line_count(blob.payload),
-            byte_size=len(blob.payload),
-            content_hash=digest,
-            git_blob_id=blob.git_blob_id,
-            parse_status="not_parsed",
-            parse_message=None,
-        )
-        parsed = parse_file(path, blob.payload)
-        record.parse_status = parsed.parse_status
-        record.parse_message = parsed.parse_message
-        file_by_path[path] = record
-        parsed_by_path[path] = parsed
-        symbols_by_file[path] = _symbol_records(repo_uuid, record, parsed, blob.payload)
-        draft.chunks.extend(
-            _chunk_records(record, symbols_by_file[path], parsed, blob.payload, embedding_fingerprint)
-        )
-        draft.technologies.extend(_technologies(record, blob.payload))
+    for blob, (record, parsed, symbols, chunks, technologies) in zip(included, products, strict=True):
+        record.directory_id = _ensure_directories(repository, blob.relative_path, directories)
+        file_by_path[blob.relative_path] = record
+        parsed_by_path[blob.relative_path] = parsed
+        symbols_by_file[blob.relative_path] = symbols
+        draft.chunks.extend(chunks)
+        draft.technologies.extend(technologies)
 
     draft.files = list(file_by_path.values())
     draft.directories = list(directories.values())
@@ -179,6 +165,80 @@ def assemble_generation(
         draft.symbols.extend(symbols)
     draft.edges = _edges(index_generation, file_by_path, symbols_by_file, parsed_by_path, draft.directories)
     return draft
+
+
+def _file_products(repository: str, included: list[SourceBlob], fingerprint: str, on_progress, workers: int | None):
+    count = 1 if workers is None and len(included) < 32 else workers
+    if count is None:
+        count = min(4, os.cpu_count() or 2)
+    count = max(1, count)
+    if count == 1 or len(included) < 2:
+        products = []
+        renewed = time.monotonic()
+        for blob in included:
+            renewed = _renew_if_due(on_progress, renewed)
+            products.append(_build_file(repository, blob.relative_path, blob.payload, blob.git_blob_id, fingerprint))
+        return products
+    context = multiprocessing.get_context("spawn")
+    products: list = [None] * len(included)
+    with ProcessPoolExecutor(max_workers=count, mp_context=context) as pool:
+        pending = {}
+        next_index = 0
+        renewed = time.monotonic()
+        limit = count * 2
+        while next_index < len(included) or pending:
+            while next_index < len(included) and len(pending) < limit:
+                blob = included[next_index]
+                future = pool.submit(
+                    _build_file,
+                    repository,
+                    blob.relative_path,
+                    blob.payload,
+                    blob.git_blob_id,
+                    fingerprint,
+                )
+                pending[future] = next_index
+                next_index += 1
+            if not pending:
+                break
+            done, _ = wait(pending, timeout=30, return_when=FIRST_COMPLETED)
+            renewed = _renew_if_due(on_progress, renewed)
+            for future in done:
+                index = pending.pop(future)
+                products[index] = future.result()
+        return products
+
+
+def _renew_if_due(on_progress, renewed: float) -> float:
+    if on_progress is None or time.monotonic() - renewed < 30:
+        return renewed
+    on_progress()
+    return time.monotonic()
+
+
+def _build_file(repository: str, path: str, payload: bytes, git_blob_id: str, fingerprint: str):
+    digest = content_hash(payload)
+    record = FileRecord(
+        id=str(file_id(repository, path, digest)),
+        directory_id="",
+        logical_file_key=str(logical_file_key(repository, path)),
+        relative_path=path,
+        language=_language_name(path),
+        extension=_extension(path),
+        line_count=line_count(payload),
+        byte_size=len(payload),
+        content_hash=digest,
+        git_blob_id=git_blob_id,
+        parse_status="not_parsed",
+        parse_message=None,
+    )
+    parsed = parse_file(path, payload)
+    record.parse_status = parsed.parse_status
+    record.parse_message = parsed.parse_message
+    symbols = _symbol_records(repository, record, parsed, payload)
+    chunks = _chunk_records(record, symbols, parsed, payload, fingerprint)
+    technologies = _technologies(record, payload)
+    return record, parsed, symbols, chunks, technologies
 
 
 def _symbol_records(repository: str, file: FileRecord, parsed: ParsedFile, payload: bytes) -> list[SymbolRecord]:
@@ -191,6 +251,7 @@ def _symbol_records(repository: str, file: FileRecord, parsed: ParsedFile, paylo
             ordinals[id(symbol)] = ordinal
     records = []
     index_to_id: dict[int, str] = {}
+    spans = line_spans(payload)
     for index, symbol in enumerate(parsed.symbols):
         ordinal = ordinals[id(symbol)]
         sid = str(
@@ -204,7 +265,7 @@ def _symbol_records(repository: str, file: FileRecord, parsed: ParsedFile, paylo
             )
         )
         index_to_id[index] = sid
-        start_line, end_line = line_labels(payload, symbol.start_byte, symbol.end_byte)
+        start_line, end_line = line_labels(payload, symbol.start_byte, symbol.end_byte, spans)
         parent_id = None
         if symbol.parent_index is not None:
             parent_id = index_to_id[symbol.parent_index]
@@ -252,6 +313,7 @@ def _chunk_records(
         symbol_spans.append((key, symbol.kind, Span(symbol.start_byte, symbol.end_byte)))
     drafts = build_chunks(payload, symbol_spans, [Span(start, end) for start, end in parsed.import_spans])
     records = []
+    spans = line_spans(payload)
     for draft in drafts:
         symbol = by_key.get(draft.symbol_ordinal_key) if draft.symbol_ordinal_key else None
         span = payload[draft.start_byte : draft.end_byte]
@@ -259,7 +321,7 @@ def _chunk_records(
         prefix = ""
         if symbol is not None:
             prefix = context_prefix(symbol.qualified_name, symbol.signature)
-        start_line, end_line = line_labels(payload, draft.start_byte, draft.end_byte)
+        start_line, end_line = line_labels(payload, draft.start_byte, draft.end_byte, spans)
         records.append(
             ChunkRecord(
                 id=str(
@@ -330,6 +392,12 @@ def _edges(
                 add("DECLARES", symbol.parent_symbol_id, symbol.id)
 
     paths = set(files)
+    modules_by_id = {
+        symbol.id: symbol.id
+        for symbols in symbols_by_file.values()
+        for symbol in symbols
+        if symbol.kind == "module"
+    }
     for path, parsed in parsed_by_path.items():
         file = files[path]
         module = next((symbol for symbol in symbols_by_file[path] if symbol.kind == "module"), None)
@@ -337,7 +405,7 @@ def _edges(
             if mention.relationship == "IMPORTS":
                 candidate_paths = _import_targets(path, mention.mentioned_name, paths)
                 candidates = _endpoint_ids(candidate_paths, files, symbols_by_file)
-                _add_resolved(add, "IMPORTS", file.id, candidates, mention.mentioned_name, files, symbols_by_file, module)
+                _add_resolved(add, "IMPORTS", file.id, candidates, mention.mentioned_name, files, symbols_by_file, module, modules_by_id)
                 continue
             if mention.source_symbol_index is None:
                 source = module.id if module is not None else None
@@ -355,12 +423,13 @@ def _edges(
                 files,
                 symbols_by_file,
                 module,
+                modules_by_id,
                 unresolved_target=file.id,
             )
     return edges
 
 
-def _add_resolved(add, relationship, source, candidates, mentioned_name, files, symbols_by_file, module, unresolved_target=None):
+def _add_resolved(add, relationship, source, candidates, mentioned_name, files, symbols_by_file, module, modules_by_id, unresolved_target=None):
     if not candidates:
         target = unresolved_target if unresolved_target is not None else source
         add(relationship, source, target, mentioned_name, "unresolved")
@@ -369,7 +438,7 @@ def _add_resolved(add, relationship, source, candidates, mentioned_name, files, 
     for candidate in candidates:
         add(relationship, source, candidate, mentioned_name, resolution)
         if relationship == "IMPORTS" and resolution == "resolved" and module is not None:
-            target_module = _module_for_target(candidate, symbols_by_file)
+            target_module = modules_by_id.get(candidate)
             if target_module is not None:
                 add("DEPENDS_ON", module.id, target_module, "", "")
 
@@ -380,14 +449,6 @@ def _endpoint_ids(candidate_paths: list[str], files: dict[str, FileRecord], symb
         module = next((symbol for symbol in symbols_by_file[candidate] if symbol.kind == "module"), None)
         endpoints.append(module.id if module is not None else files[candidate].id)
     return endpoints
-
-
-def _module_for_target(target_id: str, symbols_by_file: dict[str, list[SymbolRecord]]) -> str | None:
-    for symbols in symbols_by_file.values():
-        for symbol in symbols:
-            if symbol.id == target_id and symbol.kind == "module":
-                return symbol.id
-    return None
 
 
 def _import_targets(source_path: str, specifier: str, paths: set[str]) -> list[str]:

@@ -9,8 +9,9 @@ from app.services.llm.base import BaseLLMProvider, LLMProviderError
 
 
 class OpenAIProvider(BaseLLMProvider):
-    def __init__(self, client: OpenAI | None = None) -> None:
+    def __init__(self, client: OpenAI | None = None, model: str | None = None) -> None:
         self.client = client
+        self.model = model
 
     def generate(self, system_message: str, user_message: str, max_output_tokens: int) -> str:
         if not user_message.strip() or max_output_tokens < 1:
@@ -23,7 +24,7 @@ class OpenAIProvider(BaseLLMProvider):
                 raise LLMProviderError("the model provider is unavailable")
             client = OpenAI(api_key=api_key, timeout=settings.openai_timeout)
 
-        model = os.getenv("OPENAI_MODEL") or settings.openai_model
+        model = self.model or os.getenv("OPENAI_MODEL") or settings.openai_model
         temperature = float(os.getenv("OPENAI_TEMPERATURE", settings.openai_temperature))
 
         try:
