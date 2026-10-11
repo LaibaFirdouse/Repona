@@ -82,7 +82,7 @@ class RepositoryService:
         request: RepositoryCreateRequest,
         db: Session,
     ) -> RepositoryCreateResponse:
-        repo_url = str(request.repo_url)
+        raise RepositoryServiceError("Repository indexing runs through the refresh service.")
 
         print("\n========== STEP 1 ==========")
         print("Starting repository analysis")

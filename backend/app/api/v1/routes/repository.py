@@ -1,27 +1,35 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.repository import RepositoryCreateRequest, RepositoryCreateResponse
-from app.services.repository_service import RepositoryService, RepositoryServiceError
+from app.services.refresh_service import RefreshError, RefreshService
 
 router = APIRouter(tags=["repository"])
-repository_service = RepositoryService()
+refresh_service = RefreshService()
 
 
-@router.post(
-    "/repository",
-    response_model=RepositoryCreateResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/repository", response_model=RepositoryCreateResponse, status_code=201)
 def create_repository(
     request: RepositoryCreateRequest,
     db: Session = Depends(get_db),
 ) -> RepositoryCreateResponse:
     try:
-        return repository_service.create_repository(request, db)
-    except RepositoryServiceError as error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error),
-        ) from error
+        outcome = refresh_service.index(
+            db,
+            str(request.repo_url),
+            request.tracked_branch,
+            request.user_id,
+            request.access_token,
+        )
+    except RefreshError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.detail) from error
+    return RepositoryCreateResponse(
+        repository_id=outcome.repository_id,
+        normalized_url=outcome.normalized_url,
+        tracked_branch=outcome.tracked_branch,
+        commit_sha=outcome.commit_sha,
+        generation_id=outcome.generation_id,
+        action=outcome.action,
+        message=outcome.message,
+    )

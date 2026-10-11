@@ -65,9 +65,7 @@ class RepositoryQAService:
         request: RepositoryQuestionRequest,
         db: Session,
     ) -> RepositoryQuestionResponse:
-        repository = self.repository_crud.get_repository_by_id(
-            db, request.repository_id
-        )
+        raise RepositoryQAServiceError("A question runs through the refresh service. Retrieval is a later phase.")
         if repository is None:
             raise RepositoryQAServiceError("Repository was not found.")
 

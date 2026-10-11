@@ -1,10 +1,11 @@
-from pydantic import BaseModel, Field
+from typing import Literal
 
-from app.schemas.repository import TokenUsage
+from pydantic import BaseModel, Field
 
 
 class RepositoryQuestionRequest(BaseModel):
     repository_id: str = Field(..., min_length=1)
+    user_id: str = Field(..., min_length=1, max_length=36)
     question: str = Field(..., min_length=3, max_length=2000)
 
 
@@ -18,5 +19,7 @@ class RepositoryQuestionAnswer(BaseModel):
 class RepositoryQuestionResponse(BaseModel):
     repository_id: str
     question: str
-    answer: RepositoryQuestionAnswer
-    token_usage: TokenUsage
+    action: Literal["serve", "wait"]
+    generation_id: str | None
+    commit_sha: str | None
+    message: str

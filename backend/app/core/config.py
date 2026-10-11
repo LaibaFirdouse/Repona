@@ -55,6 +55,7 @@ class Settings:
     neo4j_user: str = os.getenv("NEO4J_USER", "neo4j")
     neo4j_password: str | None = os.getenv("NEO4J_PASSWORD")
     qdrant_url: str = os.getenv("QDRANT_URL", "http://localhost:6333")
+    credential_key: str = os.getenv("CREDENTIAL_KEY", "")
     debug: bool = _get_bool_env("DEBUG", True)
 
 

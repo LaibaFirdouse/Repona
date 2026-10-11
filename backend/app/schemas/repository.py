@@ -7,6 +7,9 @@ from pydantic import BaseModel, Field, HttpUrl
 
 class RepositoryCreateRequest(BaseModel):
     repo_url: HttpUrl = Field(..., description="URL of the repository to analyze")
+    tracked_branch: str = Field(..., min_length=1, max_length=255)
+    user_id: str = Field(..., min_length=1, max_length=36)
+    access_token: str = Field(..., min_length=1)
 
 
 class DirectoryEntry(BaseModel):
@@ -59,11 +62,9 @@ class RepositoryGraphStats(BaseModel):
 
 class RepositoryCreateResponse(BaseModel):
     repository_id: str
-    analysis_report_id: str
-    repo_url: HttpUrl
-    status: str
+    normalized_url: str
+    tracked_branch: str
+    commit_sha: str | None
+    generation_id: str | None
+    action: Literal["serve", "wait"]
     message: str
-    metadata: RepositoryMetadata
-    summary: RepositorySummary
-    token_usage: TokenUsage
-    graph: RepositoryGraphStats

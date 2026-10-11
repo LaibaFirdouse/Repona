@@ -120,7 +120,99 @@ def ingest_commit(
         attempt,
     )
     db.commit()
+    _finish_generation(
+        db,
+        repository_id=repository_id,
+        revision_key=revision_key,
+        generation_key=generation_key,
+        owner=owner,
+        epoch=epoch,
+        git_dir=git_dir,
+        commit_sha=commit_sha,
+        snapshot_mode=snapshot_mode,
+        fingerprint=fingerprint,
+        embed=embed,
+        embedding_model=embedding_model,
+        vector_dimensions=vector_dimensions,
+        qdrant_url=qdrant_url,
+        graph_session=graph_session,
+    )
+    return generation_key
 
+
+def complete_owned_refresh(
+    db: Session,
+    *,
+    repository_id: str,
+    owner: str,
+    git_dir: Path,
+    embed,
+    embedding_model: str,
+    vector_dimensions: int,
+    snapshot_root: Path,
+    qdrant_url: str | None,
+    graph_session,
+) -> str:
+    """Finish the pending generation after this worker has adopted its expired lease."""
+    now = datetime.utcnow()
+    repository = db.query(Repository).filter(Repository.id == repository_id).with_for_update().one()
+    if repository.refresh_state != "running" or repository.refresh_owner != owner:
+        raise GenerationWriteError("refresh owner no longer holds this generation")
+    if repository.refresh_lease_expires_at is None or repository.refresh_lease_expires_at <= now:
+        raise GenerationWriteError("refresh lease has expired")
+    generation_key = repository.refresh_generation_id
+    generation = db.get(IndexGeneration, generation_key)
+    if generation is None or generation.status != "pending":
+        raise GenerationWriteError("pending generation is missing")
+    revision = db.get(SourceRevision, generation.source_revision_id)
+    if revision.snapshot_state == "deleting":
+        raise GenerationWriteError("work tree deletion is still in progress")
+    if revision.snapshot_state == "creating":
+        recover_creating_snapshot(revision, owner, now, git_dir, revision.commit_sha)
+    if revision.snapshot_state == "ready" and revision.snapshot_path:
+        snapshot_mode = "reuse"
+    else:
+        snapshot_mode = claim_snapshot(revision, owner, snapshot_root, now)
+    epoch = repository.refresh_epoch
+    db.commit()
+    _finish_generation(
+        db,
+        repository_id=repository_id,
+        revision_key=revision.id,
+        generation_key=generation_key,
+        owner=owner,
+        epoch=epoch,
+        git_dir=git_dir,
+        commit_sha=revision.commit_sha,
+        snapshot_mode=snapshot_mode,
+        fingerprint=generation.embedding_config_fingerprint,
+        embed=embed,
+        embedding_model=embedding_model,
+        vector_dimensions=vector_dimensions,
+        qdrant_url=qdrant_url,
+        graph_session=graph_session,
+    )
+    return generation_key
+
+
+def _finish_generation(
+    db: Session,
+    *,
+    repository_id: str,
+    revision_key: str,
+    generation_key: str,
+    owner: str,
+    epoch: int,
+    git_dir: Path,
+    commit_sha: str,
+    snapshot_mode: str,
+    fingerprint: str,
+    embed,
+    embedding_model: str,
+    vector_dimensions: int,
+    qdrant_url: str | None,
+    graph_session,
+) -> None:
     try:
         revision = db.get(SourceRevision, revision_key)
         if snapshot_mode == "create":
@@ -171,7 +263,6 @@ def ingest_commit(
             db.commit()
         _fail_if_owner(db, repository_id, generation_key, owner, epoch)
         raise
-    return generation_key
 
 
 def _next_attempt(db: Session, revision_key: str, fingerprint: str) -> int:
