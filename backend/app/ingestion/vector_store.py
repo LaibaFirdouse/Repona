@@ -98,6 +98,24 @@ def _payload(chunk: ChunkRecord, file, symbol, repository_id: str, fingerprint: 
     }
 
 
+def search_points(base_url: str, collection: str, vector: list[float], query_filter: dict, limit: int, offset: int) -> list[dict]:
+    body = _request(
+        base_url,
+        f"/collections/{collection}/points/search",
+        method="POST",
+        payload={
+            "vector": vector,
+            "filter": query_filter,
+            "limit": limit,
+            "offset": offset,
+            "with_payload": True,
+            "with_vector": False,
+        },
+        required=True,
+    )
+    return list(body.get("result") or [])
+
+
 def fetch_point_payloads(base_url: str, collection: str, identifiers: list[str]) -> dict[str, dict]:
     return _existing_points(base_url, collection, identifiers)
 

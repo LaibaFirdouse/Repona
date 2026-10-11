@@ -51,11 +51,16 @@ class Settings:
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     openai_temperature: float = _get_float_env("OPENAI_TEMPERATURE", 0.2)
     openai_max_output_tokens: int = _get_int_env("OPENAI_MAX_OUTPUT_TOKENS", 800)
+    llm_context_tokens: int = _get_int_env("LLM_CONTEXT_TOKENS", 128000)
     neo4j_uri: str = os.getenv("NEO4J_URI", "bolt://localhost:7687")
     neo4j_user: str = os.getenv("NEO4J_USER", "neo4j")
     neo4j_password: str | None = os.getenv("NEO4J_PASSWORD")
     qdrant_url: str = os.getenv("QDRANT_URL", "http://localhost:6333")
     credential_key: str = os.getenv("CREDENTIAL_KEY", "")
+    retrieval_lane_limit: int = _get_int_env("RETRIEVAL_LANE_LIMIT", 8)
+    retrieval_vector_raw_limit: int = _get_int_env("RETRIEVAL_VECTOR_RAW_LIMIT", 64)
+    retrieval_span_limit: int = _get_int_env("RETRIEVAL_SPAN_LIMIT", 12)
+    retrieval_edge_limit: int = _get_int_env("RETRIEVAL_EDGE_LIMIT", 24)
     debug: bool = _get_bool_env("DEBUG", True)
 
 

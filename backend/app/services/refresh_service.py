@@ -48,6 +48,7 @@ class RefreshOutcome:
     commit_sha: str | None
     generation_id: str | None
     message: str
+    pin_id: str | None = None
 
 
 class RefreshService:
@@ -154,7 +155,14 @@ class RefreshService:
             if pin is None:
                 return self._outcome(repository, "wait", remote_sha, None, "The active snapshot cannot be pinned.")
             db.commit()
-            return self._outcome(repository, "serve", revision.commit_sha, generation.id, "The active generation matches this commit.")
+            return self._outcome(
+                repository,
+                "serve",
+                revision.commit_sha,
+                generation.id,
+                "The active generation matches this commit.",
+                pin.id,
+            )
         if answer == "serve" and generation is not None and revision is not None:
             return self._outcome(repository, "wait", remote_sha, None, "The active generation changed before it could be pinned.")
         return self._outcome(
@@ -311,7 +319,15 @@ class RefreshService:
             raise RefreshError(500, "CREDENTIAL_KEY is not configured")
         return self.credential_key
 
-    def _outcome(self, repository: Repository, action: str, commit_sha: str | None, generation_id: str | None, message: str) -> RefreshOutcome:
+    def _outcome(
+        self,
+        repository: Repository,
+        action: str,
+        commit_sha: str | None,
+        generation_id: str | None,
+        message: str,
+        pin_id: str | None = None,
+    ) -> RefreshOutcome:
         return RefreshOutcome(
             action=action,
             repository_id=repository.id,
@@ -320,6 +336,7 @@ class RefreshService:
             commit_sha=commit_sha,
             generation_id=generation_id,
             message=message,
+            pin_id=pin_id,
         )
 
 
