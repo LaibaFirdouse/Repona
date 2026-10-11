@@ -15,6 +15,12 @@ class VectorStoreError(RuntimeError):
     pass
 
 
+def collection_config(base_url: str, name: str) -> tuple[int, str]:
+    existing = _request(base_url, f"/collections/{name}", method="GET", required=True)
+    vectors = existing["result"]["config"]["params"]["vectors"]
+    return int(vectors["size"]), str(vectors["distance"])
+
+
 def ensure_collection(base_url: str, name: str, dimensions: int, distance: str = "Cosine") -> None:
     existing = _request(base_url, f"/collections/{name}", method="GET")
     if existing is not None:
@@ -90,6 +96,10 @@ def _payload(chunk: ChunkRecord, file, symbol, repository_id: str, fingerprint: 
         "span_hash": chunk.span_hash,
         "embedding_input_hash": chunk.embedding_input_hash,
     }
+
+
+def fetch_point_payloads(base_url: str, collection: str, identifiers: list[str]) -> dict[str, dict]:
+    return _existing_points(base_url, collection, identifiers)
 
 
 def _existing_points(base_url: str, collection: str, identifiers: list[str]) -> dict[str, dict]:

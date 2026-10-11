@@ -48,7 +48,12 @@ def write_graph(
         MERGE (generation:IndexGeneration {id: $generation_id})
         ON CREATE SET generation.repository_id = $repository_id
         MERGE (revision)-[link:HAS_GENERATION {index_generation_id: $generation_id}]->(generation)
-        SET link.edge_id = $edge_id, link.writer_epoch = $epoch
+        SET link.edge_id = CASE
+                WHEN link.writer_epoch IS NULL OR link.writer_epoch < $epoch THEN $edge_id
+                ELSE link.edge_id END,
+            link.writer_epoch = CASE
+                WHEN link.writer_epoch IS NULL OR link.writer_epoch < $epoch THEN $epoch
+                ELSE link.writer_epoch END
         """,
         repository_id=repository_id,
         revision_id=source_revision_id_value,
@@ -102,6 +107,46 @@ def write_graph(
         )
     for edge in draft.edges:
         _merge_edge(session, edge, generation_id, epoch)
+
+
+SERVING_EDGE_FILTER = """
+MATCH (generation:IndexGeneration {id: $index_generation_id})
+MATCH ()-[rel]-()
+WHERE rel.index_generation_id = generation.id
+  AND rel.writer_epoch = generation.graph_epoch
+"""
+
+
+def delete_edges_outside_expected(session, generation_id: str, expected_edge_ids: list[str], epoch: int) -> None:
+    session.run(
+        """
+        MATCH ()-[rel]->()
+        WHERE rel.index_generation_id = $generation_id
+          AND (
+            NOT rel.edge_id IN $expected
+            OR rel.writer_epoch IS NULL
+            OR rel.writer_epoch < $epoch
+          )
+        DELETE rel
+        """,
+        generation_id=generation_id,
+        expected=expected_edge_ids,
+        epoch=epoch,
+    )
+
+
+def current_epoch_edge_ids(session, generation_id: str, epoch: int) -> set[str]:
+    records = session.run(
+        """
+        MATCH ()-[rel]->()
+        WHERE rel.index_generation_id = $generation_id
+          AND rel.writer_epoch = $epoch
+        RETURN rel.edge_id AS edge_id
+        """,
+        generation_id=generation_id,
+        epoch=epoch,
+    )
+    return {record["edge_id"] for record in records}
 
 
 def publish_graph_epoch(session, generation_id: str, epoch: int) -> None:

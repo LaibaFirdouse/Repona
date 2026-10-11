@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from app.ingestion.materialize import publish_worktree, read_commit_blobs
+from app.ingestion.validation import validate_worktree_bytes
 
 
 class MaterializeTests(unittest.TestCase):
@@ -26,6 +27,7 @@ class MaterializeTests(unittest.TestCase):
             destination = root / "snapshot"
             publish_worktree(repo / ".git", commit, destination)
             self.assertEqual((destination / "app.py").read_bytes(), blobs[0].payload)
+            validate_worktree_bytes(repo / ".git", commit, destination, blobs)
 
 
 def _git(repo: Path, *args: str) -> bytes:

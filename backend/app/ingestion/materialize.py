@@ -36,11 +36,10 @@ def read_commit_blobs(git_dir: Path, commit_sha: str) -> list[SourceBlob]:
     return blobs
 
 
-def publish_worktree(git_dir: Path, commit_sha: str, destination: Path) -> None:
-    creating = destination.with_name(destination.name + ".creating")
+def write_detached_tree(git_dir: Path, commit_sha: str, creating: Path) -> None:
     if creating.exists():
         shutil.rmtree(creating)
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    creating.parent.mkdir(parents=True, exist_ok=True)
     _git(git_dir, "worktree", "add", "--detach", str(creating), commit_sha, text=False)
     for blob in read_commit_blobs(git_dir, commit_sha):
         if not is_included(blob.relative_path, blob.mode):
@@ -48,9 +47,18 @@ def publish_worktree(git_dir: Path, commit_sha: str, destination: Path) -> None:
         target = creating / blob.relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(blob.payload)
-    if destination.exists():
-        raise SnapshotError(f"snapshot already exists: {destination}")
-    creating.rename(destination)
+
+
+def promote_tree(creating: Path, publish: Path) -> None:
+    if publish.exists():
+        raise SnapshotError(f"snapshot already exists: {publish}")
+    creating.rename(publish)
+
+
+def publish_worktree(git_dir: Path, commit_sha: str, destination: Path) -> None:
+    creating = destination.with_name(destination.name + ".creating")
+    write_detached_tree(git_dir, commit_sha, creating)
+    promote_tree(creating, destination)
 
 
 def _git(git_dir: Path, *args: str, text: bool = False) -> bytes:

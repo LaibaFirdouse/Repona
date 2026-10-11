@@ -224,12 +224,22 @@ def write_draft(db: Session, repository_id: str, generation_id: str, fingerprint
     db.flush()
 
 
-def activate_generation(db: Session, repository_id: str, generation_id: str, owner: str, epoch: int) -> None:
+def activate_generation(db: Session, repository_id: str, generation_id: str, owner: str, epoch: int, now: datetime) -> None:
     repository = db.query(Repository).filter(Repository.id == repository_id).with_for_update().one()
-    if repository.refresh_owner != owner or repository.refresh_epoch != epoch:
+    from app.ingestion.coordination import refresh_may_activate
+
+    if not refresh_may_activate(
+        repository.refresh_state,
+        repository.refresh_generation_id,
+        generation_id,
+        repository.refresh_owner,
+        owner,
+        repository.refresh_epoch,
+        epoch,
+        repository.refresh_lease_expires_at,
+        now,
+    ):
         raise GenerationWriteError("refresh owner no longer holds this generation")
-    if repository.refresh_generation_id != generation_id:
-        raise GenerationWriteError("refresh generation does not match this build")
     generation = db.get(IndexGeneration, generation_id)
     if generation is None:
         raise GenerationWriteError("pending generation is missing")

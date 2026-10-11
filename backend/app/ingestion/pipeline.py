@@ -2,13 +2,23 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
 from app.ingestion.assemble import assemble_generation
-from app.ingestion.graph_store import publish_graph_epoch, write_graph
-from app.ingestion.materialize import publish_worktree, read_commit_blobs
+from app.ingestion.claims import (
+    abort_snapshot_claim,
+    claim_snapshot,
+    publish_snapshot_claim,
+    recover_creating_snapshot,
+    recover_deleting_snapshot,
+)
+from app.ingestion.coordination import lease_deadline
+from app.ingestion.graph_store import current_epoch_edge_ids, delete_edges_outside_expected, publish_graph_epoch, write_graph
+from app.ingestion.inclusion import is_included
+from app.ingestion.materialize import promote_tree, read_commit_blobs, write_detached_tree
 from app.ingestion.persist import (
     GenerationWriteError,
     activate_generation,
@@ -16,19 +26,28 @@ from app.ingestion.persist import (
     insert_pending_generation,
     write_draft,
 )
-from app.ingestion.vector_store import ensure_collection, upsert_missing_points
+from app.ingestion.validation import (
+    ChecklistError,
+    edge_set_matches,
+    generation_link_is_valid,
+    point_is_valid,
+    validate_worktree_bytes,
+)
+from app.ingestion.vector_store import collection_config, ensure_collection, fetch_point_payloads, upsert_missing_points
 from app.ingestion.versions import (
     CHUNKING_VERSION,
     INCLUSION_RULES_VERSION,
     LEXICAL_INDEX_VERSION,
     PARSER_VERSION,
 )
-from app.models.catalog import IndexGeneration
+from app.models.catalog import GenerationChunk, GenerationDirectory, GenerationFile, IndexGeneration, SourceRevision
 from app.models.repository import Repository
 from app.storage.identity import (
     collection_name,
+    edge_id,
     embedding_config_fingerprint,
     index_generation_id,
+    point_id,
     source_revision_id,
 )
 
@@ -48,9 +67,12 @@ def ingest_commit(
     qdrant_url: str | None = None,
     graph_session=None,
 ) -> str:
+    now = datetime.utcnow()
     repository = db.query(Repository).filter(Repository.id == repository_id).with_for_update().one()
     if repository.refresh_state == "running":
-        raise GenerationWriteError("a refresh is already running for this repository")
+        if repository.refresh_lease_expires_at and repository.refresh_lease_expires_at > now:
+            raise GenerationWriteError("a refresh is already running for this repository")
+        raise GenerationWriteError("an expired refresh must be adopted before another build starts")
     fingerprint = embedding_config_fingerprint(embedding_model, model_revision, vector_dimensions)
     revision_key = str(source_revision_id(repository_id, commit_sha))
     attempt = _next_attempt(db, revision_key, fingerprint)
@@ -70,6 +92,8 @@ def ingest_commit(
     repository.refresh_epoch = epoch
     repository.refresh_owner = owner
     repository.refresh_generation_id = generation_key
+    repository.refresh_heartbeat_at = now
+    repository.refresh_lease_expires_at = lease_deadline(now)
     revision = ensure_source_revision(
         db,
         repository_id,
@@ -77,6 +101,13 @@ def ingest_commit(
         repository.tracked_branch,
         snapshot_path=None,
     )
+    if revision.snapshot_state == "deleting":
+        recover_deleting_snapshot(revision, owner, now)
+        if revision.snapshot_state == "deleting":
+            raise GenerationWriteError("work tree deletion is still in progress")
+    if revision.snapshot_state == "creating":
+        recover_creating_snapshot(revision, owner, now, git_dir, commit_sha)
+    snapshot_mode = claim_snapshot(revision, owner, snapshot_root, now)
     insert_pending_generation(
         db,
         repository_id,
@@ -91,25 +122,53 @@ def ingest_commit(
     db.commit()
 
     try:
-        snapshot_path = snapshot_root / revision.id
-        publish_worktree(git_dir, commit_sha, snapshot_path)
+        revision = db.get(SourceRevision, revision_key)
+        if snapshot_mode == "create":
+            creating = Path(revision.creating_path)
+            publish = Path(revision.publish_path)
+            write_detached_tree(git_dir, commit_sha, creating)
+            created_blobs = read_commit_blobs(git_dir, commit_sha)
+            validate_worktree_bytes(git_dir, commit_sha, creating, created_blobs)
+            promote_tree(creating, publish)
+            publish_snapshot_claim(revision, owner)
+            db.commit()
+            revision = db.get(SourceRevision, revision_key)
         blobs = read_commit_blobs(git_dir, commit_sha)
+        validate_worktree_bytes(git_dir, commit_sha, Path(revision.snapshot_path), blobs)
+        _renew_lease(db, repository_id, owner, epoch, datetime.utcnow())
         draft = assemble_generation(repository_id, commit_sha, blobs, fingerprint, generation_key)
         write_draft(db, repository_id, generation_key, fingerprint, draft)
-        revision.snapshot_path = str(snapshot_path)
-        revision.snapshot_state = "ready"
-        if graph_session is not None:
-            write_graph(graph_session, repository_id, revision.id, generation_key, draft, epoch)
-            publish_graph_epoch(graph_session, generation_key, epoch)
-        if qdrant_url is not None and draft.chunks:
+        _renew_lease(db, repository_id, owner, epoch, datetime.utcnow())
+        if _lost_ownership(db, repository_id, owner, epoch):
+            raise GenerationWriteError("refresh owner no longer holds this generation")
+        if graph_session is None:
+            raise ChecklistError("neo4j session is required")
+        write_graph(graph_session, repository_id, revision.id, generation_key, draft, epoch)
+        expected = {item.edge_id for item in draft.edges}
+        expected.add(str(edge_id("HAS_GENERATION", generation_key, revision.id, generation_key)))
+        delete_edges_outside_expected(graph_session, generation_key, list(expected), epoch)
+        present = current_epoch_edge_ids(graph_session, generation_key, epoch)
+        if not edge_set_matches(present, expected):
+            raise ChecklistError("neo4j edge set does not match this generation")
+        _assert_catalog(db, generation_key, fingerprint, draft, blobs)
+        if draft.chunks:
+            if qdrant_url is None:
+                raise ChecklistError("qdrant is required when the generation has chunks")
             collection = collection_name(embedding_model, vector_dimensions)
             ensure_collection(qdrant_url, collection, vector_dimensions)
             vectors = {chunk.id: embed(chunk.lexical_text) for chunk in draft.chunks}
             upsert_missing_points(qdrant_url, collection, repository_id, draft, fingerprint, vectors)
-        activate_generation(db, repository_id, generation_key, owner, epoch)
+            _assert_points(qdrant_url, collection, repository_id, generation_key, fingerprint, vector_dimensions, draft, db)
+        publish_graph_epoch(graph_session, generation_key, epoch)
+        _renew_lease(db, repository_id, owner, epoch, datetime.utcnow())
+        activate_generation(db, repository_id, generation_key, owner, epoch, datetime.utcnow())
         db.commit()
     except Exception:
         db.rollback()
+        revision = db.get(SourceRevision, revision_key)
+        if revision is not None and revision.snapshot_state == "creating" and revision.creation_owner == owner:
+            abort_snapshot_claim(revision, owner)
+            db.commit()
         _fail_if_owner(db, repository_id, generation_key, owner, epoch)
         raise
     return generation_key
@@ -131,6 +190,93 @@ def _next_attempt(db: Session, revision_key: str, fingerprint: str) -> int:
     if not attempts:
         return 1
     return max(row[0] for row in attempts) + 1
+
+
+def adopt_expired_refresh(db: Session, repository_id: str, owner: str, now: datetime | None = None) -> int:
+    current = now or datetime.utcnow()
+    repository = db.query(Repository).filter(Repository.id == repository_id).with_for_update().one()
+    if repository.refresh_state != "running" or repository.refresh_generation_id is None:
+        raise GenerationWriteError("there is no refresh to adopt")
+    if repository.refresh_lease_expires_at and repository.refresh_lease_expires_at > current:
+        raise GenerationWriteError("the refresh lease is still held")
+    repository.refresh_epoch += 1
+    repository.refresh_owner = owner
+    repository.refresh_heartbeat_at = current
+    repository.refresh_lease_expires_at = lease_deadline(current)
+    db.commit()
+    return repository.refresh_epoch
+
+
+def _renew_lease(db: Session, repository_id: str, owner: str, epoch: int, now: datetime) -> None:
+    repository = db.query(Repository).filter(Repository.id == repository_id).with_for_update().one()
+    if repository.refresh_owner != owner or repository.refresh_epoch != epoch:
+        raise GenerationWriteError("refresh owner no longer holds this generation")
+    if repository.refresh_lease_expires_at and repository.refresh_lease_expires_at <= now:
+        raise GenerationWriteError("refresh lease has expired")
+    repository.refresh_heartbeat_at = now
+    repository.refresh_lease_expires_at = lease_deadline(now)
+    db.flush()
+
+
+def _lost_ownership(db: Session, repository_id: str, owner: str, epoch: int) -> bool:
+    repository = db.get(Repository, repository_id)
+    return repository.refresh_owner != owner or repository.refresh_epoch != epoch
+
+
+def _assert_catalog(db: Session, generation_id: str, fingerprint: str, draft, blobs) -> None:
+    included = [blob for blob in blobs if is_included(blob.relative_path, blob.mode)]
+    file_links = db.query(GenerationFile).filter(GenerationFile.index_generation_id == generation_id).all()
+    if len(file_links) != len(included):
+        raise ChecklistError("generation file set does not match the included tree")
+    directories = db.query(GenerationDirectory).filter(GenerationDirectory.index_generation_id == generation_id).all()
+    if {row.directory_id for row in directories} != {item.id for item in draft.directories}:
+        raise ChecklistError("generation directories do not match the included tree")
+    links = db.query(GenerationChunk).filter(GenerationChunk.index_generation_id == generation_id).all()
+    if {row.chunk_id for row in links} != {item.id for item in draft.chunks}:
+        raise ChecklistError("generation chunks do not match the parsed spans")
+    for link in links:
+        if link.embedding_config_fingerprint != fingerprint or link.search_vector is None:
+            raise ChecklistError("lexical row does not match this generation")
+
+
+def _assert_points(qdrant_url, collection, repository_id, generation_id, fingerprint, dimensions, draft, db: Session) -> None:
+    size, distance = collection_config(qdrant_url, collection)
+    identifiers = [str(point_id(chunk.id, chunk.embedding_input_hash, fingerprint)) for chunk in draft.chunks]
+    payloads = fetch_point_payloads(qdrant_url, collection, identifiers)
+    links = {
+        row.chunk_id: row
+        for row in db.query(GenerationChunk).filter(GenerationChunk.index_generation_id == generation_id).all()
+    }
+    files = {row.file_id for row in db.query(GenerationFile).filter(GenerationFile.index_generation_id == generation_id).all()}
+    for chunk, identifier in zip(draft.chunks, identifiers):
+        payload = payloads.get(identifier)
+        if payload is None or not point_is_valid(
+            payload,
+            chunk_id_value=chunk.id,
+            repository_id=repository_id,
+            file_id_value=chunk.file_id,
+            parser_version=PARSER_VERSION,
+            chunking_version=CHUNKING_VERSION,
+            span_hash=chunk.span_hash,
+            embedding_input_hash=chunk.embedding_input_hash,
+            fingerprint=fingerprint,
+            point_identifier=identifier,
+            collection_size=size,
+            collection_distance=distance,
+            expected_size=dimensions,
+        ):
+            raise ChecklistError(f"point for chunk {chunk.id} failed validation")
+        link = links[chunk.id]
+        if not generation_link_is_valid(
+            link_exists=True,
+            link_fingerprint=link.embedding_config_fingerprint,
+            link_input_hash=link.embedding_input_hash,
+            payload_fingerprint=payload["embedding_config_fingerprint"],
+            payload_input_hash=payload["embedding_input_hash"],
+            generation_fingerprint=fingerprint,
+            file_linked=chunk.file_id in files,
+        ):
+            raise ChecklistError(f"generation link for chunk {chunk.id} failed validation")
 
 
 def _fail_if_owner(db: Session, repository_id: str, generation_id: str, owner: str, epoch: int) -> None:

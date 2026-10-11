@@ -483,30 +483,9 @@ def _ensure_directories(repository: str, relative_path: str, directories: dict[s
 
 
 def _technologies(file: FileRecord, payload: bytes) -> list[TechnologyRecord]:
-    name = file.relative_path.rsplit("/", 1)[-1]
-    text = payload.decode("utf-8", errors="replace")
-    found: list[TechnologyRecord] = []
-    if name == "requirements.txt":
-        for line in text.splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            package = stripped.split("==")[0].split(">=")[0].split("[")[0].strip()
-            if package:
-                found.append(TechnologyRecord(package, file.id, stripped))
-    elif name == "package.json":
-        for line in text.splitlines():
-            stripped = line.strip().strip(",")
-            if stripped.startswith('"') and ":" in stripped:
-                package = stripped.split('"', 2)[1]
-                if package not in {"name", "version", "dependencies", "devDependencies"}:
-                    found.append(TechnologyRecord(package, file.id, stripped))
-    elif name == "pyproject.toml":
-        for line in text.splitlines():
-            stripped = line.strip().strip(",").strip('"')
-            if "==" in stripped or stripped.startswith("dependencies"):
-                found.append(TechnologyRecord(stripped.split("==")[0].strip(" '\""), file.id, line.strip()))
-    return [item for item in found if item.name]
+    from app.ingestion.technologies import technologies_for_manifest
+
+    return technologies_for_manifest(file.relative_path, payload, file.id)
 
 
 def _language_name(relative_path: str) -> str | None:
