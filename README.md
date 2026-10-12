@@ -1,154 +1,47 @@
-# Repository Intelligence Backend
+# Repona
 
-A high-performance REST API for indexing and natural-language querying of code repositories. This system combines **Retrieval-Augmented Generation (RAG)** with a **Neo4j knowledge graph** and a **PostgreSQL vector store** to answer developer questions about code.
+Paste a public GitHub URL, then ask a question about that code. You get a short answer in plain language, plus the file and lines it came from.
 
-Given a GitHub URL, the backend clones the repo, extracts metadata and a code knowledge graph, chunks and embeds the source code, and persists it. When asked a question (e.g. *"How is SidebarProvider implemented?"*), it generates a query embedding, retrieves relevant code snippets and graph context, constructs a prompt, and invokes a local LLM (Ollama, using the `qwen2.5:1.5b` model) to produce a structured JSON answer including explanation, confidence, and sources.
+Open http://127.0.0.1:8000. A GitHub link indexes that repository. Anything else is a question about the last one you indexed. A public repository needs no token. A private one needs a GitHub token that can read the contents, passed to the API.
 
-> For a deep dive into internals - architecture diagrams, project structure, RAG pipeline, prompt construction, and database queries - see [ARCHITECTURE.md](./ARCHITECTURE.md).
+## What it does
 
----
+It fetches the default branch and keeps source and config files: Python, JavaScript, TypeScript, JSON, Markdown, YAML, TOML, SQL, shell, Dockerfiles, and `requirements.txt`. It skips `.git`, `node_modules`, `build`, `dist`, and lockfiles.
 
-## Key Features
+Postgres holds the catalog, Neo4j holds the call graph, and Qdrant holds the embeddings (`all-MiniLM-L6-v2`). A question is searched by name, by the words in the text, and by meaning. The model writes the answer from that evidence.
 
-- **RAG over code**: Semantic search (via Sentence-Transformers) finds relevant code chunks in PostgreSQL. A Neo4j graph provides structural context (files, classes, imports).
-- **LLM integration**: Ollama handles generation with strict JSON output.
-- **FastAPI backend**: Built on FastAPI with Uvicorn ASGI server. Interactive OpenAPI docs auto-generated at `/docs` and `/redoc`.
-- **Robust parsing**: Strips markdown fences and uses `JSONDecoder.raw_decode()` to parse the first JSON object from the LLM response, handling extra output gracefully.
-- **Debugging and reliability**: Detailed logging and stop-sequences in the Ollama call to catch timeouts or invalid JSON.
+The model is the one named by `LLM_PROVIDER` on the machine running the app. The page has no picker. Set it to the tool you already have signed in: `cursor`, `claude`, `codex`, `copilot`, `opencode`, `zai`, `ollama`, or `openai`. Restart after you change it. Everyone who uses that copy gets the same model.
 
----
+A small public repository is the comfortable size. A very large one can take a long time.
 
-## Tech Stack
+## Run it
 
-- **Language & Frameworks**: Python 3.12, FastAPI, Uvicorn
-- **Databases**: PostgreSQL (vector store), Neo4j (code knowledge graph)
-- **ML / AI**: Sentence-Transformers (`all-MiniLM-L6-v2`) for embeddings, Ollama (`qwen2.5:1.5b`) for generation
-- **Infrastructure**: Docker & Docker Compose
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Docker & Docker Compose
-- [Ollama](https://ollama.com) installed locally (or reachable over the network)
-
-### 1. Clone the repo
+You need Docker, Python 3.12, and the model command from `LLM_PROVIDER` installed and signed in on this machine. The API runs on the host so it can call that command. Postgres, Qdrant, and Neo4j run in Docker.
 
 ```bash
-git clone https://github.com/LaibaFirdouse/Repona
-cd Repona
+docker compose up -d postgres qdrant neo4j
+cp .env.example .env
+python -m venv .venv
+.venv/bin/pip install -r requirements.txt
+PYTHONPATH=backend .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-### 2. Configure environment variables
+Postgres is on port 5433. The page is on port 8000. `.env.example` already points at those services and at Cursor. Change `LLM_PROVIDER` before you start the app if you want a different model.
 
-Create a `.env` file in the project root:
+## Ask from the API
 
-| Variable | Description | Example |
-|---|---|---|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://postgres:password@postgres:5432/repo_db` |
-| `NEO4J_URI` | Neo4j Bolt URI | `bolt://neo4j:7687` |
-| `NEO4J_USERNAME` | Neo4j admin username | `neo4j` |
-| `NEO4J_PASSWORD` | Neo4j admin password | `password` |
-| `OLLAMA_BASE_URL` | Base URL for Ollama API | `http://localhost:11434` |
-| `OLLAMA_MODEL` | Ollama model to use | `qwen2.5:1.5b` |
-| `OLLAMA_TIMEOUT` | (Optional) Generation timeout in seconds | `600` |
-| `OPENAI_MAX_OUTPUT_TOKENS` | Max answer tokens reserved for OpenAI and Ollama | `800` |
-| `EMBEDDING_MODEL` | (Optional) SentenceTransformer model | `all-MiniLM-L6-v2` |
-
-### 3. Pull the Ollama model & start the daemon
+Indexing waits until the repository is ready. `action` is `serve` when you can ask.
 
 ```bash
-ollama pull qwen2.5:1.5b
-ollama serve
-```
-
-### 4. Launch all services
-
-```bash
-docker compose up --build
-```
-
-This starts the FastAPI app, PostgreSQL, and Neo4j. Ollama is expected to run on the host (`ollama serve`); the API container reaches it at `http://host.docker.internal:11434` via the host-gateway mapping. The API binds to `0.0.0.0:8000` by default.
-
-### 5. Explore the API
-
-Visit `http://localhost:8000/docs` (Swagger UI) or `http://localhost:8000/redoc` for interactive API documentation.
-
----
-
-## Usage
-
-### Index a repository
-
-```bash
-curl -X POST http://localhost:8000/api/v1/repository \
+curl -X POST http://127.0.0.1:8000/api/v1/repository \
   -H "Content-Type: application/json" \
-  -d '{"repo_url":"https://github.com/owner/repository.git"}'
+  -d '{"repo_url":"https://github.com/pallets/itsdangerous","user_id":"local-user"}'
 ```
-
-**Response:**
-```json
-{"repository_id": "d6f1c2a3-1234-4567-89ab-cdef01234567"}
-```
-
-### Ask a question about the repo
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/ask \
+curl -X POST http://127.0.0.1:8000/api/v1/ask \
   -H "Content-Type: application/json" \
-  -d '{
-    "repository_id": "d6f1c2a3-1234-4567-89ab-cdef01234567",
-    "question": "How is SidebarProvider implemented?"
-  }'
+  -d '{"repository_id":"<id>","user_id":"local-user","question":"Which functions call derive_key?"}'
 ```
 
-**Response:**
-```json
-{
-  "repository_id": "d6f1c2a3-1234-4567-89ab-cdef01234567",
-  "question": "How is SidebarProvider implemented?",
-  "answer": "SidebarProvider is implemented in `components/ui/sidebar.tsx`. It defines a context and `useSidebar` hook to manage the sidebar state across the app.",
-  "confidence": "high",
-  "sources": ["components/ui/sidebar.tsx"],
-  "graph_context_used": true,
-  "token_usage": {
-    "prompt_tokens": 812,
-    "completion_tokens": 143,
-    "total_tokens": 955
-  }
-}
-```
-
----
-
-## Example Questions to Try
-
-**Code understanding (RAG):**
-- "How is SidebarProvider implemented?"
-- "Where is SidebarTrigger rendered?"
-- "Explain the mobile sidebar layout."
-- "How does authentication flow work in this app?"
-- "Where is the Firebase configuration?"
-
-**Structural / graph questions:**
-- "Which files import the AuthContext module?"
-- "Which classes inherit from BaseService?"
-- "How many files are there in the repository?"
-- "List the largest directories by file count."
-
-**Stats about the index:**
-- "How many code chunks were generated?"
-- "How many repositories are indexed?"
-- "What programming languages are used in the repo?"
-
----
-
-## Troubleshooting
-
-- **Slow responses / timeouts** - Generation timeout defaults to 180s (tune via `OLLAMA_TIMEOUT`). Both providers cap an answer at `OPENAI_MAX_OUTPUT_TOKENS` (default 800), which is the same length reserved when the evidence packet is packed. Unreachable Ollama URLs are probed with a short connect timeout and skipped quickly, so a bad `OLLAMA_BASE_URL` no longer blocks for minutes. `qwen2.5:1.5b` is used by default to keep generation fast on modest hardware; on faster machines `phi3:mini` also works well.
-- **"Connection refused"** - Make sure `OLLAMA_BASE_URL` is correct and Ollama is running (`ollama serve`). Test with `curl http://localhost:11434/api/chat`.
-- **Invalid or empty answers** - Check container logs; the app logs the raw LLM response before parsing to help pinpoint the issue.
-
-For a full breakdown of internals, logging, and JSON-parsing safeguards, see [ARCHITECTURE.md](./ARCHITECTURE.md).
+Read `answer` and `citations`. An API call can also set `provider` to `cursor`, `claude`, `codex`, `copilot`, `opencode`, `zai`, or `ollama`, and `model` to that provider's model id. Leave both off to use `.env`.
