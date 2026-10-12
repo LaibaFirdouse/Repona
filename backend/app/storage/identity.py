@@ -310,9 +310,14 @@ def context_prefix(parent_qualified_name: str | None, signature: str | None) -> 
     return parent_qualified_name
 
 
+def without_nul(value: str) -> str:
+    """Drop NUL bytes. PostgreSQL text cannot store them; span bytes and chunk ids stay as they are."""
+    return value.replace("\x00", "")
+
+
 def lexical_input(prefix: str, span: bytes) -> bytes:
-    decoded = span.decode("utf-8", errors="replace")
-    return prefix.encode("utf-8") + b"\n" + decoded.encode("utf-8")
+    decoded = without_nul(span.decode("utf-8", errors="replace"))
+    return without_nul(prefix).encode("utf-8") + b"\n" + decoded.encode("utf-8")
 
 
 def embedding_input_hash(prefix: str, span: bytes) -> str:

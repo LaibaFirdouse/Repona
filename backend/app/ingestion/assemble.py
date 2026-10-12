@@ -141,6 +141,7 @@ def assemble_generation(
     index_generation: str,
     on_progress=None,
     workers: int | None = None,
+    cache=None,
 ) -> GenerationDraft:
     included = [blob for blob in blobs if is_included(blob.relative_path, blob.mode)]
     included.sort(key=lambda blob: blob.relative_path.encode("utf-8"))
@@ -149,7 +150,7 @@ def assemble_generation(
     symbols_by_file: dict[str, list[SymbolRecord]] = {}
     file_by_path: dict[str, FileRecord] = {}
     directories: dict[str, DirectoryRecord] = {}
-    products = _file_products(repository, included, embedding_fingerprint, on_progress, workers)
+    products = _file_products(repository, included, embedding_fingerprint, on_progress, workers, cache)
 
     for blob, (record, parsed, symbols, chunks, technologies) in zip(included, products, strict=True):
         record.directory_id = _ensure_directories(repository, blob.relative_path, directories)
@@ -163,11 +164,18 @@ def assemble_generation(
     draft.directories = list(directories.values())
     for symbols in symbols_by_file.values():
         draft.symbols.extend(symbols)
-    draft.edges = _edges(index_generation, file_by_path, symbols_by_file, parsed_by_path, draft.directories)
+    draft.edges = _edges(
+        index_generation,
+        file_by_path,
+        symbols_by_file,
+        parsed_by_path,
+        draft.directories,
+        on_progress,
+    )
     return draft
 
 
-def _file_products(repository: str, included: list[SourceBlob], fingerprint: str, on_progress, workers: int | None):
+def _file_products(repository: str, included: list[SourceBlob], fingerprint: str, on_progress, workers: int | None, cache):
     count = 1 if workers is None and len(included) < 32 else workers
     if count is None:
         count = min(4, os.cpu_count() or 2)
@@ -179,16 +187,28 @@ def _file_products(repository: str, included: list[SourceBlob], fingerprint: str
             renewed = _renew_if_due(on_progress, renewed)
             products.append(_build_file(repository, blob.relative_path, blob.payload, blob.git_blob_id, fingerprint))
         return products
-    context = multiprocessing.get_context("spawn")
     products: list = [None] * len(included)
+    missing: list[int] = []
+    renewed = time.monotonic()
+    for index, blob in enumerate(included):
+        renewed = _renew_if_due(on_progress, renewed)
+        loaded = None if cache is None else cache.load(blob.relative_path, blob.payload, fingerprint)
+        if loaded is None:
+            missing.append(index)
+        else:
+            products[index] = loaded
+    if not missing:
+        return products
+    context = multiprocessing.get_context("spawn")
     with ProcessPoolExecutor(max_workers=count, mp_context=context) as pool:
         pending = {}
-        next_index = 0
+        cursor = 0
         renewed = time.monotonic()
         limit = count * 2
-        while next_index < len(included) or pending:
-            while next_index < len(included) and len(pending) < limit:
-                blob = included[next_index]
+        while cursor < len(missing) or pending:
+            while cursor < len(missing) and len(pending) < limit:
+                index = missing[cursor]
+                blob = included[index]
                 future = pool.submit(
                     _build_file,
                     repository,
@@ -197,15 +217,19 @@ def _file_products(repository: str, included: list[SourceBlob], fingerprint: str
                     blob.git_blob_id,
                     fingerprint,
                 )
-                pending[future] = next_index
-                next_index += 1
+                pending[future] = index
+                cursor += 1
             if not pending:
                 break
             done, _ = wait(pending, timeout=30, return_when=FIRST_COMPLETED)
             renewed = _renew_if_due(on_progress, renewed)
             for future in done:
                 index = pending.pop(future)
-                products[index] = future.result()
+                product = future.result()
+                blob = included[index]
+                if cache is not None:
+                    cache.store(blob.relative_path, blob.payload, fingerprint, product)
+                products[index] = product
         return products
 
 
@@ -359,6 +383,7 @@ def _edges(
     symbols_by_file: dict[str, list[SymbolRecord]],
     parsed_by_path: dict[str, ParsedFile],
     directories: list[DirectoryRecord],
+    on_progress=None,
 ) -> list[EdgeRecord]:
     edges: list[EdgeRecord] = []
     seen: set[tuple] = set()
@@ -398,9 +423,13 @@ def _edges(
         for symbol in symbols
         if symbol.kind == "module"
     }
+    local_names = {path: _function_names(symbols) for path, symbols in symbols_by_file.items()}
+    renewed = time.monotonic()
     for path, parsed in parsed_by_path.items():
+        renewed = _renew_if_due(on_progress, renewed)
         file = files[path]
         module = next((symbol for symbol in symbols_by_file[path] if symbol.kind == "module"), None)
+        imported_names = _imported_function_names(path, parsed, symbols_by_file, paths)
         for mention in parsed.mentions:
             if mention.relationship == "IMPORTS":
                 candidate_paths = _import_targets(path, mention.mentioned_name, paths)
@@ -413,7 +442,7 @@ def _edges(
                 source = symbols_by_file[path][mention.source_symbol_index].id
             if source is None:
                 continue
-            candidates = _symbol_targets(path, mention.mentioned_name, symbols_by_file, parsed_by_path, files)
+            candidates = _call_candidates(path, mention, symbols_by_file, local_names, imported_names)
             _add_resolved(
                 add,
                 mention.relationship,
@@ -493,24 +522,49 @@ def _path_candidates(stem: str, paths: set[str], extensions: tuple[str, ...]) ->
     return found
 
 
-def _symbol_targets(path, mentioned_name, symbols_by_file, parsed_by_path, files) -> list[str]:
-    matches = []
-    for symbol in symbols_by_file[path]:
-        if symbol.kind in {"function", "method"} and mentioned_name in {symbol.name, symbol.qualified_name}:
-            matches.append(symbol.id)
-    if matches:
-        return matches
-    imported = []
-    for mention in parsed_by_path[path].mentions:
+def _call_candidates(path, mention, symbols_by_file, local_names, imported_names) -> list[str]:
+    mentioned = mention.mentioned_name
+    candidates = local_names[path].get(mentioned) or imported_names.get(mentioned) or []
+    if candidates or "." not in mentioned:
+        return candidates
+    receiver, leaf = mentioned.split(".", 1)
+    if receiver not in {"self", "cls"} or not leaf or "." in leaf:
+        return []
+    local = local_names[path].get(leaf) or []
+    if mention.source_symbol_index is None:
+        return local
+    source = symbols_by_file[path][mention.source_symbol_index]
+    owner = source.qualified_name.rsplit(".", 1)[0]
+    by_id = {symbol.id: symbol for symbol in symbols_by_file[path]}
+    same_class = [symbol_id for symbol_id in local if by_id[symbol_id].qualified_name == f"{owner}.{leaf}"]
+    return same_class or local
+
+
+def _function_names(symbols: list[SymbolRecord]) -> dict[str, list[str]]:
+    names: dict[str, list[str]] = {}
+    for symbol in symbols:
+        if symbol.kind not in {"function", "method"}:
+            continue
+        keys = [symbol.name]
+        if symbol.qualified_name != symbol.name:
+            keys.append(symbol.qualified_name)
+        for key in keys:
+            names.setdefault(key, []).append(symbol.id)
+    return names
+
+
+def _imported_function_names(path: str, parsed: ParsedFile, symbols_by_file: dict[str, list[SymbolRecord]], paths: set[str]) -> dict[str, list[str]]:
+    names: dict[str, list[str]] = {}
+    for mention in parsed.mentions:
         if mention.relationship != "IMPORTS":
             continue
-        targets = _import_targets(path, mention.mentioned_name, set(files))
+        targets = _import_targets(path, mention.mentioned_name, paths)
         if len(targets) != 1:
             continue
         for symbol in symbols_by_file[targets[0]]:
-            if symbol.kind in {"function", "method"} and symbol.name == mentioned_name:
-                imported.append(symbol.id)
-    return imported
+            if symbol.kind in {"function", "method"}:
+                names.setdefault(symbol.name, []).append(symbol.id)
+    return names
 
 
 def _ensure_directories(repository: str, relative_path: str, directories: dict[str, DirectoryRecord]) -> str:

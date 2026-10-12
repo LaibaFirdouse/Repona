@@ -5,9 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.ingestion.assemble import assemble_generation
+from app.ingestion.checkpoint import ParseCache
 from app.ingestion.claims import (
     abort_snapshot_claim,
     claim_snapshot,
@@ -49,6 +51,7 @@ from app.storage.identity import (
     index_generation_id,
     point_id,
     source_revision_id,
+    without_nul,
 )
 
 
@@ -131,6 +134,7 @@ def ingest_commit(
         commit_sha=commit_sha,
         snapshot_mode=snapshot_mode,
         fingerprint=fingerprint,
+        snapshot_root=snapshot_root,
         embed=embed,
         embedding_model=embedding_model,
         vector_dimensions=vector_dimensions,
@@ -186,6 +190,7 @@ def complete_owned_refresh(
         commit_sha=revision.commit_sha,
         snapshot_mode=snapshot_mode,
         fingerprint=generation.embedding_config_fingerprint,
+        snapshot_root=snapshot_root,
         embed=embed,
         embedding_model=embedding_model,
         vector_dimensions=vector_dimensions,
@@ -207,7 +212,8 @@ def _finish_generation(
     commit_sha: str,
     snapshot_mode: str,
     fingerprint: str,
-    embed,
+    snapshot_root: Path | None = None,
+    embed=None,
     embedding_model: str,
     vector_dimensions: int,
     qdrant_url: str | None,
@@ -229,6 +235,9 @@ def _finish_generation(
             blobs = read_commit_blobs(git_dir, commit_sha)
         validate_worktree_bytes(git_dir, commit_sha, Path(revision.snapshot_path), blobs)
         _renew_lease(db, repository_id, owner, epoch, datetime.utcnow())
+        cache = None
+        if snapshot_root is not None:
+            cache = ParseCache(Path(snapshot_root).parent / "parse-cache" / repository_id)
         draft = assemble_generation(
             repository_id,
             commit_sha,
@@ -236,14 +245,16 @@ def _finish_generation(
             fingerprint,
             generation_key,
             on_progress=lambda: _renew_lease(db, repository_id, owner, epoch, datetime.utcnow()),
+            cache=cache,
         )
-        write_draft(db, repository_id, generation_key, fingerprint, draft)
-        _renew_lease(db, repository_id, owner, epoch, datetime.utcnow())
+        renew = lambda: _renew_lease(db, repository_id, owner, epoch, datetime.utcnow())
+        write_draft(db, repository_id, generation_key, fingerprint, draft, on_progress=renew)
+        renew()
         if _lost_ownership(db, repository_id, owner, epoch):
             raise GenerationWriteError("refresh owner no longer holds this generation")
         if graph_session is None:
             raise ChecklistError("neo4j session is required")
-        write_graph(graph_session, repository_id, revision.id, generation_key, draft, epoch)
+        write_graph(graph_session, repository_id, revision.id, generation_key, draft, epoch, on_progress=renew)
         expected = {item.edge_id for item in draft.edges}
         expected.add(str(edge_id("HAS_GENERATION", generation_key, revision.id, generation_key)))
         delete_edges_outside_expected(graph_session, generation_key, list(expected), epoch)
@@ -256,8 +267,19 @@ def _finish_generation(
                 raise ChecklistError("qdrant is required when the generation has chunks")
             collection = collection_name(embedding_model, vector_dimensions)
             ensure_collection(qdrant_url, collection, vector_dimensions)
-            vectors = _embed_chunks(embed, draft.chunks, lambda: _renew_lease(db, repository_id, owner, epoch, datetime.utcnow()))
-            upsert_missing_points(qdrant_url, collection, repository_id, draft, fingerprint, vectors)
+            renew_embed = lambda: _renew_lease(db, repository_id, owner, epoch, datetime.utcnow())
+            for start in range(0, len(draft.chunks), 256):
+                part = draft.chunks[start : start + 256]
+                vectors = _embed_chunks(embed, part, renew_embed)
+                upsert_missing_points(
+                    qdrant_url,
+                    collection,
+                    repository_id,
+                    draft,
+                    fingerprint,
+                    vectors,
+                    chunks=part,
+                )
             _assert_points(qdrant_url, collection, repository_id, generation_key, fingerprint, vector_dimensions, draft, db)
         publish_graph_epoch(graph_session, generation_key, epoch)
         _renew_lease(db, repository_id, owner, epoch, datetime.utcnow())
@@ -281,13 +303,13 @@ def _embed_chunks(embed, chunks, renew) -> dict[str, list[float]]:
         for index, chunk in enumerate(chunks):
             if index and index % 100 == 0:
                 renew()
-            vectors[chunk.id] = [float(value) for value in embed(chunk.lexical_text)]
+            vectors[chunk.id] = [float(value) for value in embed(without_nul(chunk.lexical_text))]
         return vectors
     for start in range(0, len(chunks), 32):
         if start:
             renew()
         batch = chunks[start : start + 32]
-        encoded = many([chunk.lexical_text for chunk in batch])
+        encoded = many([without_nul(chunk.lexical_text) for chunk in batch])
         if len(encoded) != len(batch):
             raise ChecklistError("the embedding model returned a different number of vectors")
         for chunk, vector in zip(batch, encoded, strict=True):
@@ -346,58 +368,86 @@ def _lost_ownership(db: Session, repository_id: str, owner: str, epoch: int) -> 
 
 def _assert_catalog(db: Session, generation_id: str, fingerprint: str, draft, blobs) -> None:
     included = [blob for blob in blobs if is_included(blob.relative_path, blob.mode)]
-    file_links = db.query(GenerationFile).filter(GenerationFile.index_generation_id == generation_id).all()
-    if len(file_links) != len(included):
+    file_links = (
+        db.query(func.count(GenerationFile.file_id))
+        .filter(GenerationFile.index_generation_id == generation_id)
+        .scalar()
+    )
+    if file_links != len(included):
         raise ChecklistError("generation file set does not match the included tree")
-    directories = db.query(GenerationDirectory).filter(GenerationDirectory.index_generation_id == generation_id).all()
-    if {row.directory_id for row in directories} != {item.id for item in draft.directories}:
+    directories = db.query(GenerationDirectory.directory_id).filter(GenerationDirectory.index_generation_id == generation_id).all()
+    if {row[0] for row in directories} != {item.id for item in draft.directories}:
         raise ChecklistError("generation directories do not match the included tree")
-    links = db.query(GenerationChunk).filter(GenerationChunk.index_generation_id == generation_id).all()
-    if {row.chunk_id for row in links} != {item.id for item in draft.chunks}:
+    link_ids = {
+        row[0]
+        for row in db.query(GenerationChunk.chunk_id)
+        .filter(GenerationChunk.index_generation_id == generation_id)
+        .yield_per(1000)
+    }
+    if link_ids != {item.id for item in draft.chunks}:
         raise ChecklistError("generation chunks do not match the parsed spans")
-    for link in links:
-        if link.embedding_config_fingerprint != fingerprint or link.search_vector is None:
-            raise ChecklistError("lexical row does not match this generation")
+    bad = (
+        db.query(GenerationChunk.chunk_id)
+        .filter(
+            GenerationChunk.index_generation_id == generation_id,
+            (GenerationChunk.embedding_config_fingerprint != fingerprint) | (GenerationChunk.search_vector.is_(None)),
+        )
+        .first()
+    )
+    if bad is not None:
+        raise ChecklistError("lexical row does not match this generation")
 
 
 def _assert_points(qdrant_url, collection, repository_id, generation_id, fingerprint, dimensions, draft, db: Session) -> None:
     size, distance = collection_config(qdrant_url, collection)
-    identifiers = [str(point_id(chunk.id, chunk.embedding_input_hash, fingerprint)) for chunk in draft.chunks]
-    payloads = fetch_point_payloads(qdrant_url, collection, identifiers)
-    links = {
-        row.chunk_id: row
-        for row in db.query(GenerationChunk).filter(GenerationChunk.index_generation_id == generation_id).all()
+    payloads_checked = 0
+    link_rows = db.query(
+        GenerationChunk.chunk_id,
+        GenerationChunk.embedding_config_fingerprint,
+        GenerationChunk.embedding_input_hash,
+    ).filter(GenerationChunk.index_generation_id == generation_id).all()
+    links = {row.chunk_id: row for row in link_rows}
+    files = {
+        row[0]
+        for row in db.query(GenerationFile.file_id).filter(GenerationFile.index_generation_id == generation_id).all()
     }
-    files = {row.file_id for row in db.query(GenerationFile).filter(GenerationFile.index_generation_id == generation_id).all()}
-    for chunk, identifier in zip(draft.chunks, identifiers):
-        payload = payloads.get(identifier)
-        if payload is None or not point_is_valid(
-            payload,
-            chunk_id_value=chunk.id,
-            repository_id=repository_id,
-            file_id_value=chunk.file_id,
-            parser_version=PARSER_VERSION,
-            chunking_version=CHUNKING_VERSION,
-            span_hash=chunk.span_hash,
-            embedding_input_hash=chunk.embedding_input_hash,
-            fingerprint=fingerprint,
-            point_identifier=identifier,
-            collection_size=size,
-            collection_distance=distance,
-            expected_size=dimensions,
-        ):
-            raise ChecklistError(f"point for chunk {chunk.id} failed validation")
-        link = links[chunk.id]
-        if not generation_link_is_valid(
-            link_exists=True,
-            link_fingerprint=link.embedding_config_fingerprint,
-            link_input_hash=link.embedding_input_hash,
-            payload_fingerprint=payload["embedding_config_fingerprint"],
-            payload_input_hash=payload["embedding_input_hash"],
-            generation_fingerprint=fingerprint,
-            file_linked=chunk.file_id in files,
-        ):
-            raise ChecklistError(f"generation link for chunk {chunk.id} failed validation")
+    identifiers = [str(point_id(chunk.id, chunk.embedding_input_hash, fingerprint)) for chunk in draft.chunks]
+    for start in range(0, len(draft.chunks), 256):
+        part = list(draft.chunks[start : start + 256])
+        part_ids = identifiers[start : start + 256]
+        payloads = fetch_point_payloads(qdrant_url, collection, part_ids)
+        for chunk, identifier in zip(part, part_ids, strict=True):
+            payload = payloads.get(identifier)
+            if payload is None or not point_is_valid(
+                payload,
+                chunk_id_value=chunk.id,
+                repository_id=repository_id,
+                file_id_value=chunk.file_id,
+                parser_version=PARSER_VERSION,
+                chunking_version=CHUNKING_VERSION,
+                span_hash=chunk.span_hash,
+                embedding_input_hash=chunk.embedding_input_hash,
+                fingerprint=fingerprint,
+                point_identifier=identifier,
+                collection_size=size,
+                collection_distance=distance,
+                expected_size=dimensions,
+            ):
+                raise ChecklistError(f"point for chunk {chunk.id} failed validation")
+            link = links[chunk.id]
+            if not generation_link_is_valid(
+                link_exists=True,
+                link_fingerprint=link.embedding_config_fingerprint,
+                link_input_hash=link.embedding_input_hash,
+                payload_fingerprint=payload["embedding_config_fingerprint"],
+                payload_input_hash=payload["embedding_input_hash"],
+                generation_fingerprint=fingerprint,
+                file_linked=chunk.file_id in files,
+            ):
+                raise ChecklistError(f"generation link for chunk {chunk.id} failed validation")
+            payloads_checked += 1
+    if payloads_checked != len(draft.chunks):
+        raise ChecklistError("generation chunks do not match the parsed spans")
 
 
 def _fail_if_owner(db: Session, repository_id: str, generation_id: str, owner: str, epoch: int) -> None:

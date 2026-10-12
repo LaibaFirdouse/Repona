@@ -49,11 +49,13 @@ def upsert_missing_points(
     draft: GenerationDraft,
     fingerprint: str,
     vectors: dict[str, list[float]],
+    chunks=None,
 ) -> None:
     symbols = {item.id: item for item in draft.symbols}
     files = {item.id: item for item in draft.files}
+    chosen = draft.chunks if chunks is None else chunks
     points = []
-    for chunk in draft.chunks:
+    for chunk in chosen:
         symbol = symbols.get(chunk.symbol_id)
         file = files[chunk.file_id]
         identifier = str(point_id(chunk.id, chunk.embedding_input_hash, fingerprint))

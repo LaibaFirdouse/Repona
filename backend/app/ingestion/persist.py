@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import time
 from datetime import datetime
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.ingestion.assemble import GenerationDraft
+from app.storage.identity import without_nul
 from app.ingestion.versions import (
     CHUNKING_VERSION,
     EMBEDDING_INPUT_VERSION,
@@ -94,24 +96,74 @@ def insert_pending_generation(
     return generation
 
 
-def write_draft(db: Session, repository_id: str, generation_id: str, fingerprint: str, draft: GenerationDraft) -> None:
-    for directory in draft.directories:
-        if db.get(Directory, directory.id) is None:
-            db.add(
-                Directory(
-                    id=directory.id,
-                    repository_id=repository_id,
-                    parent_directory_id=directory.parent_directory_id,
-                    relative_path=directory.relative_path,
-                    name=directory.name,
-                    depth=directory.depth,
-                )
-            )
+def _touch(on_progress, renewed: float) -> float:
+    if on_progress is None or time.monotonic() - renewed < 30:
+        return renewed
+    on_progress()
+    return time.monotonic()
+
+
+_BATCH = 400
+
+
+def _known_ids(db: Session, model, ids: list[str]) -> set[str]:
+    found: set[str] = set()
+    for start in range(0, len(ids), _BATCH):
+        found.update(
+            row[0]
+            for row in db.query(model.id).filter(model.id.in_(ids[start : start + _BATCH])).all()
+        )
+    return found
+
+
+def _release(db: Session, pending: list) -> None:
+    if not pending:
+        return
     db.flush()
+    for obj in pending:
+        db.expunge(obj)
+    pending.clear()
+
+
+def write_draft(
+    db: Session,
+    repository_id: str,
+    generation_id: str,
+    fingerprint: str,
+    draft: GenerationDraft,
+    on_progress=None,
+) -> None:
+    """Insert the same rows as one-at-a-time writes, in batches so a large tree stays inside the lease."""
+    renewed = time.monotonic()
+    known_directories = _known_ids(db, Directory, [item.id for item in draft.directories])
+    pending: list = []
+    for directory in draft.directories:
+        renewed = _touch(on_progress, renewed)
+        if directory.id in known_directories:
+            continue
+        pending.append(
+            Directory(
+                id=directory.id,
+                repository_id=repository_id,
+                parent_directory_id=directory.parent_directory_id,
+                relative_path=directory.relative_path,
+                name=directory.name,
+                depth=directory.depth,
+            )
+        )
+        db.add(pending[-1])
+        if len(pending) >= _BATCH:
+            _release(db, pending)
+    _release(db, pending)
+    known_files = {
+        row.id: (row.content_hash, row.relative_path)
+        for row in _batched_files(db, [item.id for item in draft.files])
+    }
     for file in draft.files:
-        existing = db.get(File, file.id)
+        renewed = _touch(on_progress, renewed)
+        existing = known_files.get(file.id)
         if existing is None:
-            db.add(
+            pending.append(
                 File(
                     id=file.id,
                     repository_id=repository_id,
@@ -126,9 +178,15 @@ def write_draft(db: Session, repository_id: str, generation_id: str, fingerprint
                     git_blob_id=file.git_blob_id,
                 )
             )
-        elif existing.content_hash != file.content_hash or existing.relative_path != file.relative_path:
+            db.add(pending[-1])
+        elif existing != (file.content_hash, file.relative_path):
             raise GenerationWriteError(f"file id {file.id} does not match the stored bytes")
-        db.add(
+        if len(pending) >= _BATCH:
+            _release(db, pending)
+    _release(db, pending)
+    for file in draft.files:
+        renewed = _touch(on_progress, renewed)
+        pending.append(
             GenerationFile(
                 repository_id=repository_id,
                 index_generation_id=generation_id,
@@ -138,19 +196,33 @@ def write_draft(db: Session, repository_id: str, generation_id: str, fingerprint
                 parse_message=file.parse_message,
             )
         )
-    db.flush()
+        db.add(pending[-1])
+        if len(pending) >= _BATCH:
+            _release(db, pending)
+    _release(db, pending)
     for directory in draft.directories:
-        db.merge(
-            GenerationDirectory(
-                repository_id=repository_id,
-                index_generation_id=generation_id,
-                directory_id=directory.id,
+        renewed = _touch(on_progress, renewed)
+        pending.append(
+            db.merge(
+                GenerationDirectory(
+                    repository_id=repository_id,
+                    index_generation_id=generation_id,
+                    directory_id=directory.id,
+                )
             )
         )
+        if len(pending) >= _BATCH:
+            _release(db, pending)
+    _release(db, pending)
+    known_symbols = {
+        row.id: (row.start_byte, row.end_byte, row.qualified_name)
+        for row in _batched_symbols(db, [item.id for item in draft.symbols])
+    }
     for symbol in draft.symbols:
-        existing = db.get(Symbol, symbol.id)
+        renewed = _touch(on_progress, renewed)
+        existing = known_symbols.get(symbol.id)
         if existing is None:
-            db.add(
+            pending.append(
                 Symbol(
                     id=symbol.id,
                     repository_id=repository_id,
@@ -170,17 +242,18 @@ def write_draft(db: Session, repository_id: str, generation_id: str, fingerprint
                     end_line=symbol.end_line,
                 )
             )
-        elif (existing.start_byte, existing.end_byte, existing.qualified_name) != (
-            symbol.start_byte,
-            symbol.end_byte,
-            symbol.qualified_name,
-        ):
+            db.add(pending[-1])
+        elif existing != (symbol.start_byte, symbol.end_byte, symbol.qualified_name):
             raise GenerationWriteError(f"symbol id {symbol.id} does not match this parse")
-    db.flush()
+        if len(pending) >= _BATCH:
+            _release(db, pending)
+    _release(db, pending)
+    known_chunks = {row.id: row.span_hash for row in _batched_chunks(db, [item.id for item in draft.chunks])}
     for chunk in draft.chunks:
-        existing = db.get(Chunk, chunk.id)
+        renewed = _touch(on_progress, renewed)
+        existing = known_chunks.get(chunk.id)
         if existing is None:
-            db.add(
+            pending.append(
                 Chunk(
                     id=chunk.id,
                     repository_id=repository_id,
@@ -198,30 +271,71 @@ def write_draft(db: Session, repository_id: str, generation_id: str, fingerprint
                     span_hash=chunk.span_hash,
                 )
             )
-        elif existing.span_hash != chunk.span_hash:
+            db.add(pending[-1])
+        elif existing != chunk.span_hash:
             raise GenerationWriteError(f"chunk id {chunk.id} does not match this span")
-        db.add(
+        if len(pending) >= _BATCH:
+            _release(db, pending)
+    _release(db, pending)
+    for chunk in draft.chunks:
+        renewed = _touch(on_progress, renewed)
+        pending.append(
             GenerationChunk(
                 repository_id=repository_id,
                 index_generation_id=generation_id,
                 chunk_id=chunk.id,
-                context_prefix=chunk.context_prefix,
+                context_prefix=without_nul(chunk.context_prefix),
                 embedding_input_hash=chunk.embedding_input_hash,
                 embedding_config_fingerprint=fingerprint,
-                search_vector=func.to_tsvector("simple", chunk.lexical_text),
+                search_vector=func.to_tsvector("simple", without_nul(chunk.lexical_text)),
             )
         )
+        db.add(pending[-1])
+        if len(pending) >= _BATCH:
+            _release(db, pending)
     for technology in draft.technologies:
-        db.add(
+        pending.append(
             DetectedTechnology(
                 repository_id=repository_id,
                 index_generation_id=generation_id,
-                name=technology.name,
+                name=without_nul(technology.name),
                 evidence_file_id=technology.evidence_file_id,
-                evidence_text=technology.evidence_text,
+                evidence_text=without_nul(technology.evidence_text),
             )
         )
-    db.flush()
+        db.add(pending[-1])
+    _release(db, pending)
+
+
+def _batched_files(db: Session, ids: list[str]):
+    rows = []
+    for start in range(0, len(ids), _BATCH):
+        rows.extend(
+            db.query(File.id, File.content_hash, File.relative_path)
+            .filter(File.id.in_(ids[start : start + _BATCH]))
+            .all()
+        )
+    return rows
+
+
+def _batched_symbols(db: Session, ids: list[str]):
+    rows = []
+    for start in range(0, len(ids), _BATCH):
+        rows.extend(
+            db.query(Symbol.id, Symbol.start_byte, Symbol.end_byte, Symbol.qualified_name)
+            .filter(Symbol.id.in_(ids[start : start + _BATCH]))
+            .all()
+        )
+    return rows
+
+
+def _batched_chunks(db: Session, ids: list[str]):
+    rows = []
+    for start in range(0, len(ids), _BATCH):
+        rows.extend(
+            db.query(Chunk.id, Chunk.span_hash).filter(Chunk.id.in_(ids[start : start + _BATCH])).all()
+        )
+    return rows
 
 
 def activate_generation(db: Session, repository_id: str, generation_id: str, owner: str, epoch: int, now: datetime) -> None:

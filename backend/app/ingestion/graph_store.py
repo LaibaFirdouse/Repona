@@ -6,8 +6,10 @@ A relationship is updated only when its writer_epoch is missing or older.
 
 from __future__ import annotations
 
-from app.ingestion.assemble import EdgeRecord, GenerationDraft
-from app.storage.identity import edge_id
+import time
+
+from app.ingestion.assemble import GenerationDraft
+from app.storage.identity import edge_id, without_nul
 
 LABEL_BY_KIND = {
     "module": "Module",
@@ -32,6 +34,13 @@ def ensure_constraints(session) -> None:
         )
 
 
+def _touch(on_progress, renewed: float) -> float:
+    if on_progress is None or time.monotonic() - renewed < 30:
+        return renewed
+    on_progress()
+    return time.monotonic()
+
+
 def write_graph(
     session,
     repository_id: str,
@@ -39,7 +48,10 @@ def write_graph(
     generation_id: str,
     draft: GenerationDraft,
     epoch: int,
+    on_progress=None,
 ) -> None:
+    renewed = time.monotonic()
+    ensure_constraints(session)
     session.run(
         """
         MERGE (repository:Repository {id: $repository_id})
@@ -61,52 +73,125 @@ def write_graph(
         edge_id=str(edge_id("HAS_GENERATION", generation_id, source_revision_id_value, generation_id)),
         epoch=epoch,
     )
-    for directory in draft.directories:
-        session.run(
-            """
-            MERGE (n:Directory {id: $id})
-            ON CREATE SET n.repository_id = $repository_id, n.relative_path = $relative_path, n.name = $name
-            """,
-            id=directory.id,
-            repository_id=repository_id,
-            relative_path=directory.relative_path,
-            name=directory.name,
-        )
-    for file in draft.files:
-        session.run(
-            """
-            MERGE (n:File {id: $id})
-            ON CREATE SET n.repository_id = $repository_id, n.relative_path = $relative_path
-            """,
-            id=file.id,
-            repository_id=repository_id,
-            relative_path=file.relative_path,
-        )
+    renewed = _write_nodes(
+        session,
+        """
+        UNWIND $rows AS row
+        MERGE (n:Directory {id: row.id})
+        ON CREATE SET n.repository_id = $repository_id, n.relative_path = row.relative_path, n.name = row.name
+        """,
+        [
+            {"id": directory.id, "relative_path": directory.relative_path, "name": directory.name}
+            for directory in draft.directories
+        ],
+        renewed,
+        on_progress,
+        repository_id=repository_id,
+    )
+    renewed = _write_nodes(
+        session,
+        """
+        UNWIND $rows AS row
+        MERGE (n:File {id: row.id})
+        ON CREATE SET n.repository_id = $repository_id, n.relative_path = row.relative_path
+        """,
+        [{"id": file.id, "relative_path": file.relative_path} for file in draft.files],
+        renewed,
+        on_progress,
+        repository_id=repository_id,
+    )
+    symbols_by_label: dict[str, list[dict]] = {}
     for symbol in draft.symbols:
-        label = LABEL_BY_KIND[symbol.kind]
-        session.run(
+        symbols_by_label.setdefault(LABEL_BY_KIND[symbol.kind], []).append(
+            {
+                "id": symbol.id,
+                "kind": symbol.kind,
+                "name": symbol.name,
+                "qualified_name": symbol.qualified_name,
+                "relative_path": symbol.relative_path,
+                "start_line": symbol.start_line,
+                "end_line": symbol.end_line,
+            }
+        )
+    for label, rows in symbols_by_label.items():
+        renewed = _write_nodes(
+            session,
             f"""
-            MERGE (n:{label} {{id: $id}})
+            UNWIND $rows AS row
+            MERGE (n:{label} {{id: row.id}})
             ON CREATE SET
                 n.repository_id = $repository_id,
-                n.kind = $kind,
-                n.name = $name,
-                n.qualified_name = $qualified_name,
-                n.relative_path = $relative_path,
-                n.start_line = $start_line,
-                n.end_line = $end_line
+                n.kind = row.kind,
+                n.name = row.name,
+                n.qualified_name = row.qualified_name,
+                n.relative_path = row.relative_path,
+                n.start_line = row.start_line,
+                n.end_line = row.end_line
             """,
-            id=symbol.id,
+            rows,
+            renewed,
+            on_progress,
             repository_id=repository_id,
-            kind=symbol.kind,
-            name=symbol.name,
-            qualified_name=symbol.qualified_name,
-            relative_path=symbol.relative_path,
-            start_line=symbol.start_line,
-            end_line=symbol.end_line,
         )
+    _write_edges(session, draft, generation_id, epoch, on_progress, renewed)
+
+
+def _write_nodes(session, statement: str, rows: list[dict], renewed: float, on_progress, **common) -> float:
+    for start in range(0, len(rows), 400):
+        renewed = _touch(on_progress, renewed)
+        session.run(statement, rows=rows[start : start + 400], **common)
+    return renewed
+
+
+def _write_edges(session, draft: GenerationDraft, generation_id: str, epoch: int, on_progress, renewed: float) -> None:
+    labels = {directory.id: "Directory" for directory in draft.directories}
+    labels.update({file.id: "File" for file in draft.files})
+    for symbol in draft.symbols:
+        labels[symbol.id] = LABEL_BY_KIND[symbol.kind]
+    labels[generation_id] = "IndexGeneration"
+    grouped: dict[tuple[str, str, str], list[dict]] = {}
     for edge in draft.edges:
-        _merge_edge(session, edge, generation_id, epoch)
+        if edge.relationship not in _EDGE_TYPES:
+            raise ValueError(f"unknown relationship {edge.relationship}")
+        source_label = labels.get(edge.source_id)
+        target_label = labels.get(edge.target_id)
+        if source_label is None or target_label is None:
+            raise ValueError(f"edge {edge.edge_id} points outside this generation")
+        grouped.setdefault((edge.relationship, source_label, target_label), []).append(
+            {
+                "source_id": edge.source_id,
+                "target_id": edge.target_id,
+                "edge_id": edge.edge_id,
+                "mentioned_name": without_nul(edge.mentioned_name),
+                "resolution": edge.resolution,
+            }
+        )
+    for (relationship, source_label, target_label), rows in grouped.items():
+        statement = f"""
+        UNWIND $rows AS row
+        MATCH (source:{source_label} {{id: row.source_id}}), (target:{target_label} {{id: row.target_id}})
+        MERGE (source)-[rel:{relationship} {{edge_id: row.edge_id}}]->(target)
+        SET rel.index_generation_id = CASE
+                WHEN rel.writer_epoch IS NULL OR rel.writer_epoch < $epoch THEN $generation_id
+                ELSE rel.index_generation_id END,
+            rel.mentioned_name = CASE
+                WHEN rel.writer_epoch IS NULL OR rel.writer_epoch < $epoch THEN row.mentioned_name
+                ELSE rel.mentioned_name END,
+            rel.resolution = CASE
+                WHEN rel.writer_epoch IS NULL OR rel.writer_epoch < $epoch THEN row.resolution
+                ELSE rel.resolution END,
+            rel.writer_epoch = CASE
+                WHEN rel.writer_epoch IS NULL OR rel.writer_epoch < $epoch THEN $epoch
+                ELSE rel.writer_epoch END
+        """
+        for start in range(0, len(rows), 400):
+            renewed = _touch(on_progress, renewed)
+            session.run(
+                statement,
+                rows=rows[start : start + 400],
+                generation_id=generation_id,
+                epoch=epoch,
+            )
 
 
 SERVING_EDGE_FILTER = """
@@ -156,35 +241,5 @@ def publish_graph_epoch(session, generation_id: str, epoch: int) -> None:
         SET generation.graph_epoch = $epoch
         """,
         generation_id=generation_id,
-        epoch=epoch,
-    )
-
-
-def _merge_edge(session, edge: EdgeRecord, generation_id: str, epoch: int) -> None:
-    if edge.relationship not in _EDGE_TYPES:
-        raise ValueError(f"unknown relationship {edge.relationship}")
-    session.run(
-        f"""
-        MATCH (source {{id: $source_id}}), (target {{id: $target_id}})
-        MERGE (source)-[rel:{edge.relationship} {{edge_id: $edge_id}}]->(target)
-        SET rel.index_generation_id = CASE
-                WHEN rel.writer_epoch IS NULL OR rel.writer_epoch < $epoch THEN $generation_id
-                ELSE rel.index_generation_id END,
-            rel.mentioned_name = CASE
-                WHEN rel.writer_epoch IS NULL OR rel.writer_epoch < $epoch THEN $mentioned_name
-                ELSE rel.mentioned_name END,
-            rel.resolution = CASE
-                WHEN rel.writer_epoch IS NULL OR rel.writer_epoch < $epoch THEN $resolution
-                ELSE rel.resolution END,
-            rel.writer_epoch = CASE
-                WHEN rel.writer_epoch IS NULL OR rel.writer_epoch < $epoch THEN $epoch
-                ELSE rel.writer_epoch END
-        """,
-        source_id=edge.source_id,
-        target_id=edge.target_id,
-        edge_id=edge.edge_id,
-        generation_id=generation_id,
-        mentioned_name=edge.mentioned_name,
-        resolution=edge.resolution,
         epoch=epoch,
     )

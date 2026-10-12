@@ -11,6 +11,7 @@ from app.storage.identity import (
     file_id,
     frame_text,
     lexical_input,
+    without_nul,
     line_count,
     line_labels,
     line_spans,
@@ -86,6 +87,11 @@ class IdentityTests(unittest.TestCase):
     def test_lexical_input_replaces_invalid_utf8(self) -> None:
         encoded = lexical_input("pkg.read", b"a\xffb")
         self.assertEqual(encoded, "pkg.read\na\ufffdb".encode("utf-8"))
+
+    def test_lexical_input_drops_nul_bytes(self) -> None:
+        encoded = lexical_input("pkg.read", b"a\x00b")
+        self.assertEqual(encoded, b"pkg.read\nab")
+        self.assertEqual(without_nul("a\x00b"), "ab")
 
     def test_fingerprint_changes_when_model_revision_changes(self) -> None:
         first = embedding_config_fingerprint("all-MiniLM-L6-v2", "unversioned", 384)

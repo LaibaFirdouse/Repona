@@ -32,6 +32,10 @@ class TechnologyTests(unittest.TestCase):
             "file-3",
         )
         self.assertEqual({row.name for row in pyproject}, {"sqlalchemy", "sphinx", "ruff", "requests"})
+        evidence = {row.name: row.evidence_text for row in pyproject}
+        self.assertEqual(evidence["sphinx"], "docs: sphinx")
+        self.assertEqual(evidence["ruff"], "dev: ruff")
+        self.assertEqual(evidence["sqlalchemy"], "sqlalchemy>=2")
 
 
 class CoordinationTests(unittest.TestCase):

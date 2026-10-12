@@ -75,8 +75,9 @@ def _group_rows(groups: object, file_id: str) -> list[TechnologyRecord]:
     if not isinstance(groups, dict):
         return []
     rows: list[TechnologyRecord] = []
-    for entries in groups.values():
-        rows.extend(_requirement_rows(entries, file_id))
+    for group, entries in groups.items():
+        for row in _requirement_rows(entries, file_id):
+            rows.append(TechnologyRecord(row.name, file_id, f"{group}: {row.evidence_text}"))
     return rows
 
 

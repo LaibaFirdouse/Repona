@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from time import perf_counter
@@ -50,7 +51,7 @@ from app.retrieval.model_call import collect_model_claims
 from app.retrieval.packet import NO_CITED_CLAIM, estimate_tokens, pack_evidence, render_answer, review_claims
 from app.services.llm.llm_factory import LLMFactory
 from app.services.refresh_service import RefreshOutcome, _absolute, _embed
-from app.storage.identity import content_hash
+from app.storage.identity import content_hash, without_nul
 
 SYSTEM_PROMPT = (
     "Answer only from the evidence packet. "
@@ -133,7 +134,12 @@ class AnswerService:
         fused = fuse_anchors(lanes)
         ranks = {anchor: index for index, anchor in enumerate(fused, start=1)}
         choices = _choices_for(db, generation.id, fused, name_hits + text_hits + vector_hits)
-        spans = materialize_anchors(fused, chunk_ids_for_anchor(text_hits + vector_hits), choices, _chunks_by_symbol(choices))
+        spans = materialize_anchors(
+            fused,
+            chunk_ids_for_anchor(name_hits + text_hits + vector_hits),
+            choices,
+            _chunks_by_symbol(choices),
+        )
         self._ensure_open(db, outcome.pin_id)
         edges = self._edges(db, generation, fused, ranks)
         for edge in edges:
@@ -142,6 +148,11 @@ class AnswerService:
             extra = neighbor_chunk(_symbol_chunks(db, generation.id, edge.other_id))
             if extra is not None and all(item.chunk_id != extra.chunk_id for item in spans):
                 spans.append(extra)
+        path_chunks = {chunk_id for _, chunk_id in _path_file_hits(db, generation, question)}
+        if path_chunks:
+            front = [span for span in spans if span.chunk_id in path_chunks]
+            rest = [span for span in spans if span.chunk_id not in path_chunks]
+            spans = front + rest
         spans = spans[: settings.retrieval_span_limit]
         self._ensure_open(db, outcome.pin_id)
         blobs = _require_fresh_tree(repository, revision)
@@ -379,26 +390,110 @@ class AnswerService:
         return renewed
 
 
+def question_identifiers(question: str) -> list[str]:
+    found: list[str] = []
+    for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", question):
+        if len(token) < 3 or token in found:
+            continue
+        found.append(token)
+    return found
+
+
+def question_paths(question: str) -> list[str]:
+    found: list[str] = []
+    for token in re.findall(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+", question):
+        token = token.strip("./")
+        if token and token not in found:
+            found.append(token)
+    return found
+
+
 def _name_hits(db: Session, generation: IndexGeneration, question: str) -> list[LaneHit]:
+    limit = settings.retrieval_lane_limit
+    hits: list[LaneHit] = []
+    seen: set[str] = set()
+
+    def add(anchor_id: str, chunk_id: str | None) -> None:
+        if anchor_id in seen or len(hits) >= limit:
+            return
+        seen.add(anchor_id)
+        hits.append(LaneHit(anchor_id, chunk_id, len(hits) + 1))
+
+    for file_id, chunk_id in _path_file_hits(db, generation, question):
+        add(file_id, chunk_id)
+    identifiers = question_identifiers(question)
+    matches = [Symbol.qualified_name == question, Symbol.name == question]
+    if identifiers:
+        matches.extend([Symbol.name.in_(identifiers), Symbol.qualified_name.in_(identifiers)])
+    matches.extend([Symbol.name.op("%")(question), Symbol.qualified_name.op("%")(question)])
     rank = case((Symbol.qualified_name == question, 0), (Symbol.name == question, 1), else_=2)
+    if identifiers:
+        rank = case(
+            (Symbol.qualified_name == question, 0),
+            (Symbol.name == question, 1),
+            (Symbol.name.in_(identifiers), 2),
+            (Symbol.qualified_name.in_(identifiers), 3),
+            else_=4,
+        )
     rows = (
         db.query(Symbol)
         .join(GenerationFile, GenerationFile.file_id == Symbol.file_id)
         .filter(
             GenerationFile.index_generation_id == generation.id,
             Symbol.parser_version == generation.parser_version,
-            or_(
-                Symbol.qualified_name == question,
-                Symbol.name == question,
-                Symbol.name.op("%")(question),
-                Symbol.qualified_name.op("%")(question),
-            ),
+            or_(*matches),
         )
         .order_by(rank, desc(func.greatest(func.similarity(Symbol.name, question), func.similarity(Symbol.qualified_name, question))), Symbol.id)
-        .limit(settings.retrieval_lane_limit)
+        .limit(limit)
         .all()
     )
-    return [LaneHit(row.id, None, index) for index, row in enumerate(rows, start=1)]
+    for row in rows:
+        add(row.id, None)
+    return hits
+
+
+def _path_file_hits(db: Session, generation: IndexGeneration, question: str) -> list[tuple[str, str]]:
+    prefixes = question_paths(question)
+    if not prefixes:
+        return []
+    filters = []
+    for prefix in prefixes:
+        filters.append(File.relative_path == prefix)
+        escaped = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        filters.append(File.relative_path.like(escaped + "/%", escape="\\"))
+    files = (
+        db.query(File)
+        .join(GenerationFile, GenerationFile.file_id == File.id)
+        .filter(GenerationFile.index_generation_id == generation.id, or_(*filters))
+        .order_by(File.relative_path, File.id)
+        .all()
+    )
+    if not files:
+        return []
+    file_ids = [item.id for item in files]
+    chunks = (
+        db.query(Chunk)
+        .join(GenerationChunk, GenerationChunk.chunk_id == Chunk.id)
+        .filter(GenerationChunk.index_generation_id == generation.id, Chunk.file_id.in_(file_ids))
+        .all()
+    )
+    by_file: dict[str, list] = {}
+    for chunk in chunks:
+        by_file.setdefault(chunk.file_id, []).append(chunk)
+    chosen = []
+    for item in files:
+        chunk = _representative_chunk(by_file.get(item.id, []))
+        if chunk is not None:
+            chosen.append((item.id, chunk.id))
+    return chosen
+
+
+def _representative_chunk(chunks: list):
+    if not chunks:
+        return None
+    preferred = [chunk for chunk in chunks if chunk.kind in {"file_overview", "non_code", "import_block"}]
+    pool = preferred or [chunk for chunk in chunks if chunk.kind == "symbol_body"] or list(chunks)
+    return min(pool, key=lambda chunk: (chunk.end_byte - chunk.start_byte, chunk.ordinal, chunk.id))
 
 
 def _text_hits(db: Session, generation: IndexGeneration, question: str) -> list[LaneHit]:
@@ -568,8 +663,8 @@ def _load_span_text(db: Session, generation_id: str, revision: SourceRevision, s
                 "chunk_kind": chunk.kind,
                 "start_line": chunk.start_line,
                 "end_line": chunk.end_line,
-                "context_prefix": link.context_prefix,
-                "text": source.decode("utf-8", errors="replace"),
+                "context_prefix": without_nul(link.context_prefix),
+                "text": without_nul(source.decode("utf-8", errors="replace")),
                 "raw_bytes": len(source),
             }
         )

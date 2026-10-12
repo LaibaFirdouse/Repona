@@ -2,6 +2,7 @@ import json
 import unittest
 
 from app.retrieval.model_call import parse_claims
+from app.retrieval.answer import question_identifiers, question_paths
 from app.retrieval.fusion import (
     ChunkChoice,
     GraphEdge,
@@ -168,6 +169,12 @@ class PacketTests(unittest.TestCase):
     def test_model_json_is_parsed_from_a_fence(self) -> None:
         raw = '```json\n' + json.dumps({"claims": [{"kind": "observed", "text": "yes", "evidence_ids": ["c"]}]}) + "\n```"
         self.assertEqual(parse_claims(raw).claims[0]["text"], "yes")
+
+
+class QuestionTokenTests(unittest.TestCase):
+    def test_a_sentence_keeps_the_identifier_and_the_directory(self) -> None:
+        self.assertEqual(question_identifiers("Which functions call derive_key?"), ["Which", "functions", "call", "derive_key"])
+        self.assertEqual(question_paths("What Python files live under src/itsdangerous?"), ["src/itsdangerous"])
 
 
 if __name__ == "__main__":

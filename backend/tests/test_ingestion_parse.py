@@ -82,6 +82,32 @@ class AssembleTests(unittest.TestCase):
         self.assertEqual(call.target_id, file_id)
         self.assertFalse(any(edge.relationship == "DEPENDS_ON" for edge in draft.edges))
 
+    def test_self_call_resolves_to_the_same_class_method(self) -> None:
+        draft = assemble_generation(
+            REPO,
+            "d" * 40,
+            [blob("app.py", "class Box:\n    def open(self):\n        return 1\n    def run(self):\n        self.open()\n")],
+            "f" * 64,
+            GENERATION,
+        )
+        call = next(edge for edge in draft.edges if edge.relationship == "CALLS" and edge.mentioned_name == "self.open")
+        target = next(symbol.id for symbol in draft.symbols if symbol.qualified_name == "Box.open")
+        self.assertEqual(call.resolution, "resolved")
+        self.assertEqual(call.target_id, target)
+
+    def test_call_on_another_object_stays_unresolved(self) -> None:
+        draft = assemble_generation(
+            REPO,
+            "e" * 40,
+            [blob("app.py", "class Box:\n    def open(self):\n        return 1\n    def run(self, other):\n        other.open()\n")],
+            "f" * 64,
+            GENERATION,
+        )
+        call = next(edge for edge in draft.edges if edge.relationship == "CALLS")
+        file_id = next(item.id for item in draft.files if item.relative_path == "app.py")
+        self.assertEqual(call.resolution, "unresolved")
+        self.assertEqual(call.target_id, file_id)
+
     def test_module_symbol_has_no_chunk(self) -> None:
         draft = assemble_generation(
             REPO,
@@ -112,6 +138,31 @@ class AssembleTests(unittest.TestCase):
             [(item.name, item.evidence_file_id, item.evidence_text) for item in serial.technologies],
             [(item.name, item.evidence_file_id, item.evidence_text) for item in parallel.technologies],
         )
+
+    def test_saved_parse_matches_the_first_run(self) -> None:
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        from app.ingestion.checkpoint import ParseCache
+
+        blobs = [
+            blob(f"pkg/file_{index:02d}.py", f"def item_{index}():\n    return {index}\n")
+            for index in range(40)
+        ]
+        blobs.append(blob("pkg/use.py", "from pkg.file_01 import item_1\n\ndef run():\n    return item_1()\n"))
+        with TemporaryDirectory() as directory:
+            cache = ParseCache(Path(directory))
+            serial = assemble_generation(REPO, "e" * 40, blobs, "f" * 64, GENERATION, workers=1)
+            first = assemble_generation(REPO, "e" * 40, blobs, "f" * 64, GENERATION, workers=2, cache=cache)
+            stored = [path for path in Path(directory).rglob("*") if path.is_file()]
+            second = assemble_generation(REPO, "e" * 40, blobs, "f" * 64, GENERATION, workers=2, cache=cache)
+            self.assertEqual(len(stored), 41)
+        for draft in (first, second):
+            self.assertEqual([item.id for item in serial.files], [item.id for item in draft.files])
+            self.assertEqual([item.directory_id for item in serial.files], [item.directory_id for item in draft.files])
+            self.assertEqual([item.id for item in serial.symbols], [item.id for item in draft.symbols])
+            self.assertEqual([item.id for item in serial.chunks], [item.id for item in draft.chunks])
+            self.assertEqual([item.edge_id for item in serial.edges], [item.edge_id for item in draft.edges])
 
 
 if __name__ == "__main__":
