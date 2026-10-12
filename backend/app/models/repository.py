@@ -16,7 +16,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 if TYPE_CHECKING:
-    from app.models.analysis_report import AnalysisReport
     from app.models.catalog import Chunk
 
 
@@ -67,10 +66,6 @@ class Repository(Base):
         nullable=False,
     )
 
-    analysis_reports: Mapped[list["AnalysisReport"]] = relationship(
-        back_populates="repository",
-        cascade="all, delete-orphan",
-    )
     chunks: Mapped[list["Chunk"]] = relationship(back_populates="repository")
 
 
