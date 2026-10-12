@@ -106,7 +106,9 @@ def module_qualified_name(relative_path: str) -> str:
 def parse_file(relative_path: str, payload: bytes) -> ParsedFile:
     language = language_for_path(relative_path)
     if language is None:
-        return ParsedFile(language=None, parse_status="not_parsed", parse_message=None)
+        from app.ingestion.grammars import parse_other
+
+        return parse_other(relative_path, payload)
     if not payload:
         stem = module_qualified_name(relative_path).rsplit(".", 1)[-1]
         return ParsedFile(

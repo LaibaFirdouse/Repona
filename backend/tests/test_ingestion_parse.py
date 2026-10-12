@@ -1,6 +1,7 @@
 import unittest
 
 from app.ingestion.assemble import SourceBlob, assemble_generation
+from app.ingestion.inclusion import is_included
 from app.ingestion.parse import parse_file
 from app.storage.identity import repository_id
 
@@ -32,6 +33,23 @@ class ParseTests(unittest.TestCase):
         parsed = parse_file("package.json", b"{}")
         self.assertEqual(parsed.parse_status, "not_parsed")
         self.assertEqual(parsed.symbols, [])
+
+    def test_manifests_are_kept_as_text(self) -> None:
+        self.assertTrue(is_included("requirements.txt", "100644"))
+        self.assertTrue(is_included("go.mod", "100644"))
+        self.assertEqual(parse_file("requirements.txt", b"flask\n").parse_status, "not_parsed")
+        self.assertEqual(parse_file("go.mod", b"module example.com/demo\n").parse_status, "not_parsed")
+        self.assertEqual(parse_file("CMakeLists.txt", b"cmake_minimum_required(VERSION 3.16)\n").parse_status, "not_parsed")
+
+    def test_go_function_and_call_are_read(self) -> None:
+        self.assertTrue(is_included("cmd/main.go", "100644"))
+        source = "package main\nfunc answer() int { return 1 }\nfunc main() {\n\tanswer()\n}\n"
+        parsed = parse_file("cmd/main.go", source.encode())
+        self.assertEqual(parsed.parse_status, "parsed")
+        functions = {symbol.qualified_name for symbol in parsed.symbols if symbol.kind == "function"}
+        self.assertEqual(functions, {"answer", "main"})
+        calls = [mention.mentioned_name for mention in parsed.mentions if mention.relationship == "CALLS"]
+        self.assertEqual(calls, ["answer"])
 
     def test_python_method_is_not_parented_by_the_module(self) -> None:
         parsed = parse_file("app.py", b"class Box:\n    def open(self):\n        return 1\n")
@@ -92,6 +110,20 @@ class AssembleTests(unittest.TestCase):
         )
         call = next(edge for edge in draft.edges if edge.relationship == "CALLS" and edge.mentioned_name == "self.open")
         target = next(symbol.id for symbol in draft.symbols if symbol.qualified_name == "Box.open")
+        self.assertEqual(call.resolution, "resolved")
+        self.assertEqual(call.target_id, target)
+
+    def test_go_call_resolves_to_the_function(self) -> None:
+        draft = assemble_generation(
+            REPO,
+            "f" * 40,
+            [blob("main.go", "package main\nfunc answer() int { return 1 }\nfunc main() {\n\tanswer()\n}\n")],
+            "f" * 64,
+            GENERATION,
+        )
+        call = next(edge for edge in draft.edges if edge.relationship == "CALLS")
+        target = next(symbol.id for symbol in draft.symbols if symbol.qualified_name == "answer")
+        self.assertEqual(call.mentioned_name, "answer")
         self.assertEqual(call.resolution, "resolved")
         self.assertEqual(call.target_id, target)
 

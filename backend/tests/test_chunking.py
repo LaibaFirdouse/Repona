@@ -7,11 +7,18 @@ from app.ingestion.inclusion import is_included
 class InclusionTests(unittest.TestCase):
     def test_includes_source_and_named_manifests(self) -> None:
         self.assertTrue(is_included("src/app.py", "100644"))
+        self.assertTrue(is_included("cmd/main.go", "100644"))
+        self.assertTrue(is_included("src/lib.rs", "100644"))
+        self.assertTrue(is_included("Main.java", "100644"))
+        self.assertTrue(is_included("src/app.CPP", "100644"))
+        self.assertTrue(is_included("Makefile", "100644"))
         self.assertTrue(is_included("Dockerfile", "100755"))
         self.assertTrue(is_included("requirements.txt", "100644"))
 
     def test_skips_other_text_lockfiles_and_vendor_trees(self) -> None:
         self.assertFalse(is_included("notes.txt", "100644"))
+        self.assertFalse(is_included("logo.png", "100644"))
+        self.assertFalse(is_included("go.sum", "100644"))
         self.assertFalse(is_included("package-lock.json", "100644"))
         self.assertFalse(is_included("node_modules/pkg/index.js", "100644"))
         self.assertFalse(is_included("build/app.js", "100644"))

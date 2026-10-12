@@ -10,7 +10,7 @@ from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from dataclasses import dataclass, field
 
 from app.ingestion.chunking import Span, build_chunks
-from app.ingestion.inclusion import is_included
+from app.ingestion.inclusion import INCLUDED_FILENAMES, LANGUAGE_BY_EXTENSION, is_included
 from app.ingestion.parse import ParsedFile, parse_file
 from app.ingestion.versions import (
     CHUNKING_VERSION,
@@ -605,25 +605,14 @@ def _technologies(file: FileRecord, payload: bytes) -> list[TechnologyRecord]:
 
 def _language_name(relative_path: str) -> str | None:
     extension = _extension(relative_path)
-    return {
-        ".py": "python",
-        ".js": "javascript",
-        ".jsx": "javascript",
-        ".ts": "typescript",
-        ".tsx": "typescript",
-        ".md": "markdown",
-        ".json": "json",
-        ".yml": "yaml",
-        ".yaml": "yaml",
-        ".toml": "toml",
-        ".sql": "sql",
-        ".sh": "shell",
-    }.get(extension or "")
+    if extension is None:
+        return None
+    return LANGUAGE_BY_EXTENSION.get(extension)
 
 
 def _extension(relative_path: str) -> str | None:
     name = relative_path.rsplit("/", 1)[-1]
-    if name in {"Dockerfile", "requirements.txt"}:
+    if name in INCLUDED_FILENAMES:
         return None
     dot = name.rfind(".")
     if dot == -1:

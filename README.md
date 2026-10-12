@@ -6,7 +6,7 @@ Open http://127.0.0.1:8000. A GitHub link indexes that repository. Anything else
 
 ## What it does
 
-It fetches the default branch and keeps source and config files: Python, JavaScript, TypeScript, JSON, Markdown, YAML, TOML, SQL, shell, Dockerfiles, and `requirements.txt`. It skips `.git`, `node_modules`, `build`, `dist`, and lockfiles.
+It fetches the default branch and keeps source files for each programming language, plus JSON, Markdown, YAML, TOML, SQL, shell, Dockerfiles, and `requirements.txt`. It skips `.git`, `node_modules`, `build`, `dist`, and lockfiles. Declarations and calls are read from each programming language that has a grammar. A language with no grammar is still kept as source text, so a question can cite the file.
 
 Postgres holds the catalog, Neo4j holds the call graph, and Qdrant holds the embeddings (`all-MiniLM-L6-v2`). A question is searched by name, by the words in the text, and by meaning. The model writes the answer from that evidence.
 
