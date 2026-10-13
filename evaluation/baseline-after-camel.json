@@ -1,0 +1,735 @@
+{
+  "label": "after-camel",
+  "model": "stub; ollama was not called",
+  "cold_warmup": {
+    "id": "flask_exact",
+    "question": "In Flask, how does Flask.dispatch_request invoke the matched view function?",
+    "repository": "https://github.com/pallets/flask",
+    "expected": [
+      "Flask.dispatch_request"
+    ],
+    "known_miss": false,
+    "abstain": false,
+    "error": null,
+    "strategy": "implementation",
+    "model_calls": 0,
+    "retrieval_seconds": 21.310571588997846,
+    "stage_seconds": {
+      "name": 0.092,
+      "text": 0.013,
+      "vector": 17.774,
+      "graph": 0.929,
+      "load": 0.15
+    },
+    "lane_candidates": [
+      "test_basic_view.Index.dispatch_request",
+      "Flask.dispatch_request",
+      "View.dispatch_request",
+      "test_basic_view.Index",
+      "test_basic_view",
+      "test_endpoint_override.Index",
+      "test_view_decorators.Index.dispatch_request",
+      "test_view_provide_automatic_options_attr_enable.Index",
+      "MethodView.dispatch_request",
+      "Flask.preprocess_request",
+      "AsyncView.dispatch_request",
+      "test_view_provide_automatic_options_attr_disable.Index.dispatch_request",
+      "test_init_once.CountInit",
+      "test_init_once",
+      "test_view_provide_automatic_options_attr_enable.Index.dispatch_request",
+      "Flask.make_default_options_response",
+      "Flask.ensure_sync",
+      "Flask.raise_routing_exception",
+      "Flask.full_dispatch_request",
+      "Request.endpoint",
+      "AppContext.request"
+    ],
+    "selection_set": [
+      "Flask.dispatch_request",
+      "View.dispatch_request",
+      "MethodView.dispatch_request",
+      "Flask.preprocess_request",
+      "test_basic_view.Index.dispatch_request",
+      "test_basic_view.Index",
+      "test_basic_view",
+      "test_endpoint_override.Index",
+      "test_view_decorators.Index.dispatch_request",
+      "test_view_provide_automatic_options_attr_enable.Index",
+      "AsyncView.dispatch_request",
+      "test_view_provide_automatic_options_attr_disable.Index.dispatch_request"
+    ],
+    "packet": [
+      "Flask.dispatch_request",
+      "View.dispatch_request",
+      "MethodView.dispatch_request",
+      "Flask.preprocess_request",
+      "test_basic_view.Index.dispatch_request",
+      "test_basic_view.Index",
+      "test_basic_view",
+      "test_endpoint_override.Index",
+      "test_view_decorators.Index.dispatch_request",
+      "test_view_provide_automatic_options_attr_enable.Index",
+      "AsyncView.dispatch_request",
+      "test_view_provide_automatic_options_attr_disable.Index.dispatch_request"
+    ],
+    "discovered": {
+      "Flask.dispatch_request": true
+    },
+    "in_packet": {
+      "Flask.dispatch_request": true
+    },
+    "citations": [
+      {
+        "chunk_id": "fa7a557f-672c-5d55-84de-0242ea4c64b1",
+        "path": "src/flask/app.py",
+        "start_line": 966,
+        "end_line": 990
+      }
+    ],
+    "citation_lines_match": {
+      "Flask.dispatch_request": true
+    },
+    "quotes_in_cited_source": true,
+    "no_claim_line": false,
+    "answer": "Flask.dispatch_request calls `self.raise_routing_exception(req)` when `req.routing_exception is not None`. Flask.dispatch_request returns `self.make_default_options_response(ctx)` when `getattr(rule, \"provide_automatic_options\", False) and req.method == \"OPTIONS\"`. Flask.dispatch_request calls `self.make_default_options_response` with `(ctx)`. Flask.dispatch_request returns `self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)`. Flask.dispatch_request calls `self.ensure_sync` with `(self.view_functions[rule.endpoint])`. `self.view_functions` is indexed by `rule.endpoint`. Flask.dispatch_request calls that result with `(**view_args)`.",
+    "pass": "cold"
+  },
+  "cases": [
+    {
+      "id": "flask_exact",
+      "question": "In Flask, how does Flask.dispatch_request invoke the matched view function?",
+      "repository": "https://github.com/pallets/flask",
+      "expected": [
+        "Flask.dispatch_request"
+      ],
+      "known_miss": false,
+      "abstain": false,
+      "error": null,
+      "strategy": "implementation",
+      "model_calls": 0,
+      "retrieval_seconds": 1.0554979459993774,
+      "stage_seconds": {
+        "name": 0.076,
+        "text": 0.004,
+        "vector": 0.116,
+        "graph": 0.531,
+        "load": 0.123
+      },
+      "lane_candidates": [
+        "test_basic_view.Index.dispatch_request",
+        "Flask.dispatch_request",
+        "View.dispatch_request",
+        "test_basic_view.Index",
+        "test_basic_view",
+        "test_endpoint_override.Index",
+        "test_view_decorators.Index.dispatch_request",
+        "test_view_provide_automatic_options_attr_enable.Index",
+        "MethodView.dispatch_request",
+        "Flask.preprocess_request",
+        "AsyncView.dispatch_request",
+        "test_view_provide_automatic_options_attr_disable.Index.dispatch_request",
+        "test_init_once.CountInit",
+        "test_init_once",
+        "test_view_provide_automatic_options_attr_enable.Index.dispatch_request",
+        "Flask.make_default_options_response",
+        "Flask.ensure_sync",
+        "Flask.raise_routing_exception",
+        "Flask.full_dispatch_request",
+        "Request.endpoint",
+        "AppContext.request"
+      ],
+      "selection_set": [
+        "Flask.dispatch_request",
+        "View.dispatch_request",
+        "MethodView.dispatch_request",
+        "Flask.preprocess_request",
+        "test_basic_view.Index.dispatch_request",
+        "test_basic_view.Index",
+        "test_basic_view",
+        "test_endpoint_override.Index",
+        "test_view_decorators.Index.dispatch_request",
+        "test_view_provide_automatic_options_attr_enable.Index",
+        "AsyncView.dispatch_request",
+        "test_view_provide_automatic_options_attr_disable.Index.dispatch_request"
+      ],
+      "packet": [
+        "Flask.dispatch_request",
+        "View.dispatch_request",
+        "MethodView.dispatch_request",
+        "Flask.preprocess_request",
+        "test_basic_view.Index.dispatch_request",
+        "test_basic_view.Index",
+        "test_basic_view",
+        "test_endpoint_override.Index",
+        "test_view_decorators.Index.dispatch_request",
+        "test_view_provide_automatic_options_attr_enable.Index",
+        "AsyncView.dispatch_request",
+        "test_view_provide_automatic_options_attr_disable.Index.dispatch_request"
+      ],
+      "discovered": {
+        "Flask.dispatch_request": true
+      },
+      "in_packet": {
+        "Flask.dispatch_request": true
+      },
+      "citations": [
+        {
+          "chunk_id": "fa7a557f-672c-5d55-84de-0242ea4c64b1",
+          "path": "src/flask/app.py",
+          "start_line": 966,
+          "end_line": 990
+        }
+      ],
+      "citation_lines_match": {
+        "Flask.dispatch_request": true
+      },
+      "quotes_in_cited_source": true,
+      "no_claim_line": false,
+      "answer": "Flask.dispatch_request calls `self.raise_routing_exception(req)` when `req.routing_exception is not None`. Flask.dispatch_request returns `self.make_default_options_response(ctx)` when `getattr(rule, \"provide_automatic_options\", False) and req.method == \"OPTIONS\"`. Flask.dispatch_request calls `self.make_default_options_response` with `(ctx)`. Flask.dispatch_request returns `self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)`. Flask.dispatch_request calls `self.ensure_sync` with `(self.view_functions[rule.endpoint])`. `self.view_functions` is indexed by `rule.endpoint`. Flask.dispatch_request calls that result with `(**view_args)`.",
+      "pass": "warm"
+    },
+    {
+      "id": "flask_dispatch",
+      "question": "How does Flask match an incoming request to a view and return the result?",
+      "repository": "https://github.com/pallets/flask",
+      "expected": [
+        "Flask.dispatch_request"
+      ],
+      "known_miss": false,
+      "abstain": false,
+      "error": null,
+      "strategy": "implementation",
+      "model_calls": 0,
+      "retrieval_seconds": 1.0537778119978611,
+      "stage_seconds": {
+        "name": 0.079,
+        "text": 0.003,
+        "vector": 0.107,
+        "graph": 0.509,
+        "load": 0.11
+      },
+      "lane_candidates": [
+        "test_inject_blueprint_url_defaults.view",
+        "test_basic_view.Index.dispatch_request",
+        "AppContext.request",
+        "test_basic_view.Index",
+        "result",
+        "test_basic_view",
+        "Flask.preprocess_request",
+        "test_custom_config_class.Flask",
+        "test_endpoint_override.Index",
+        "test_route_decorator_custom_endpoint_with_dots.view",
+        "test_subdomain.view",
+        "test_method_based_view.Index",
+        "test_nosubdomain.view",
+        "test_method_based_view",
+        "Flask",
+        "Flask",
+        "Flask",
+        "Flask",
+        "Flask",
+        "Flask",
+        "Flask",
+        "Flask",
+        "test_explicit_head",
+        "test_inject_blueprint_url_defaults",
+        "Flask.raise_routing_exception",
+        "Flask.process_response",
+        "Flask.make_response",
+        "Flask.dispatch_request",
+        "Flask.handle_http_exception",
+        "Flask.handle_user_exception",
+        "Flask.handle_exception",
+        "Flask.create_jinja_environment",
+        "Flask.url_for",
+        "Flask.update_template_context"
+      ],
+      "selection_set": [
+        "Flask.dispatch_request",
+        "Flask.full_dispatch_request",
+        "result",
+        "AppContext.request",
+        "Flask.preprocess_request",
+        "test_inject_blueprint_url_defaults.view",
+        "test_basic_view.Index.dispatch_request",
+        "test_basic_view.Index",
+        "test_basic_view",
+        "test_custom_config_class.Flask",
+        "test_endpoint_override.Index",
+        "test_route_decorator_custom_endpoint_with_dots.view"
+      ],
+      "packet": [
+        "Flask.dispatch_request",
+        "Flask.full_dispatch_request",
+        "result",
+        "AppContext.request",
+        "Flask.preprocess_request",
+        "test_inject_blueprint_url_defaults.view",
+        "test_basic_view.Index.dispatch_request",
+        "test_basic_view.Index",
+        "test_basic_view",
+        "test_custom_config_class.Flask",
+        "test_endpoint_override.Index",
+        "test_route_decorator_custom_endpoint_with_dots.view"
+      ],
+      "discovered": {
+        "Flask.dispatch_request": true
+      },
+      "in_packet": {
+        "Flask.dispatch_request": true
+      },
+      "citations": [
+        {
+          "chunk_id": "fa7a557f-672c-5d55-84de-0242ea4c64b1",
+          "path": "src/flask/app.py",
+          "start_line": 966,
+          "end_line": 990
+        }
+      ],
+      "citation_lines_match": {
+        "Flask.dispatch_request": true
+      },
+      "quotes_in_cited_source": true,
+      "no_claim_line": false,
+      "answer": "Flask.dispatch_request calls `self.raise_routing_exception(req)` when `req.routing_exception is not None`. Flask.dispatch_request returns `self.make_default_options_response(ctx)` when `getattr(rule, \"provide_automatic_options\", False) and req.method == \"OPTIONS\"`. Flask.dispatch_request calls `self.make_default_options_response` with `(ctx)`. Flask.dispatch_request returns `self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)`. Flask.dispatch_request calls `self.ensure_sync` with `(self.view_functions[rule.endpoint])`. `self.view_functions` is indexed by `rule.endpoint`. Flask.dispatch_request calls that result with `(**view_args)`.",
+      "pass": "warm"
+    },
+    {
+      "id": "flask_response_one",
+      "question": "How does Flask convert a view's return value into a response?",
+      "repository": "https://github.com/pallets/flask",
+      "expected": [
+        "Flask.make_response"
+      ],
+      "known_miss": false,
+      "abstain": false,
+      "error": null,
+      "strategy": "implementation",
+      "model_calls": 0,
+      "retrieval_seconds": 1.033618971996475,
+      "stage_seconds": {
+        "name": 0.069,
+        "text": 0.003,
+        "vector": 0.132,
+        "graph": 0.535,
+        "load": 0.116
+      },
+      "lane_candidates": [
+        "DefaultJSONProvider.response",
+        "Flask.make_response",
+        "JSONProvider.response",
+        "",
+        "make_response",
+        "CertParamType.convert",
+        "test_basic_view.Index.dispatch_request",
+        "SeparatedPathType.convert",
+        "test_custom_config_class.Flask",
+        "test_basic_view.Index",
+        "test_inject_blueprint_url_defaults.view",
+        "test_endpoint_override.Index",
+        "Flask",
+        "Flask",
+        "Flask",
+        "Flask",
+        "Flask",
+        "Flask",
+        "Flask",
+        "Flask",
+        "test_method_based_view.Index",
+        "View.as_view.view",
+        "test_response_types.from_response_headers",
+        "DefaultJSONProvider.dumps",
+        "JSONProvider._prepare_response_obj",
+        "App.debug",
+        "App.debug",
+        "JSONProvider.dumps"
+      ],
+      "selection_set": [
+        "Flask.make_response",
+        "Flask.make_default_options_response",
+        "Flask.process_response",
+        "DefaultJSONProvider.response",
+        "JSONProvider.response",
+        "make_response",
+        "CertParamType.convert",
+        "SeparatedPathType.convert",
+        null,
+        "test_basic_view.Index.dispatch_request",
+        "test_custom_config_class.Flask",
+        "test_basic_view.Index"
+      ],
+      "packet": [
+        "Flask.make_response",
+        "Flask.make_default_options_response",
+        "Flask.process_response",
+        "DefaultJSONProvider.response",
+        "JSONProvider.response",
+        "make_response"
+      ],
+      "discovered": {
+        "Flask.make_response": true
+      },
+      "in_packet": {
+        "Flask.make_response": true
+      },
+      "citations": [
+        {
+          "chunk_id": "0fb0ee83-0d66-5397-a40a-af66043094ba",
+          "path": "src/flask/app.py",
+          "start_line": 1224,
+          "end_line": 1364
+        }
+      ],
+      "citation_lines_match": {
+        "Flask.make_response": true
+      },
+      "quotes_in_cited_source": false,
+      "no_claim_line": false,
+      "answer": "Flask.make_response assigns `self.response_class( rv, status=status, headers=headers, )` to `rv` when `isinstance(rv, (str, bytes, bytearray)) or isinstance(rv, cabc.Iterator)`. Flask.make_response assigns `self.json.response(rv)` to `rv` when `isinstance(rv, (dict, list))`. Flask.make_response assigns `self.response_class.force_type( rv, request.environ, )` to `rv` when `isinstance(rv, BaseResponse) or callable(rv)`. Flask.make_response returns `rv`.",
+      "pass": "warm"
+    },
+    {
+      "id": "flask_response_many",
+      "question": "How does Flask process and finalize a response?",
+      "repository": "https://github.com/pallets/flask",
+      "expected": [
+        "Flask.finalize_request",
+        "Flask.process_response"
+      ],
+      "known_miss": false,
+      "abstain": false,
+      "error": null,
+      "strategy": "implementation",
+      "model_calls": 0,
+      "retrieval_seconds": 1.0093671929935226,
+      "stage_seconds": {
+        "name": 0.06,
+        "text": 0.004,
+        "vector": 0.115,
+        "graph": 0.538,
+        "load": 0.118
+      },
+      "lane_candidates": [
+        "Flask.finalize_request",
+        "Flask.process_response",
+        "Flask",
+        "DefaultJSONProvider.response",
+        "JSONProvider.response",
+        "process",
+        "",
+        "",
+        "process",
+        "Flask.do_teardown_request",
+        "test_custom_config_class.Flask",
+        "test_make_response_with_response_instance",
+        "Flask.preprocess_request",
+        "Flask.make_response",
+        "Flask.handle_exception",
+        "Flask.full_dispatch_request",
+        "App.logger",
+        "Flask.ensure_sync",
+        "Flask.__init_subclass__"
+      ],
+      "selection_set": [
+        "Flask.finalize_request",
+        "Flask.process_response",
+        "Flask",
+        "process",
+        "process",
+        "DefaultJSONProvider.response",
+        "JSONProvider.response",
+        "Flask.do_teardown_request",
+        null,
+        null,
+        "test_custom_config_class.Flask",
+        "test_make_response_with_response_instance"
+      ],
+      "packet": [
+        "Flask.finalize_request",
+        "Flask.process_response",
+        "Flask",
+        "process",
+        "process"
+      ],
+      "discovered": {
+        "Flask.finalize_request": true,
+        "Flask.process_response": true
+      },
+      "in_packet": {
+        "Flask.finalize_request": true,
+        "Flask.process_response": true
+      },
+      "citations": [
+        {
+          "chunk_id": "b19f52ad-55c7-55b1-b003-7a11ec0b19e0",
+          "path": "src/flask/app.py",
+          "start_line": 1021,
+          "end_line": 1051
+        },
+        {
+          "chunk_id": "2f66e882-317f-5284-83c8-62351420e2be",
+          "path": "src/flask/app.py",
+          "start_line": 1394,
+          "end_line": 1418
+        }
+      ],
+      "citation_lines_match": {
+        "Flask.finalize_request": true,
+        "Flask.process_response": true
+      },
+      "quotes_in_cited_source": true,
+      "no_claim_line": false,
+      "answer": "Flask.finalize_request assigns `self.make_response(rv)` to `response`. Flask.finalize_request assigns `self.process_response(ctx, response)` to `response`. Flask.finalize_request calls `request_finished.send( self, _async_wrapper=self.ensure_sync, response=response )`. Flask.finalize_request returns `response`. Flask.process_response assigns `self.ensure_sync(func)(response)` to `response`. Flask.process_response assigns `self.ensure_sync(func)(response)` to `response` when `name in self.after_request_funcs`. Flask.process_response calls `self.session_interface.save_session(self, ctx._get_session(), response)` when `not self.session_interface.is_null_session(ctx._get_session())`. Flask.process_response returns `response`.",
+      "pass": "warm"
+    },
+    {
+      "id": "itsdangerous_exact",
+      "question": "How does Signer.sign produce a signed value?",
+      "repository": "https://github.com/pallets/itsdangerous",
+      "expected": [
+        "Signer.sign"
+      ],
+      "known_miss": false,
+      "abstain": false,
+      "error": null,
+      "strategy": "implementation",
+      "model_calls": 0,
+      "retrieval_seconds": 0.8735526890013716,
+      "stage_seconds": {
+        "name": 0.047,
+        "text": 0.003,
+        "vector": 0.115,
+        "graph": 0.44,
+        "load": 0.125
+      },
+      "lane_candidates": [
+        "Signer.sign",
+        "TestSigner.test_signer",
+        "Signer",
+        "TestSigner.signer",
+        "TimestampSigner.sign",
+        "TestSerializer.value",
+        "Signer.validate",
+        "TestSigner.test_key_derivation",
+        "TestURLSafeSerializer.value",
+        "TestSigner.test_secret_keys",
+        "Serializer.make_signer",
+        "TestSigner.signer_factory",
+        "want_bytes",
+        "Signer.get_signature",
+        "SigningAlgorithm.get_signature",
+        "NoneAlgorithm.get_signature",
+        "HMACAlgorithm.get_signature",
+        "Serializer.dumps"
+      ],
+      "selection_set": [
+        "Signer.sign",
+        "Signer",
+        "TimestampSigner.sign",
+        "Signer.validate",
+        "Serializer.make_signer",
+        "TestSigner.test_signer",
+        "TestSigner.signer",
+        "TestSerializer.value",
+        "TestSigner.test_key_derivation",
+        "TestURLSafeSerializer.value",
+        "TestSigner.test_secret_keys",
+        "TestSigner.signer_factory"
+      ],
+      "packet": [
+        "Signer.sign",
+        "Signer",
+        "TimestampSigner.sign",
+        "Signer.validate",
+        "Serializer.make_signer",
+        "TestSigner.test_signer",
+        "TestSigner.signer",
+        "TestSerializer.value",
+        "TestSigner.test_key_derivation",
+        "TestURLSafeSerializer.value"
+      ],
+      "discovered": {
+        "Signer.sign": true
+      },
+      "in_packet": {
+        "Signer.sign": true
+      },
+      "citations": [
+        {
+          "chunk_id": "4da6922c-7ae9-5640-bec5-93ea0aaa3f7c",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 222,
+          "end_line": 225
+        }
+      ],
+      "citation_lines_match": {
+        "Signer.sign": true
+      },
+      "quotes_in_cited_source": true,
+      "no_claim_line": false,
+      "answer": "Signer.sign assigns `want_bytes(value)` to `value`. Signer.sign returns `value + self.sep + self.get_signature(value)`.",
+      "pass": "warm"
+    },
+    {
+      "id": "itsdangerous_sign",
+      "question": "How does a value get signed and later checked?",
+      "repository": "https://github.com/pallets/itsdangerous",
+      "expected": [
+        "Signer.sign",
+        "Signer.unsign"
+      ],
+      "known_miss": true,
+      "abstain": false,
+      "error": null,
+      "strategy": "model",
+      "model_calls": 1,
+      "retrieval_seconds": 0.9212894609954674,
+      "stage_seconds": {
+        "name": 0.066,
+        "text": 0.003,
+        "vector": 0.113,
+        "graph": 0.443,
+        "load": 0.115
+      },
+      "lane_candidates": [
+        "TestSerializer.value",
+        "Signer.validate",
+        "TestURLSafeSerializer.value",
+        "Signer.sign",
+        "TestSigner.test_signer",
+        "TimestampSigner.validate",
+        "SigningAlgorithm.verify_signature",
+        "Signer.unsign",
+        "TestSigner.test_changed_value",
+        "TestTimestampSigner.test_return_timestamp",
+        "TestSerializer.test_loads_unsafe",
+        "TestSerializer.test_fallback_signers",
+        "TestSerializer.test_bad_signature_exception",
+        "TestSerializer.test_changed_value",
+        "TestSerializer.test_bad_payload_exception",
+        "TestSerializer.test_alt_salt",
+        "TestSerializer.test_signer_cls",
+        "TestSerializer.test_file",
+        "TestSerializer.test_serializer",
+        "TestSerializer.test_signer_kwargs",
+        "TestSerializer",
+        "Signer",
+        "TestURLSafeSerializer"
+      ],
+      "selection_set": [
+        "Signer.validate",
+        "Signer.sign",
+        "TimestampSigner.validate",
+        "SigningAlgorithm.verify_signature",
+        "Signer.unsign",
+        "TestSerializer.value",
+        "TestURLSafeSerializer.value",
+        "TestSigner.test_signer",
+        "TestSigner.test_changed_value",
+        "TestTimestampSigner.test_return_timestamp",
+        "TestSerializer.test_loads_unsafe",
+        "TestSerializer.test_fallback_signers"
+      ],
+      "packet": [
+        "Signer.validate",
+        "Signer.sign",
+        "TimestampSigner.validate",
+        "SigningAlgorithm.verify_signature",
+        "Signer.unsign",
+        "TestSerializer.value",
+        "TestURLSafeSerializer.value",
+        "TestSigner.test_signer",
+        "TestSigner.test_changed_value",
+        "TestTimestampSigner.test_return_timestamp",
+        "TestSerializer.test_loads_unsafe",
+        "TestSerializer.test_fallback_signers"
+      ],
+      "discovered": {
+        "Signer.sign": true,
+        "Signer.unsign": true
+      },
+      "in_packet": {
+        "Signer.sign": true,
+        "Signer.unsign": true
+      },
+      "citations": [],
+      "citation_lines_match": {},
+      "quotes_in_cited_source": null,
+      "no_claim_line": true,
+      "answer": "The repository evidence did not produce a cited claim.",
+      "pass": "warm"
+    },
+    {
+      "id": "hello_abstain",
+      "question": "Where is the request dispatcher?",
+      "repository": "https://github.com/octocat/Hello-World",
+      "expected": [],
+      "known_miss": false,
+      "abstain": true,
+      "error": null,
+      "strategy": "model",
+      "model_calls": 1,
+      "retrieval_seconds": 0.052236670002457686,
+      "stage_seconds": {
+        "name": 0.013,
+        "text": 0.003,
+        "vector": 0.001,
+        "graph": 0.0,
+        "load": 0.017
+      },
+      "lane_candidates": [],
+      "selection_set": [],
+      "packet": [],
+      "discovered": {},
+      "in_packet": {},
+      "citations": [],
+      "citation_lines_match": {},
+      "quotes_in_cited_source": null,
+      "no_claim_line": true,
+      "answer": "The repository evidence did not produce a cited claim.",
+      "pass": "warm"
+    }
+  ],
+  "javascript": {
+    "id": "javascript_fixture",
+    "question": "What does build return when name is missing, and what does it call?",
+    "expected_quotes": [
+      "prefix.concat",
+      "!name"
+    ],
+    "steps": [
+      "build returns `prefix.concat(\"guest\")` when `!name`.",
+      "build calls `prefix.concat` with `(\"guest\")`.",
+      "build returns `prefix.concat(name)`.",
+      "build calls `prefix.concat` with `(name)`."
+    ],
+    "quotes_present": true,
+    "model_calls": 0
+  },
+  "camel_case": [
+    {
+      "question": "How does the type get a signature?",
+      "expected": "Token.getSignature",
+      "chosen": [
+        "Token.getSignature"
+      ],
+      "discovered": true
+    },
+    {
+      "question": "How does the session verify a token?",
+      "expected": "Session.verifyToken",
+      "chosen": [
+        "Session.verifyToken"
+      ],
+      "discovered": true
+    },
+    {
+      "question": "How does the application make a response?",
+      "expected": "App.makeResponse",
+      "chosen": [
+        "App.makeResponse"
+      ],
+      "discovered": true
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "provider": "cursor",
+  "model": "composer-2.5-fast",
+  "sandbox": "enabled",
+  "mode": "ask",
+  "path": "live HTTP through the temporary API",
+  "product_b_pass": true,
+  "reason": "All eight questions ran on the live Cursor path. The four explanations cite the indexed source. The dependency answer cites the itsdangerous declarations and the sessions.py import. Hello-World, payroll, and authentication abstain before the model. Hello-World no longer fails on a read-only FETCH_HEAD write.",
+  "cases": [
+    {
+      "id": "flask_dispatch",
+      "path": "http",
+      "model_calls": 1,
+      "retrieval_seconds": 19.930,
+      "model_seconds": 13.984,
+      "wall_seconds": 35.958,
+      "citations": [{"path": "src/flask/app.py", "start_line": 966, "end_line": 990}],
+      "pass": true
+    },
+    {
+      "id": "signer_sign",
+      "path": "http",
+      "model_calls": 1,
+      "retrieval_seconds": 1.294,
+      "model_seconds": 18.520,
+      "wall_seconds": 21.205,
+      "citations": [{"path": "src/itsdangerous/signer.py", "start_line": 222, "end_line": 225}],
+      "pass": true,
+      "note": "Live generation, not a pinned fixture. The answer includes want_bytes and the signature return."
+    },
+    {
+      "id": "signing_multi",
+      "path": "http",
+      "model_calls": 1,
+      "retrieval_seconds": 1.009,
+      "model_seconds": 28.420,
+      "wall_seconds": 30.301,
+      "citations": [
+        {"path": "src/itsdangerous/signer.py", "start_line": 222, "end_line": 225},
+        {"path": "src/itsdangerous/signer.py", "start_line": 244, "end_line": 256},
+        {"path": "src/itsdangerous/signer.py", "start_line": 258, "end_line": 266}
+      ],
+      "pass": true,
+      "note": "Live generation. sign, unsign, and validate are all cited."
+    },
+    {
+      "id": "escape_cross",
+      "path": "http",
+      "model_calls": 1,
+      "retrieval_seconds": 2.181,
+      "model_seconds": 16.232,
+      "wall_seconds": 19.322,
+      "citations": [
+        {"path": "src/markupsafe/_native.py", "start_line": 1, "end_line": 8},
+        {"path": "src/markupsafe/__init__.py", "start_line": 24, "end_line": 45}
+      ],
+      "pass": true
+    },
+    {
+      "id": "dependency",
+      "path": "http",
+      "model_calls": 1,
+      "retrieval_seconds": 5.895,
+      "model_seconds": 15.821,
+      "wall_seconds": 22.812,
+      "citations": [
+        {"path": "pyproject.toml", "start_line": 1, "end_line": 272},
+        {"path": "examples/celery/requirements.txt", "start_line": 1, "end_line": 58},
+        {"path": "src/flask/sessions.py", "start_line": 3, "end_line": 14},
+        {"path": "src/flask/sessions.py", "start_line": 303, "end_line": 321}
+      ],
+      "pass": true,
+      "note": "The answer cites itsdangerous>=2.2.0, the celery requirements pin, and the sessions.py import of URLSafeTimedSerializer. docs/conf.py is cited only as the Sphinx intersphinx mapping."
+    },
+    {
+      "id": "payroll",
+      "path": "http",
+      "strategy": "abstain",
+      "model_calls": 0,
+      "retrieval_seconds": 2.262,
+      "model_seconds": 0,
+      "wall_seconds": 3.182,
+      "answer": "The retrieved evidence is not sufficient to explain this.",
+      "citations": [],
+      "pass": true
+    },
+    {
+      "id": "authentication",
+      "path": "http",
+      "strategy": "abstain",
+      "model_calls": 0,
+      "retrieval_seconds": 1.110,
+      "model_seconds": 0,
+      "wall_seconds": 2.193,
+      "answer": "The retrieved evidence is not sufficient to explain this.",
+      "citations": [],
+      "pass": true
+    },
+    {
+      "id": "hello",
+      "path": "http",
+      "strategy": "abstain",
+      "model_calls": 0,
+      "retrieval_seconds": 0.089,
+      "model_seconds": 0,
+      "wall_seconds": 1.022,
+      "answer": "The retrieved evidence is not sufficient to explain this.",
+      "citations": [],
+      "pass": true,
+      "note": "The question was served from the matching commit. Git did not try to write FETCH_HEAD."
+    }
+  ]
+}

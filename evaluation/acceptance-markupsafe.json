@@ -1,0 +1,84 @@
+{
+  "repository": "https://github.com/pallets/markupsafe",
+  "commit_sha": "4e111271b1494995708a9e878a10829b5e10c7ba",
+  "repository_id": "84da167c-e26d-5a06-a219-a7c4026d6b76",
+  "generation_id": "645c3ccb-9049-5baa-9721-1842238045e1",
+  "ingestion_seconds": 72,
+  "ingestion_action": "serve",
+  "manual_repair": false,
+  "cases": [
+    {
+      "id": "overview",
+      "question": "What does MarkupSafe do, and where do its main components live?",
+      "strategy": "abstain",
+      "model_calls": 0,
+      "elapsed_seconds": 2.595,
+      "citations": [],
+      "correct": "abstained",
+      "note": "Packet did not contain a describable component. No fabricated summary."
+    },
+    {
+      "id": "implementation_function",
+      "question": "How does escape escape a string?",
+      "strategy": "implementation",
+      "model_calls": 0,
+      "elapsed_seconds": 19.91,
+      "retrieval_seconds": 18.373,
+      "citations": [{"path": "src/markupsafe/__init__.py", "start_line": 24, "end_line": 45}],
+      "correct": true,
+      "note": "Cold embedding load on the first ask after the API recreate. Quotes match the string and __html__ branches. The existing two-return cap omits the final str(s) fallback."
+    },
+    {
+      "id": "implementation_multi",
+      "question": "How does a missing value get escaped without becoming the word None?",
+      "strategy": "abstain",
+      "model_calls": 0,
+      "elapsed_seconds": 3.03,
+      "retrieval_seconds": 2.189,
+      "citations": [],
+      "correct": "abstained",
+      "note": "escape_silent is the source of this behavior. The question does not name it, and escape_silent to escape is an ambiguous edge, so no call path was invented."
+    },
+    {
+      "id": "cross_file",
+      "question": "How does escape reach _escape_inner in another file?",
+      "strategy": "implementation",
+      "model_calls": 0,
+      "elapsed_seconds": 3.503,
+      "retrieval_seconds": 2.591,
+      "citations": [
+        {"path": "src/markupsafe/_native.py", "start_line": 1, "end_line": 8},
+        {"path": "src/markupsafe/__init__.py", "start_line": 24, "end_line": 45}
+      ],
+      "correct": true,
+      "note": "States the resolved call from escape to _escape_inner in _native.py. Does not claim the unresolved ._speedups import or the C extension."
+    },
+    {
+      "id": "insufficient",
+      "question": "How does MarkupSafe calculate payroll tax withholding?",
+      "strategy": "abstain",
+      "model_calls": 0,
+      "elapsed_seconds": 2.415,
+      "citations": [],
+      "correct": true
+    },
+    {
+      "id": "unsupported_c",
+      "question": "How does escape_unicode_kind1 escape a character in the C extension?",
+      "strategy": "abstain",
+      "model_calls": 0,
+      "elapsed_seconds": 2.778,
+      "citations": [],
+      "correct": true
+    },
+    {
+      "id": "cannot_index",
+      "question": "https://github.com/pallets/this-repo-does-not-exist-repona",
+      "http_status": 403,
+      "detail": "this repository is not public",
+      "elapsed_seconds": 1.6,
+      "repository_rows": 0,
+      "correct": true
+    }
+  ]
+}

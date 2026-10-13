@@ -1,0 +1,708 @@
+{
+  "repository_url": "https://github.com/pallets/itsdangerous",
+  "commit_sha": "672971d66a2ef9f85151e53283113f33d642dabd",
+  "generation_id": "8e219f6b-fecf-54c0-99d1-efb509a13d67",
+  "cases": [
+    {
+      "id": "exact_symbol",
+      "question": "URLSafeTimedSerializer",
+      "action": "serve",
+      "needed_reached": true,
+      "needed": [
+        {
+          "kind": "span",
+          "qualified_name": "URLSafeTimedSerializer",
+          "reached": true
+        }
+      ],
+      "citation_ids_verify": true,
+      "citations": [
+        {
+          "chunk_id": "949ec87d-feee-5970-9774-8ff81e697c78",
+          "path": "src/itsdangerous/url_safe.py",
+          "start_line": 79,
+          "end_line": 83
+        },
+        {
+          "chunk_id": "335b4601-d905-553d-8fb2-70b47a8e5ca2",
+          "path": "tests/test_itsdangerous/test_url_safe.py",
+          "start_line": 21,
+          "end_line": 24
+        },
+        {
+          "chunk_id": "8cde605e-11c1-5c1c-acb4-7db35d533641",
+          "path": "tests/test_itsdangerous/test_url_safe.py",
+          "start_line": 23,
+          "end_line": 24
+        },
+        {
+          "chunk_id": "6948846b-c7e4-51fa-9f01-5c572c20b89c",
+          "path": "src/itsdangerous/url_safe.py",
+          "start_line": 72,
+          "end_line": 76
+        },
+        {
+          "chunk_id": "7b2f2b2c-fbeb-5407-baf0-6d0336ac410c",
+          "path": "src/itsdangerous/url_safe.py",
+          "start_line": 15,
+          "end_line": 69
+        },
+        {
+          "chunk_id": "dc0c96e8-ff32-5f48-b8e2-b01b175477e4",
+          "path": "src/itsdangerous/__init__.py",
+          "start_line": 1,
+          "end_line": 17
+        },
+        {
+          "chunk_id": "48574d95-e489-5856-a96c-ff5e69005961",
+          "path": "tests/test_itsdangerous/test_url_safe.py",
+          "start_line": 1,
+          "end_line": 8
+        },
+        {
+          "chunk_id": "4a04d4e3-7be0-536c-883c-0d5b6464d63e",
+          "path": "src/itsdangerous/timed.py",
+          "start_line": 170,
+          "end_line": 228
+        },
+        {
+          "chunk_id": "53c8150c-f000-58e5-a5d1-a04a87ea2729",
+          "path": "src/itsdangerous/timed.py",
+          "start_line": 222,
+          "end_line": 228
+        },
+        {
+          "chunk_id": "987b140b-e425-5499-8a21-1b437d81e3af",
+          "path": "src/itsdangerous/url_safe.py",
+          "start_line": 55,
+          "end_line": 69
+        },
+        {
+          "chunk_id": "3d6d3ff0-cf9d-5a32-85b3-62f9519bb6c8",
+          "path": "tests/test_itsdangerous/test_timed.py",
+          "start_line": 96,
+          "end_line": 115
+        }
+      ],
+      "no_claim_line": false,
+      "claims": [
+        {
+          "kind": "observed",
+          "text": "URLSafeTimedSerializer is declared in src/itsdangerous/url_safe.py as class URLSafeTimedSerializer(URLSafeSerializerMixin, TimedSerializer[str]).",
+          "evidence_ids": [
+            "949ec87d-feee-5970-9774-8ff81e697c78",
+            "927b487c-ebbb-5d6b-88cb-6dee2b8d9e4d"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "Its docstring states it works like TimedSerializer but dumps and loads into a URL-safe string using upper/lowercase alphabet plus '_', '-', and '.'.",
+          "evidence_ids": [
+            "949ec87d-feee-5970-9774-8ff81e697c78"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "URLSafeTimedSerializer is re-exported from the itsdangerous package via from .url_safe import URLSafeTimedSerializer as URLSafeTimedSerializer in __init__.py.",
+          "evidence_ids": [
+            "dc0c96e8-ff32-5f48-b8e2-b01b175477e4"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "URLSafeSerializerMixin may zlib-compress payload bytes when compression shortens them, base64-encodes the result, and prefixes base64 with b'.' when compressed; load_payload strips that prefix and decompresses before delegating to super().load_payload.",
+          "evidence_ids": [
+            "7b2f2b2c-fbeb-5407-baf0-6d0336ac410c",
+            "987b140b-e425-5499-8a21-1b437d81e3af"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "TimedSerializer uses TimestampSigner as default_signer; loads accepts max_age and return_timestamp, raises SignatureExpired when outdated, and forwards arguments to TimestampSigner.unsign.",
+          "evidence_ids": [
+            "4a04d4e3-7be0-536c-883c-0d5b6464d63e"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "TimedSerializer.loads_unsafe returns self._loads_unsafe_impl(s, salt, load_kwargs={\"max_age\": max_age}).",
+          "evidence_ids": [
+            "53c8150c-f000-58e5-a5d1-a04a87ea2729"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "TestURLSafeTimedSerializer multiply inherits TestURLSafeSerializer and TestTimedSerializer; serializer_factory returns partial(URLSafeTimedSerializer, secret_key=\"secret-key\").",
+          "evidence_ids": [
+            "335b4601-d905-553d-8fb2-70b47a8e5ca2",
+            "8cde605e-11c1-5c1c-acb4-7db35d533641"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "tests/test_itsdangerous/test_url_safe.py imports URLSafeTimedSerializer from itsdangerous.url_safe.",
+          "evidence_ids": [
+            "48574d95-e489-5856-a96c-ff5e69005961"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "URLSafeSerializer is URLSafeSerializerMixin mixed with Serializer[str] and has a parallel URL-safe docstring without timed behavior.",
+          "evidence_ids": [
+            "6948846b-c7e4-51fa-9f01-5c572c20b89c"
+          ]
+        },
+        {
+          "kind": "inference",
+          "text": "URLSafeTimedSerializer combines URL-safe encoding/compression from URLSafeSerializerMixin with time-limited signed loads from TimedSerializer; timed URL-safe behavior is not overridden in the URLSafeTimedSerializer body shown in the packet.",
+          "evidence_ids": [
+            "949ec87d-feee-5970-9774-8ff81e697c78",
+            "7b2f2b2c-fbeb-5407-baf0-6d0336ac410c",
+            "4a04d4e3-7be0-536c-883c-0d5b6464d63e"
+          ]
+        },
+        {
+          "kind": "inference",
+          "text": "TestURLSafeTimedSerializer likely exercises both URL-safe serialization and max_age/return_timestamp behavior via inherited TestURLSafeSerializer and TestTimedSerializer tests (e.g. test_max_age on TimedSerializer).",
+          "evidence_ids": [
+            "335b4601-d905-553d-8fb2-70b47a8e5ca2",
+            "3d6d3ff0-cf9d-5a32-85b3-62f9519bb6c8",
+            "547c848d-a0f8-53fa-b3b5-38a78a0138e0",
+            "6e12571e-590e-54ba-8f3d-1d603851a8cd"
+          ]
+        }
+      ],
+      "message": "The active generation matches this commit.",
+      "retrieval_seconds": 13.985691251997196,
+      "model_seconds": 14.712417994000134,
+      "error": null,
+      "packet_names": [
+        "TestTimedSerializer",
+        "TestURLSafeSerializer.serializer_factory",
+        "TestURLSafeTimedSerializer",
+        "TestURLSafeTimedSerializer.serializer_factory",
+        "TimedSerializer",
+        "TimedSerializer.loads_unsafe",
+        "URLSafeSerializer",
+        "URLSafeSerializerMixin",
+        "URLSafeSerializerMixin.dump_payload",
+        "URLSafeTimedSerializer"
+      ]
+    },
+    {
+      "id": "exact_function",
+      "question": "base64_encode",
+      "action": "serve",
+      "needed_reached": true,
+      "needed": [
+        {
+          "kind": "span",
+          "qualified_name": "base64_encode",
+          "reached": true
+        }
+      ],
+      "citation_ids_verify": true,
+      "citations": [
+        {
+          "chunk_id": "7fe9ecc1-0999-5905-9ccb-6f4843fd7dba",
+          "path": "src/itsdangerous/encoding.py",
+          "start_line": 20,
+          "end_line": 25
+        },
+        {
+          "chunk_id": "eebc4e7f-6d13-596e-88ad-330dbc6d3c9d",
+          "path": "tests/test_itsdangerous/test_encoding.py",
+          "start_line": 18,
+          "end_line": 22
+        },
+        {
+          "chunk_id": "341fb001-f46f-50ac-9461-9caa06ad1aed",
+          "path": "src/itsdangerous/encoding.py",
+          "start_line": 28,
+          "end_line": 38
+        },
+        {
+          "chunk_id": "35b2e1a5-d187-5e2b-ac7a-e447d3f3342c",
+          "path": "tests/test_itsdangerous/test_encoding.py",
+          "start_line": 25,
+          "end_line": 27
+        },
+        {
+          "chunk_id": "dc0c96e8-ff32-5f48-b8e2-b01b175477e4",
+          "path": "src/itsdangerous/__init__.py",
+          "start_line": 1,
+          "end_line": 17
+        },
+        {
+          "chunk_id": "25abaf4d-1c5d-57b0-b726-e6c09b77a1af",
+          "path": "src/itsdangerous/encoding.py",
+          "start_line": 38,
+          "end_line": 48
+        },
+        {
+          "chunk_id": "4b37a85b-32e3-5cf7-af10-e8919678d609",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 3,
+          "end_line": 12
+        },
+        {
+          "chunk_id": "7b2f2b2c-fbeb-5407-baf0-6d0336ac410c",
+          "path": "src/itsdangerous/url_safe.py",
+          "start_line": 15,
+          "end_line": 69
+        },
+        {
+          "chunk_id": "3bd7fd8f-8de4-54a4-ac05-9022cf49b64a",
+          "path": "src/itsdangerous/url_safe.py",
+          "start_line": 3,
+          "end_line": 12
+        },
+        {
+          "chunk_id": "46e2754b-b355-5db5-aa1d-51a2d03a4cd8",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 215,
+          "end_line": 220
+        }
+      ],
+      "no_claim_line": false,
+      "claims": [
+        {
+          "kind": "observed",
+          "text": "In src/itsdangerous/encoding.py, base64_encode accepts str | bytes, docstring states it base64-encodes bytes or text and the result is safe for URLs, calls want_bytes(string), and returns base64.urlsafe_b64encode(string).rstrip(b\"=\").",
+          "evidence_ids": [
+            "7fe9ecc1-0999-5905-9ccb-6f4843fd7dba",
+            "5f17be63-5ad8-5af9-a329-c3ddd604ac69"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "base64_encode is re-exported from itsdangerous package root as base64_encode in src/itsdangerous/__init__.py.",
+          "evidence_ids": [
+            "dc0c96e8-ff32-5f48-b8e2-b01b175477e4",
+            "2ba4963a-f474-5c18-9110-5f03d660b065"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "Signer.get_signature in src/itsdangerous/signer.py returns base64_encode(sig) after computing the algorithm signature.",
+          "evidence_ids": [
+            "46e2754b-b355-5db5-aa1d-51a2d03a4cd8",
+            "8c99fb92-4ffc-55e5-9d76-5a358afd3348"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "URLSafeSerializerMixin.dump_payload in src/itsdangerous/url_safe.py sets base64d = base64_encode(json) (optionally prefixed with b\".\" when compressed).",
+          "evidence_ids": [
+            "7b2f2b2c-fbeb-5407-baf0-6d0336ac410c",
+            "bae7eb97-987d-57a3-a447-de40220dc198"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "src/itsdangerous/signer.py imports base64_encode from .encoding; src/itsdangerous/url_safe.py imports base64_encode and base64_decode from .encoding.",
+          "evidence_ids": [
+            "4b37a85b-32e3-5cf7-af10-e8919678d609",
+            "3bd7fd8f-8de4-54a4-ac05-9022cf49b64a"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "test_base64 in tests/test_itsdangerous/test_encoding.py calls base64_encode(value), asserts enc is bytes, round-trips via base64_decode, and asserts dec == want_bytes(value).",
+          "evidence_ids": [
+            "eebc4e7f-6d13-596e-88ad-330dbc6d3c9d",
+            "89b06eaf-030e-5f4b-b9e3-2d1ccbbadd81"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "base64_decode in the same encoding module pads with b\"=\" * (-len(string) % 4), uses base64.urlsafe_b64decode, and raises BadData(\"Invalid base64-encoded data\") on TypeError or ValueError; test_base64_bad expects BadData for base64_decode(\"12345\").",
+          "evidence_ids": [
+            "341fb001-f46f-50ac-9461-9caa06ad1aed",
+            "35b2e1a5-d187-5e2b-ac7a-e447d3f3342c"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "encoding.py defines _base64_alphabet as URL-safe base64 characters plus \"=\"; signer.py imports _base64_alphabet from .encoding.",
+          "evidence_ids": [
+            "25abaf4d-1c5d-57b0-b726-e6c09b77a1af",
+            "4b37a85b-32e3-5cf7-af10-e8919678d609"
+          ]
+        },
+        {
+          "kind": "inference",
+          "text": "URL-safe payloads and signatures in this library rely on base64_encode output without padding equals signs, paired with base64_decode padding restoration.",
+          "evidence_ids": [
+            "7fe9ecc1-0999-5905-9ccb-6f4843fd7dba",
+            "341fb001-f46f-50ac-9461-9caa06ad1aed",
+            "7b2f2b2c-fbeb-5407-baf0-6d0336ac410c"
+          ]
+        }
+      ],
+      "message": "The active generation matches this commit.",
+      "retrieval_seconds": 0.7819402570021339,
+      "model_seconds": 14.564842021005461,
+      "error": null,
+      "packet_names": [
+        "Signer.get_signature",
+        "URLSafeSerializerMixin",
+        "base64_decode",
+        "base64_encode",
+        "test_base64",
+        "test_base64_bad"
+      ]
+    },
+    {
+      "id": "conceptual",
+      "question": "How does a signature expire after a period of time?",
+      "action": "serve",
+      "needed_reached": true,
+      "needed": [
+        {
+          "kind": "span",
+          "qualified_name": "TimestampSigner",
+          "reached": true
+        }
+      ],
+      "citation_ids_verify": true,
+      "citations": [
+        {
+          "chunk_id": "1b0ce5a6-9dbf-5f15-a1f7-5dce134101ec",
+          "path": "src/itsdangerous/exc.py",
+          "start_line": 60,
+          "end_line": 63
+        },
+        {
+          "chunk_id": "298b0109-72a0-5d41-874d-dad5397e78df",
+          "path": "src/itsdangerous/exc.py",
+          "start_line": 41,
+          "end_line": 57
+        },
+        {
+          "chunk_id": "da7e4dc1-1e3e-586f-830f-03c21a142af6",
+          "path": "src/itsdangerous/timed.py",
+          "start_line": 160,
+          "end_line": 167
+        },
+        {
+          "chunk_id": "979ceafb-b275-5002-a657-2a88ce68bb7f",
+          "path": "src/itsdangerous/exc.py",
+          "start_line": 36,
+          "end_line": 57
+        },
+        {
+          "chunk_id": "95476751-e373-52a5-846d-9d5fa227776d",
+          "path": "src/itsdangerous/timed.py",
+          "start_line": 185,
+          "end_line": 220
+        },
+        {
+          "chunk_id": "c41b8dfb-ae0c-5e37-9aaf-b7381a5bc594",
+          "path": "src/itsdangerous/timed.py",
+          "start_line": 22,
+          "end_line": 167
+        },
+        {
+          "chunk_id": "3e93cc5e-4260-51ea-9418-68cbcdf56a98",
+          "path": "tests/test_itsdangerous/test_timed.py",
+          "start_line": 78,
+          "end_line": 85
+        },
+        {
+          "chunk_id": "23a3f312-33a1-5397-9401-8431754f08e3",
+          "path": "src/itsdangerous/timed.py",
+          "start_line": 72,
+          "end_line": 158
+        }
+      ],
+      "no_claim_line": false,
+      "claims": [
+        {
+          "kind": "observed",
+          "text": "TimestampSigner records signing time and can expire signatures; its unsign method may raise SignatureExpired when unsigning fails because the signature is expired.",
+          "evidence_ids": [
+            "c41b8dfb-ae0c-5e37-9aaf-b7381a5bc594"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "On sign, TimestampSigner appends a base64-encoded timestamp from get_timestamp() (int(time.time())) to the value before computing the signature.",
+          "evidence_ids": [
+            "c41b8dfb-ae0c-5e37-9aaf-b7381a5bc594"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "During unsign, when max_age is not None, age is computed as get_timestamp() minus the embedded timestamp ts_int; if age > max_age, SignatureExpired is raised with message indicating age exceeds max_age seconds, payload value, and date_signed from timestamp_to_datetime(ts_int).",
+          "evidence_ids": [
+            "23a3f312-33a1-5397-9401-8431754f08e3",
+            "c41b8dfb-ae0c-5e37-9aaf-b7381a5bc594"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "During unsign with max_age set, if age < 0, SignatureExpired is also raised (signature timestamp appears in the future relative to current time).",
+          "evidence_ids": [
+            "23a3f312-33a1-5397-9401-8431754f08e3",
+            "3e93cc5e-4260-51ea-9418-68cbcdf56a98"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "SignatureExpired is raised when a signature timestamp is older than max_age and is a subclass of BadTimeSignature.",
+          "evidence_ids": [
+            "1b0ce5a6-9dbf-5f15-a1f7-5dce134101ec"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "BadTimeSignature (and thus SignatureExpired) exposes date_signed on the exception when the signature expired, as a timezone-aware datetime.",
+          "evidence_ids": [
+            "298b0109-72a0-5d41-874d-dad5397e78df",
+            "979ceafb-b275-5002-a657-2a88ce68bb7f"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "TimedSerializer.loads accepts max_age in seconds; if provided it ensures the signature is not older than that duration via the signer's unsign, and raises SignatureExpired when outdated; SignatureExpired is re-raised without trying other signers.",
+          "evidence_ids": [
+            "95476751-e373-52a5-846d-9d5fa227776d"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "TimestampSigner.validate returns True only if unsign(signed_value, max_age=max_age) succeeds; BadSignature is caught and yields False (SignatureExpired is not caught here and would propagate).",
+          "evidence_ids": [
+            "da7e4dc1-1e3e-586f-830f-03c21a142af6",
+            "c41b8dfb-ae0c-5e37-9aaf-b7381a5bc594"
+          ]
+        },
+        {
+          "kind": "inference",
+          "text": "Expiration is enforced at verification time by comparing elapsed seconds since the embedded sign-time to max_age; signatures do not auto-invalidate without calling unsign/loads/validate with max_age.",
+          "evidence_ids": [
+            "23a3f312-33a1-5397-9401-8431754f08e3",
+            "95476751-e373-52a5-846d-9d5fa227776d"
+          ]
+        }
+      ],
+      "message": "The active generation matches this commit.",
+      "retrieval_seconds": 0.6957436239972594,
+      "model_seconds": 13.219722768997599,
+      "error": null,
+      "packet_names": [
+        "BadTimeSignature",
+        "BadTimeSignature.__init__",
+        "SignatureExpired",
+        "TestTimestampSigner.test_future_age",
+        "TimedSerializer.loads",
+        "TimestampSigner",
+        "TimestampSigner.unsign",
+        "TimestampSigner.validate",
+        "want_bytes"
+      ]
+    },
+    {
+      "id": "dependencies",
+      "question": "Which libraries does this project depend on?",
+      "action": "serve",
+      "needed_reached": null,
+      "needed": [],
+      "citation_ids_verify": true,
+      "citations": [
+        {
+          "chunk_id": "c2a125ae-a841-5332-af8d-da1c1ffcf7ab",
+          "path": "docs/conf.py",
+          "start_line": 1,
+          "end_line": 2
+        },
+        {
+          "chunk_id": "3a07222d-c71f-5ffa-a221-ab65ac3bac70",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 1,
+          "end_line": 2
+        },
+        {
+          "chunk_id": "01b10f6f-a962-52fe-86ca-38c794229512",
+          "path": "src/itsdangerous/url_safe.py",
+          "start_line": 1,
+          "end_line": 2
+        },
+        {
+          "chunk_id": "64b37fe6-3fed-535e-9b5c-3895f367ea29",
+          "path": "src/itsdangerous/exc.py",
+          "start_line": 1,
+          "end_line": 2
+        },
+        {
+          "chunk_id": "38fbc663-d7da-5c7a-b4e0-70388ba8168d",
+          "path": "src/itsdangerous/_json.py",
+          "start_line": 1,
+          "end_line": 2
+        },
+        {
+          "chunk_id": "47f4467d-06ed-5406-a0d6-75e78fdc03a5",
+          "path": "src/itsdangerous/timed.py",
+          "start_line": 1,
+          "end_line": 2
+        },
+        {
+          "chunk_id": "10727891-e825-57bd-8fb2-8ad39af179fb",
+          "path": "src/itsdangerous/encoding.py",
+          "start_line": 1,
+          "end_line": 2
+        },
+        {
+          "chunk_id": "54381bf0-5e70-58e3-aba3-ab688d683b37",
+          "path": "src/itsdangerous/serializer.py",
+          "start_line": 1,
+          "end_line": 2
+        }
+      ],
+      "no_claim_line": false,
+      "claims": [
+        {
+          "kind": "observed",
+          "text": "docs/conf.py import block (lines 1\u20132) imports get_version and ProjectLink from pallets_sphinx_themes.",
+          "evidence_ids": [
+            "c2a125ae-a841-5332-af8d-da1c1ffcf7ab"
+          ]
+        },
+        {
+          "kind": "inference",
+          "text": "pallets_sphinx_themes is a named third-party library dependency reflected in the evidence (documentation/Sphinx configuration).",
+          "evidence_ids": [
+            "c2a125ae-a841-5332-af8d-da1c1ffcf7ab"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "Evidence spans for src/itsdangerous/signer.py, url_safe.py, exc.py, _json.py, timed.py, encoding.py, and serializer.py show only `from __future__ import annotations` on lines 1\u20132; no other third-party imports appear in those spans.",
+          "evidence_ids": [
+            "3a07222d-c71f-5ffa-a221-ab65ac3bac70",
+            "01b10f6f-a962-52fe-86ca-38c794229512",
+            "64b37fe6-3fed-535e-9b5c-3895f367ea29",
+            "38fbc663-d7da-5c7a-b4e0-70388ba8168d",
+            "47f4467d-06ed-5406-a0d6-75e78fdc03a5",
+            "10727891-e825-57bd-8fb2-8ad39af179fb",
+            "54381bf0-5e70-58e3-aba3-ab688d683b37"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "Graph edges reference Sphinx-related docs/conf.py settings (e.g. html_theme, intersphinx_mapping, autodoc_*); symbol resolution for those mentions is marked unresolved and they do not name additional installable packages in the evidence.",
+          "evidence_ids": [
+            "3eea36d9-b3c5-5597-a4f0-4e1ec537107a",
+            "bb050cdb-b3a6-5432-a3fd-9bbbb3804488",
+            "51ad3cd2-ac3a-5c48-a2dd-f086fd01d153"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "The evidence packet does not include dependency manifest files (e.g. pyproject.toml, requirements.txt, setup.cfg) or technology rows listing dependencies; a full project dependency list is not in the evidence.",
+          "evidence_ids": [
+            "c2a125ae-a841-5332-af8d-da1c1ffcf7ab"
+          ]
+        }
+      ],
+      "message": "The active generation matches this commit.",
+      "retrieval_seconds": 0.725223065004684,
+      "model_seconds": 16.156226425999193,
+      "error": null,
+      "packet_names": []
+    },
+    {
+      "id": "unanswerable",
+      "question": "Where is the payroll tax table calculated?",
+      "action": "serve",
+      "needed_reached": null,
+      "needed": [],
+      "citation_ids_verify": true,
+      "citations": [
+        {
+          "chunk_id": "2164da30-60fb-5957-9a77-c0153eb99076",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 48,
+          "end_line": 64
+        },
+        {
+          "chunk_id": "028501b8-de4a-5573-ac93-26f70f27fd69",
+          "path": "src/itsdangerous/encoding.py",
+          "start_line": 53,
+          "end_line": 54
+        },
+        {
+          "chunk_id": "87455814-32d2-527c-aaab-30df86a72138",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 62,
+          "end_line": 64
+        },
+        {
+          "chunk_id": "d1df53da-67bf-5dc9-a7de-d2a3a93902ac",
+          "path": "src/itsdangerous/timed.py",
+          "start_line": 29,
+          "end_line": 33
+        },
+        {
+          "chunk_id": "c8e843b1-c54f-5265-889b-3c70130ddd02",
+          "path": "tests/test_itsdangerous/test_encoding.py",
+          "start_line": 27,
+          "end_line": 32
+        },
+        {
+          "chunk_id": "23a3f312-33a1-5397-9401-8431754f08e3",
+          "path": "src/itsdangerous/timed.py",
+          "start_line": 72,
+          "end_line": 158
+        }
+      ],
+      "no_claim_line": false,
+      "claims": [
+        {
+          "kind": "observed",
+          "text": "The evidence packet does not include any span, symbol, or edge that mentions payroll, tax, or a tax table.",
+          "evidence_ids": [
+            "2164da30-60fb-5957-9a77-c0153eb99076",
+            "028501b8-de4a-5573-ac93-26f70f27fd69",
+            "23a3f312-33a1-5397-9401-8431754f08e3"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "Provided spans are from src/itsdangerous/signer.py (HMACAlgorithm, _lazy_sha1), src/itsdangerous/encoding.py (bytes_to_int, int_to_bytes), src/itsdangerous/timed.py (TimestampSigner), and tests/test_itsdangerous/test_encoding.py.",
+          "evidence_ids": [
+            "2164da30-60fb-5957-9a77-c0153eb99076",
+            "028501b8-de4a-5573-ac93-26f70f27fd69",
+            "d1df53da-67bf-5dc9-a7de-d2a3a93902ac",
+            "c8e843b1-c54f-5265-889b-3c70130ddd02"
+          ]
+        },
+        {
+          "kind": "inference",
+          "text": "Where the payroll tax table is calculated cannot be answered from this evidence; that location is not in the evidence.",
+          "evidence_ids": [
+            "2164da30-60fb-5957-9a77-c0153eb99076",
+            "87455814-32d2-527c-aaab-30df86a72138",
+            "e96e0259-9254-52ed-a6c3-0c4bfc3c7d08"
+          ]
+        }
+      ],
+      "message": "The active generation matches this commit.",
+      "retrieval_seconds": 0.6889885069977026,
+      "model_seconds": 15.481477875000564,
+      "error": null,
+      "packet_names": [
+        "HMACAlgorithm",
+        "HMACAlgorithm.__init__",
+        "HMACAlgorithm.get_signature",
+        "TimestampSigner.get_timestamp",
+        "TimestampSigner.timestamp_to_datetime",
+        "TimestampSigner.unsign",
+        "_lazy_sha1",
+        "bytes_to_int",
+        "int_to_bytes"
+      ]
+    }
+  ]
+}

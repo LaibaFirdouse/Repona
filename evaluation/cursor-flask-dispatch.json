@@ -1,0 +1,20 @@
+{
+  "provider": "cursor",
+  "model": "composer-2.5-fast",
+  "sandbox": "enabled",
+  "mode": "ask",
+  "path": "temporary API on 127.0.0.1:8001 via host bridge",
+  "question": "How does Flask.dispatch_request select and invoke a view?",
+  "http_status": 200,
+  "wall_seconds": 38.0,
+  "retrieval_seconds": 19.467,
+  "model_seconds": 16.970,
+  "model_calls": 1,
+  "prompt_tokens": 2686,
+  "spans": 12,
+  "edges": 24,
+  "answer": "Flask.dispatch_request reads the current request as req = ctx.request. If req.routing_exception is not None, it calls self.raise_routing_exception(req) instead of invoking a view. It assigns rule from req.url_rule. When provide_automatic_options is true and the method is OPTIONS, it returns self.make_default_options_response(ctx) and does not call the endpoint view. Otherwise it looks up self.view_functions[rule.endpoint], passes that callable through self.ensure_sync, invokes it with **view_args, and returns that value. The index resolves the ensure_sync call and the full_dispatch_request call into dispatch_request. The view_functions[rule.endpoint] call edge is unresolved.",
+  "citations": [{"path": "src/flask/app.py", "start_line": 966, "end_line": 990}],
+  "pass": true,
+  "reason": "The answer matches dispatch_request: the routing-exception branch, the OPTIONS branch, and the view call through ensure_sync with view_args. The citation is the method. The resolved and unresolved call claims match the indexed edges. Generation took 17 seconds."
+}

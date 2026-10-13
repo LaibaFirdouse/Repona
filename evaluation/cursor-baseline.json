@@ -1,0 +1,58 @@
+{
+  "recorded_on": "2026-10-14",
+  "cli": {
+    "command": "agent",
+    "version": "2026.10.01-e373342",
+    "invocation": ["--print", "--mode", "ask", "--sandbox", "enabled", "--trust", "--workspace", "<empty temp dir>", "--model", "composer-2.5-fast", "--output-format", "json"]
+  },
+  "provider": {
+    "LLM_PROVIDER": "cursor",
+    "CURSOR_MODEL": "composer-2.5-fast",
+    "CURSOR_BRIDGE_URL": "http://127.0.0.1:8765",
+    "bridge_bind": "127.0.0.1:8765",
+    "login_in_container": false,
+    "ollama_configured_on_api": false
+  },
+  "product_b": {
+    "record": "evaluation/cursor-product-b.json",
+    "pass": true,
+    "generation_seconds": {
+      "flask_dispatch": 13.984,
+      "signer_sign": 18.520,
+      "signing_multi": 28.420,
+      "escape_cross": 16.232,
+      "dependency": 15.821
+    },
+    "abstain_before_model": ["payroll", "authentication", "hello"]
+  },
+  "restart_check": {
+    "bridge_started_fresh": true,
+    "api_container_restarted": true,
+    "http": 200,
+    "provider": "cursor",
+    "model": "composer-2.5-fast",
+    "question": "How does Flask.dispatch_request select and invoke a view?",
+    "wall_seconds": 35.048,
+    "retrieval_seconds": 17.461,
+    "model_seconds": 16.421,
+    "model_calls": 1,
+    "citation": {"path": "src/flask/app.py", "start_line": 966, "end_line": 990}
+  },
+  "bridge_checks": {
+    "health_unauthenticated": 200,
+    "missing_token": 401,
+    "wrong_token": 401,
+    "extra_field": 400,
+    "boolean_max_output_tokens": 400,
+    "listen": "127.0.0.1:8765",
+    "sandbox_probe": {
+      "flags": "--print --mode ask --sandbox enabled",
+      "outside_file_created": false,
+      "inside_file_created": false,
+      "model_said": "Ask mode blocked both writes",
+      "confinement_proven": false,
+      "cli_help": "--print has access to all tools, including write and shell. --mode ask is described as read-only. --sandbox enabled overrides config and does not list which actions it blocks."
+    },
+    "lifecycle": "Compose does not start the bridge. It is a host process. A reboot leaves the API unable to generate until the bridge is started again."
+  }
+}

@@ -1,0 +1,893 @@
+{
+  "repository_url": "https://example.com/repona/eval-fixture",
+  "commit_sha": "1b599579f05f098f613e3936a1c0d9d50575436b",
+  "generation_id": "55afd730-ea9d-545d-8eec-60e5f29bdf23",
+  "cases": [
+    {
+      "id": "exact_function",
+      "question": "issue_token",
+      "action": "serve",
+      "needed_reached": true,
+      "needed": [
+        {
+          "kind": "span",
+          "qualified_name": "issue_token",
+          "reached": true
+        }
+      ],
+      "citation_ids_verify": true,
+      "citations": [
+        {
+          "chunk_id": "7c196ae6-121a-5bd7-8540-a11c48d84736",
+          "path": "auth.py",
+          "start_line": 4,
+          "end_line": 6
+        },
+        {
+          "chunk_id": "7272db48-e75a-57b1-bee9-3266e6e6d19c",
+          "path": "auth.py",
+          "start_line": 8,
+          "end_line": 9
+        },
+        {
+          "chunk_id": "43db31dd-240f-5c9c-ba7c-c425c8be2598",
+          "path": "session.py",
+          "start_line": 1,
+          "end_line": 3
+        },
+        {
+          "chunk_id": "9be0a3f1-e80b-53b5-9f28-23a817fc4921",
+          "path": "auth.py",
+          "start_line": 1,
+          "end_line": 2
+        },
+        {
+          "chunk_id": "043e5d1e-5c3a-56e6-90b4-da5fbd06611e",
+          "path": "report.py",
+          "start_line": 745,
+          "end_line": 776
+        },
+        {
+          "chunk_id": "2ee3bb64-dde1-5c9f-a9d9-b1fa37afdf3d",
+          "path": "requirements.txt",
+          "start_line": 1,
+          "end_line": 1
+        }
+      ],
+      "no_claim_line": false,
+      "claims": [
+        {
+          "kind": "observed",
+          "text": "In auth.py, issue_token(name) assigns account = lookup_account(name) and returns account['name'] + '-token'.",
+          "evidence_ids": [
+            "7c196ae6-121a-5bd7-8540-a11c48d84736"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "In auth.py, open_gate(name) returns issue_token(name).",
+          "evidence_ids": [
+            "7272db48-e75a-57b1-bee9-3266e6e6d19c"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "In auth.py, lookup_account(name) returns {'name': name}.",
+          "evidence_ids": [
+            "9be0a3f1-e80b-53b5-9f28-23a817fc4921"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "In session.py, renew_session(holder) sets holder['cookie'] to holder.get('cookie', 0) + 1 and returns holder.",
+          "evidence_ids": [
+            "43db31dd-240f-5c9c-ba7c-c425c8be2598"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "In report.py split_report (lines 745\u2013776 excerpt), value is incremented by 1 thirty times, marker is set to \"SPLIT_MARKER_TAIL\", and marker is returned.",
+          "evidence_ids": [
+            "043e5d1e-5c3a-56e6-90b4-da5fbd06611e"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "requirements.txt lists flask==3.0.0.",
+          "evidence_ids": [
+            "2ee3bb64-dde1-5c9f-a9d9-b1fa37afdf3d"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "Call graph: issue_token calls lookup_account (resolved).",
+          "evidence_ids": [
+            "c8c7ce95-88bd-5444-ae88-249e9671e696"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "Call graph: open_gate calls issue_token (resolved).",
+          "evidence_ids": [
+            "598f0800-6181-5552-a4ed-4619af4abbc8"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "auth.py declares issue_token, open_gate, and lookup_account.",
+          "evidence_ids": [
+            "0d77405b-4eca-5fa1-b256-fc5aa8ceaf72",
+            "6641b22d-fdb5-57c8-9aee-a382622a9cf6",
+            "a12fd424-16e3-583e-9c35-a23cc59c5f80"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "session.py declares renew_session.",
+          "evidence_ids": [
+            "d5ff0780-0fc9-5ea5-b174-0f1f70ffa98b"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "report.py declares split_report.",
+          "evidence_ids": [
+            "74da9654-2a52-5e27-8c5a-f33c928a1fc2"
+          ]
+        },
+        {
+          "kind": "inference",
+          "text": "open_gate(name) yields the same string as issue_token(name), i.e. name + '-token', because open_gate only calls issue_token and issue_token builds that suffix from lookup_account.",
+          "evidence_ids": [
+            "7272db48-e75a-57b1-bee9-3266e6e6d19c",
+            "7c196ae6-121a-5bd7-8540-a11c48d84736",
+            "9be0a3f1-e80b-53b5-9f28-23a817fc4921",
+            "598f0800-6181-5552-a4ed-4619af4abbc8"
+          ]
+        },
+        {
+          "kind": "suggestion",
+          "text": "Tokens are predictable (name + '-token') with no signing or secret material shown in the packet; treat as weak credentials if used for security.",
+          "evidence_ids": [
+            "7c196ae6-121a-5bd7-8540-a11c48d84736",
+            "9be0a3f1-e80b-53b5-9f28-23a817fc4921"
+          ]
+        }
+      ],
+      "message": "The active generation matches this commit.",
+      "retrieval_seconds": 16.209794867994788,
+      "model_seconds": 16.20697370700509,
+      "error": null
+    },
+    {
+      "id": "conceptual",
+      "question": "How does a returning visitor remain signed in?",
+      "action": "serve",
+      "needed_reached": true,
+      "needed": [
+        {
+          "kind": "span",
+          "qualified_name": "renew_session",
+          "reached": true
+        }
+      ],
+      "citation_ids_verify": true,
+      "citations": [
+        {
+          "chunk_id": "43db31dd-240f-5c9c-ba7c-c425c8be2598",
+          "path": "session.py",
+          "start_line": 1,
+          "end_line": 3
+        },
+        {
+          "chunk_id": "7272db48-e75a-57b1-bee9-3266e6e6d19c",
+          "path": "auth.py",
+          "start_line": 8,
+          "end_line": 9
+        },
+        {
+          "chunk_id": "9be0a3f1-e80b-53b5-9f28-23a817fc4921",
+          "path": "auth.py",
+          "start_line": 1,
+          "end_line": 2
+        },
+        {
+          "chunk_id": "7c196ae6-121a-5bd7-8540-a11c48d84736",
+          "path": "auth.py",
+          "start_line": 4,
+          "end_line": 6
+        },
+        {
+          "chunk_id": "7545dace-9694-5b7e-ae9f-ab06d8474c26",
+          "path": "auth.py",
+          "start_line": 2,
+          "end_line": 3
+        },
+        {
+          "chunk_id": "a7b8aef1-1ee9-5547-bcc0-3c30d525a9b9",
+          "path": "auth.py",
+          "start_line": 9,
+          "end_line": 9
+        },
+        {
+          "chunk_id": "db35d194-7b81-5fed-be77-5408929b56ce",
+          "path": "session.py",
+          "start_line": 6,
+          "end_line": 6
+        },
+        {
+          "chunk_id": "22081aef-5cbc-5d83-8bda-39dd63c40865",
+          "path": "report.py",
+          "start_line": 776,
+          "end_line": 776
+        }
+      ],
+      "no_claim_line": false,
+      "claims": [
+        {
+          "kind": "observed",
+          "text": "renew_session(holder) sets holder['cookie'] to holder.get('cookie', 0) + 1 and returns holder.",
+          "evidence_ids": [
+            "43db31dd-240f-5c9c-ba7c-c425c8be2598"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "renew_session is declared in session.py and references holder and holder.get (resolution unresolved in the graph).",
+          "evidence_ids": [
+            "d5ff0780-0fc9-5ea5-b174-0f1f70ffa98b",
+            "2f3842ff-1450-5024-9665-52f41ffb408f",
+            "88a1b996-fd1d-5a32-ad33-cda91829568d",
+            "6e95a172-5bb7-53b1-99e3-f49a81240021"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "open_gate(name) returns issue_token(name).",
+          "evidence_ids": [
+            "7272db48-e75a-57b1-bee9-3266e6e6d19c",
+            "598f0800-6181-5552-a4ed-4619af4abbc8"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "issue_token(name) calls lookup_account(name) and returns account['name'] + '-token'.",
+          "evidence_ids": [
+            "7c196ae6-121a-5bd7-8540-a11c48d84736",
+            "c8c7ce95-88bd-5444-ae88-249e9671e696"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "lookup_account(name) returns {'name': name}.",
+          "evidence_ids": [
+            "9be0a3f1-e80b-53b5-9f28-23a817fc4921"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "The packet lists non_code spans for auth.py, session.py, and report.py but does not include their text, so any comment or documentation there is not in the evidence.",
+          "evidence_ids": [
+            "7545dace-9694-5b7e-ae9f-ab06d8474c26",
+            "a7b8aef1-1ee9-5547-bcc0-3c30d525a9b9",
+            "db35d194-7b81-5fed-be77-5408929b56ce",
+            "22081aef-5cbc-5d83-8bda-39dd63c40865"
+          ]
+        },
+        {
+          "kind": "inference",
+          "text": "The only session-related mechanism shown for persistence is maintaining/incrementing a 'cookie' value on a holder dict via renew_session; the packet does not show reading or validating that cookie on a subsequent visit.",
+          "evidence_ids": [
+            "43db31dd-240f-5c9c-ba7c-c425c8be2598",
+            "2f3842ff-1450-5024-9665-52f41ffb408f"
+          ]
+        },
+        {
+          "kind": "inference",
+          "text": "Sign-in token issuance is shown via open_gate \u2192 issue_token, not via renew_session; the packet does not connect renew_session to open_gate or issue_token.",
+          "evidence_ids": [
+            "7272db48-e75a-57b1-bee9-3266e6e6d19c",
+            "43db31dd-240f-5c9c-ba7c-c425c8be2598",
+            "598f0800-6181-5552-a4ed-4619af4abbc8"
+          ]
+        },
+        {
+          "kind": "inference",
+          "text": "How a returning visitor remains signed in end-to-end (e.g., browser cookies, token reuse, or gate checks) is not fully described in the evidence packet beyond renew_session\u2019s cookie counter on holder.",
+          "evidence_ids": [
+            "43db31dd-240f-5c9c-ba7c-c425c8be2598",
+            "7545dace-9694-5b7e-ae9f-ab06d8474c26",
+            "db35d194-7b81-5fed-be77-5408929b56ce"
+          ]
+        }
+      ],
+      "message": "The active generation matches this commit.",
+      "retrieval_seconds": 0.33224860100017395,
+      "model_seconds": 17.322825816998375,
+      "error": null
+    },
+    {
+      "id": "callers_and_callees",
+      "question": "What calls issue_token and what does issue_token call?",
+      "action": "serve",
+      "needed_reached": true,
+      "needed": [
+        {
+          "kind": "span",
+          "qualified_name": "open_gate",
+          "reached": true
+        },
+        {
+          "kind": "span",
+          "qualified_name": "lookup_account",
+          "reached": true
+        }
+      ],
+      "citation_ids_verify": false,
+      "citations": [
+        {
+          "chunk_id": "7c196ae6-121a-5bd7-8540-a11c48d84736",
+          "path": "auth.py",
+          "start_line": 4,
+          "end_line": 6
+        },
+        {
+          "chunk_id": "9be0a3f1-e80b-53b5-9f28-23a817fc4921",
+          "path": "auth.py",
+          "start_line": 1,
+          "end_line": 2
+        }
+      ],
+      "no_claim_line": false,
+      "claims": [
+        {
+          "kind": "observed",
+          "text": "Graph edge: open_gate CALLS issue_token (resolved).",
+          "evidence_ids": [
+            "598f0800-6181-5552-a4ed-4619af4abbc8"
+          ]
+        },
+        {
+          "kind": "inference",
+          "text": "Within the evidence packet, the only resolved caller of issue_token is open_gate.",
+          "evidence_ids": [
+            "598f0800-6181-5552-a4ed-4619af4abbc8"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "In auth.py, issue_token(name) assigns account = lookup_account(name) and returns account['name'] + '-token'.",
+          "evidence_ids": [
+            "7c196ae6-121a-5bd7-8540-a11c48d84736"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "Graph edge: issue_token CALLS lookup_account (resolved).",
+          "evidence_ids": [
+            "c8c7ce95-88bd-5444-ae88-249e9671e696"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "In auth.py, lookup_account(name) returns {'name': name}.",
+          "evidence_ids": [
+            "9be0a3f1-e80b-53b5-9f28-23a817fc4921"
+          ]
+        },
+        {
+          "kind": "inference",
+          "text": "Within the evidence packet, the only resolved callee of issue_token is lookup_account; no other function calls from issue_token are shown as resolved CALLS edges.",
+          "evidence_ids": [
+            "7c196ae6-121a-5bd7-8540-a11c48d84736",
+            "c8c7ce95-88bd-5444-ae88-249e9671e696"
+          ]
+        }
+      ],
+      "message": "The active generation matches this commit.",
+      "retrieval_seconds": 0.27631967500201426,
+      "model_seconds": 12.216770067003381,
+      "error": null
+    },
+    {
+      "id": "dependencies",
+      "question": "Which libraries does this project depend on?",
+      "action": "serve",
+      "needed_reached": true,
+      "needed": [
+        {
+          "kind": "technology",
+          "name": "flask",
+          "reached": true
+        }
+      ],
+      "citation_ids_verify": true,
+      "citations": [
+        {
+          "chunk_id": "2ee3bb64-dde1-5c9f-a9d9-b1fa37afdf3d",
+          "path": "requirements.txt",
+          "start_line": 1,
+          "end_line": 1
+        }
+      ],
+      "no_claim_line": false,
+      "claims": [
+        {
+          "kind": "observed",
+          "text": "requirements.txt declares the dependency flask pinned to version 3.0.0 (flask==3.0.0).",
+          "evidence_ids": [
+            "2ee3bb64-dde1-5c9f-a9d9-b1fa37afdf3d"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "A technology record in the evidence packet lists flask with specification flask==3.0.0.",
+          "evidence_ids": [
+            "1f06e778-9c3f-4603-9889-91a53ae67f92"
+          ]
+        },
+        {
+          "kind": "inference",
+          "text": "Based on requirements.txt and the technology record, this project\u2019s declared library dependency is Flask at version 3.0.0.",
+          "evidence_ids": [
+            "2ee3bb64-dde1-5c9f-a9d9-b1fa37afdf3d",
+            "1f06e778-9c3f-4603-9889-91a53ae67f92"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "The evidence packet does not list any other library dependencies besides flask==3.0.0 in requirements.txt or the technology row.",
+          "evidence_ids": [
+            "2ee3bb64-dde1-5c9f-a9d9-b1fa37afdf3d",
+            "1f06e778-9c3f-4603-9889-91a53ae67f92"
+          ]
+        }
+      ],
+      "message": "The active generation matches this commit.",
+      "retrieval_seconds": 0.4308740839987877,
+      "model_seconds": 12.281781582001713,
+      "error": null
+    },
+    {
+      "id": "unanswerable",
+      "question": "Where is the payroll tax table calculated?",
+      "action": "serve",
+      "needed_reached": null,
+      "needed": [],
+      "citation_ids_verify": true,
+      "citations": [
+        {
+          "chunk_id": "0930ed68-c559-5990-bed1-273061329b53",
+          "path": "report.py",
+          "start_line": 1,
+          "end_line": 372
+        },
+        {
+          "chunk_id": "099a7ba9-f688-5318-8741-464bc2ea972d",
+          "path": "report.py",
+          "start_line": 373,
+          "end_line": 744
+        },
+        {
+          "chunk_id": "043e5d1e-5c3a-56e6-90b4-da5fbd06611e",
+          "path": "report.py",
+          "start_line": 745,
+          "end_line": 776
+        },
+        {
+          "chunk_id": "ade85f28-a3a8-5a24-b6cf-63679035243a",
+          "path": "session.py",
+          "start_line": 5,
+          "end_line": 6
+        },
+        {
+          "chunk_id": "43db31dd-240f-5c9c-ba7c-c425c8be2598",
+          "path": "session.py",
+          "start_line": 1,
+          "end_line": 3
+        },
+        {
+          "chunk_id": "7c196ae6-121a-5bd7-8540-a11c48d84736",
+          "path": "auth.py",
+          "start_line": 4,
+          "end_line": 6
+        },
+        {
+          "chunk_id": "9be0a3f1-e80b-53b5-9f28-23a817fc4921",
+          "path": "auth.py",
+          "start_line": 1,
+          "end_line": 2
+        },
+        {
+          "chunk_id": "2ee3bb64-dde1-5c9f-a9d9-b1fa37afdf3d",
+          "path": "requirements.txt",
+          "start_line": 1,
+          "end_line": 1
+        },
+        {
+          "chunk_id": "7272db48-e75a-57b1-bee9-3266e6e6d19c",
+          "path": "auth.py",
+          "start_line": 8,
+          "end_line": 9
+        }
+      ],
+      "no_claim_line": false,
+      "claims": [
+        {
+          "kind": "observed",
+          "text": "The evidence packet includes report.py with a function split_report (spans 0930ed68-c559-5990-bed1-273061329b53, 099a7ba9-f688-5318-8741-464bc2ea972d, 043e5d1e-5c3a-56e6-90b4-da5fbd06611e); its shown body increments value repeatedly and returns marker \"SPLIT_MARKER_TAIL\".",
+          "evidence_ids": [
+            "0930ed68-c559-5990-bed1-273061329b53",
+            "099a7ba9-f688-5318-8741-464bc2ea972d",
+            "043e5d1e-5c3a-56e6-90b4-da5fbd06611e"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "The evidence packet includes session.py (renew_session, rank_target), auth.py (lookup_account, issue_token, open_gate), and requirements.txt listing flask==3.0.0.",
+          "evidence_ids": [
+            "43db31dd-240f-5c9c-ba7c-c425c8be2598",
+            "ade85f28-a3a8-5a24-b6cf-63679035243a",
+            "9be0a3f1-e80b-53b5-9f28-23a817fc4921",
+            "7c196ae6-121a-5bd7-8540-a11c48d84736",
+            "7272db48-e75a-57b1-bee9-3266e6e6d19c",
+            "2ee3bb64-dde1-5c9f-a9d9-b1fa37afdf3d"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "None of the provided spans or graph edges mention payroll, tax, or a payroll tax table.",
+          "evidence_ids": [
+            "0930ed68-c559-5990-bed1-273061329b53",
+            "74da9654-2a52-5e27-8c5a-f33c928a1fc2"
+          ]
+        },
+        {
+          "kind": "inference",
+          "text": "The location where the payroll tax table is calculated is not in the evidence packet.",
+          "evidence_ids": [
+            "0930ed68-c559-5990-bed1-273061329b53",
+            "2ee3bb64-dde1-5c9f-a9d9-b1fa37afdf3d"
+          ]
+        }
+      ],
+      "message": "The active generation matches this commit.",
+      "retrieval_seconds": 0.2725345600047149,
+      "model_seconds": 14.024629984000057,
+      "error": null
+    },
+    {
+      "id": "split_symbol",
+      "question": "split_report",
+      "action": "serve",
+      "needed_reached": true,
+      "needed": [
+        {
+          "kind": "span",
+          "qualified_name": "split_report",
+          "text_marker": "SPLIT_MARKER_TAIL",
+          "reached": true
+        }
+      ],
+      "citation_ids_verify": false,
+      "citations": [
+        {
+          "chunk_id": "0930ed68-c559-5990-bed1-273061329b53",
+          "path": "report.py",
+          "start_line": 1,
+          "end_line": 372
+        },
+        {
+          "chunk_id": "099a7ba9-f688-5318-8741-464bc2ea972d",
+          "path": "report.py",
+          "start_line": 373,
+          "end_line": 744
+        },
+        {
+          "chunk_id": "043e5d1e-5c3a-56e6-90b4-da5fbd06611e",
+          "path": "report.py",
+          "start_line": 745,
+          "end_line": 776
+        },
+        {
+          "chunk_id": "7c196ae6-121a-5bd7-8540-a11c48d84736",
+          "path": "auth.py",
+          "start_line": 4,
+          "end_line": 6
+        },
+        {
+          "chunk_id": "7272db48-e75a-57b1-bee9-3266e6e6d19c",
+          "path": "auth.py",
+          "start_line": 8,
+          "end_line": 9
+        },
+        {
+          "chunk_id": "ade85f28-a3a8-5a24-b6cf-63679035243a",
+          "path": "session.py",
+          "start_line": 5,
+          "end_line": 6
+        },
+        {
+          "chunk_id": "9be0a3f1-e80b-53b5-9f28-23a817fc4921",
+          "path": "auth.py",
+          "start_line": 1,
+          "end_line": 2
+        },
+        {
+          "chunk_id": "db35d194-7b81-5fed-be77-5408929b56ce",
+          "path": "session.py",
+          "start_line": 6,
+          "end_line": 6
+        },
+        {
+          "chunk_id": "43db31dd-240f-5c9c-ba7c-c425c8be2598",
+          "path": "session.py",
+          "start_line": 1,
+          "end_line": 3
+        }
+      ],
+      "no_claim_line": false,
+      "claims": [
+        {
+          "kind": "observed",
+          "text": "report.py defines split_report as a symbol_part spanning lines 1\u2013372, 373\u2013744, and 745\u2013776 across three evidence spans.",
+          "evidence_ids": [
+            "0930ed68-c559-5990-bed1-273061329b53",
+            "099a7ba9-f688-5318-8741-464bc2ea972d",
+            "043e5d1e-5c3a-56e6-90b4-da5fbd06611e"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "split_report starts with value = 0, then repeatedly executes value = value + 1 in the first two spans and most of the third.",
+          "evidence_ids": [
+            "0930ed68-c559-5990-bed1-273061329b53",
+            "099a7ba9-f688-5318-8741-464bc2ea972d",
+            "043e5d1e-5c3a-56e6-90b4-da5fbd06611e"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "split_report ends by setting marker = \"SPLIT_MARKER_TAIL\" and returning marker.",
+          "evidence_ids": [
+            "043e5d1e-5c3a-56e6-90b4-da5fbd06611e"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "auth.py defines lookup_account(name) to return {'name': name}.",
+          "evidence_ids": [
+            "9be0a3f1-e80b-53b5-9f28-23a817fc4921"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "auth.py defines issue_token(name) to call lookup_account(name) and return account['name'] + '-token'.",
+          "evidence_ids": [
+            "7c196ae6-121a-5bd7-8540-a11c48d84736",
+            "c8c7ce95-88bd-5444-ae88-249e9671e696"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "auth.py defines open_gate(name) to return issue_token(name).",
+          "evidence_ids": [
+            "7272db48-e75a-57b1-bee9-3266e6e6d19c",
+            "598f0800-6181-5552-a4ed-4619af4abbc8"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "session.py defines rank_target() to return 17.",
+          "evidence_ids": [
+            "ade85f28-a3a8-5a24-b6cf-63679035243a"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "session.py defines renew_session(holder) to set holder['cookie'] to holder.get('cookie', 0) + 1 and return holder.",
+          "evidence_ids": [
+            "43db31dd-240f-5c9c-ba7c-c425c8be2598"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "Graph edges declare report.py declares split_report and auth.py declares lookup_account, issue_token, and open_gate; session.py declares rank_target.",
+          "evidence_ids": [
+            "74da9654-2a52-5e27-8c5a-f33c928a1fc2",
+            "a12fd424-16e3-583e-9c35-a23cc59c5f80",
+            "0d77405b-4eca-5fa1-b256-fc5aa8ceaf72",
+            "6641b22d-fdb5-57c8-9aee-a382622a9cf6",
+            "c8b2d2ea-e0d0-5593-9ae9-83144645798f"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "Graph REFERENCES edges from split_report to report.py for mentions value and marker are marked resolution unresolved.",
+          "evidence_ids": [
+            "16af74d1-90dc-5fea-b521-9d6b5be486fb",
+            "1fe244ba-4a1d-5fe5-8809-505498044ff3"
+          ]
+        },
+        {
+          "kind": "inference",
+          "text": "split_report accumulates value through many increments but the shown tail returns only marker, not value.",
+          "evidence_ids": [
+            "043e5d1e-5c3a-56e6-90b4-da5fbd06611e",
+            "0930ed68-c559-5990-bed1-273061329b53"
+          ]
+        },
+        {
+          "kind": "inference",
+          "text": "open_gate is a thin wrapper: calling it with a name yields the same string as issue_token(name), i.e. name + '-token' given lookup_account\u2019s return shape.",
+          "evidence_ids": [
+            "7c196ae6-121a-5bd7-8540-a11c48d84736",
+            "9be0a3f1-e80b-53b5-9f28-23a817fc4921"
+          ]
+        },
+        {
+          "kind": "suggestion",
+          "text": "The long run of identical value = value + 1 lines in split_report could be replaced with a loop or a single assignment if the final numeric value were needed, reducing size and maintenance cost.",
+          "evidence_ids": [
+            "0930ed68-c559-5990-bed1-273061329b53",
+            "099a7ba9-f688-5318-8741-464bc2ea972d"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "session.py has a non_code span at line 6 with no code content shown in the packet.",
+          "evidence_ids": [
+            "db35d194-7b81-5fed-be77-5408929b56ce"
+          ]
+        }
+      ],
+      "message": "The active generation matches this commit.",
+      "retrieval_seconds": 0.2762759039978846,
+      "model_seconds": 19.15774405100092,
+      "error": null
+    },
+    {
+      "id": "stale_points",
+      "question": "Which routine paints the violet ledger?",
+      "action": "serve",
+      "needed_reached": false,
+      "needed": [
+        {
+          "kind": "span",
+          "qualified_name": "rank_target",
+          "reached": false
+        }
+      ],
+      "citation_ids_verify": true,
+      "citations": [
+        {
+          "chunk_id": "099a7ba9-f688-5318-8741-464bc2ea972d",
+          "path": "report.py",
+          "start_line": 373,
+          "end_line": 744
+        },
+        {
+          "chunk_id": "043e5d1e-5c3a-56e6-90b4-da5fbd06611e",
+          "path": "report.py",
+          "start_line": 745,
+          "end_line": 776
+        },
+        {
+          "chunk_id": "2ee3bb64-dde1-5c9f-a9d9-b1fa37afdf3d",
+          "path": "requirements.txt",
+          "start_line": 1,
+          "end_line": 1
+        },
+        {
+          "chunk_id": "43db31dd-240f-5c9c-ba7c-c425c8be2598",
+          "path": "session.py",
+          "start_line": 1,
+          "end_line": 3
+        },
+        {
+          "chunk_id": "7545dace-9694-5b7e-ae9f-ab06d8474c26",
+          "path": "auth.py",
+          "start_line": 2,
+          "end_line": 3
+        },
+        {
+          "chunk_id": "a7b8aef1-1ee9-5547-bcc0-3c30d525a9b9",
+          "path": "auth.py",
+          "start_line": 9,
+          "end_line": 9
+        },
+        {
+          "chunk_id": "6d2f3598-b5ff-5203-8d56-8ffceb8cb6ba",
+          "path": "session.py",
+          "start_line": 3,
+          "end_line": 4
+        },
+        {
+          "chunk_id": "db35d194-7b81-5fed-be77-5408929b56ce",
+          "path": "session.py",
+          "start_line": 6,
+          "end_line": 6
+        },
+        {
+          "chunk_id": "7272db48-e75a-57b1-bee9-3266e6e6d19c",
+          "path": "auth.py",
+          "start_line": 8,
+          "end_line": 9
+        },
+        {
+          "chunk_id": "9be0a3f1-e80b-53b5-9f28-23a817fc4921",
+          "path": "auth.py",
+          "start_line": 1,
+          "end_line": 2
+        },
+        {
+          "chunk_id": "7c196ae6-121a-5bd7-8540-a11c48d84736",
+          "path": "auth.py",
+          "start_line": 4,
+          "end_line": 6
+        }
+      ],
+      "no_claim_line": false,
+      "claims": [
+        {
+          "kind": "observed",
+          "text": "None of the provided spans mention 'violet', 'ledger', or 'paint'.",
+          "evidence_ids": [
+            "099a7ba9-f688-5318-8741-464bc2ea972d",
+            "043e5d1e-5c3a-56e6-90b4-da5fbd06611e",
+            "2ee3bb64-dde1-5c9f-a9d9-b1fa37afdf3d",
+            "43db31dd-240f-5c9c-ba7c-c425c8be2598",
+            "7545dace-9694-5b7e-ae9f-ab06d8474c26",
+            "a7b8aef1-1ee9-5547-bcc0-3c30d525a9b9",
+            "6d2f3598-b5ff-5203-8d56-8ffceb8cb6ba",
+            "db35d194-7b81-5fed-be77-5408929b56ce",
+            "7272db48-e75a-57b1-bee9-3266e6e6d19c",
+            "9be0a3f1-e80b-53b5-9f28-23a817fc4921",
+            "7c196ae6-121a-5bd7-8540-a11c48d84736"
+          ]
+        },
+        {
+          "kind": "observed",
+          "text": "The packet\u2019s code spans name these routines: split_report in report.py, renew_session in session.py, and open_gate, lookup_account, and issue_token in auth.py.",
+          "evidence_ids": [
+            "099a7ba9-f688-5318-8741-464bc2ea972d",
+            "043e5d1e-5c3a-56e6-90b4-da5fbd06611e",
+            "43db31dd-240f-5c9c-ba7c-c425c8be2598",
+            "7272db48-e75a-57b1-bee9-3266e6e6d19c",
+            "9be0a3f1-e80b-53b5-9f28-23a817fc4921",
+            "7c196ae6-121a-5bd7-8540-a11c48d84736",
+            "74da9654-2a52-5e27-8c5a-f33c928a1fc2",
+            "d5ff0780-0fc9-5ea5-b174-0f1f70ffa98b",
+            "ce1d912c-c9ce-5cec-8f01-d4b371b05f7a"
+          ]
+        },
+        {
+          "kind": "inference",
+          "text": "The routine that paints the violet ledger is not identified in the evidence packet.",
+          "evidence_ids": [
+            "099a7ba9-f688-5318-8741-464bc2ea972d"
+          ]
+        }
+      ],
+      "message": "The active generation matches this commit.",
+      "retrieval_seconds": 0.2814893100003246,
+      "model_seconds": 17.0795855979959,
+      "error": null
+    },
+    {
+      "id": "question_during_refresh",
+      "question": "issue_token",
+      "action": "wait",
+      "needed_reached": null,
+      "needed": [],
+      "citation_ids_verify": false,
+      "citations": [],
+      "no_claim_line": false,
+      "claims": [],
+      "message": "A newer commit is being indexed. The previous generation is not being served.",
+      "retrieval_seconds": 0.06247025399352424,
+      "model_seconds": null,
+      "error": null
+    }
+  ]
+}

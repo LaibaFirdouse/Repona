@@ -1,0 +1,1025 @@
+{
+  "model": "stub; ollama was not called",
+  "cold_warmup": {
+    "id": "cue_dispatch",
+    "kind": "single_method",
+    "question": "How does Flask match an incoming request to a view and return the result?",
+    "repository": "https://github.com/pallets/flask",
+    "note": "The current behavior cues select this method. The comparison runs the same question with those cues turned off.",
+    "expected": [
+      "Flask.dispatch_request"
+    ],
+    "unsupported": [],
+    "error": null,
+    "strategy": "implementation",
+    "model_calls": 0,
+    "retrieval_seconds": 16.108423496996693,
+    "packet": [
+      "Flask.dispatch_request",
+      "Flask.full_dispatch_request",
+      "result",
+      "AppContext.request",
+      "Flask.preprocess_request",
+      "test_inject_blueprint_url_defaults.view",
+      "test_basic_view.Index.dispatch_request",
+      "test_basic_view.Index",
+      "test_basic_view",
+      "test_custom_config_class.Flask",
+      "test_endpoint_override.Index",
+      "test_route_decorator_custom_endpoint_with_dots.view"
+    ],
+    "selected": [
+      "Flask.dispatch_request"
+    ],
+    "expected_in_packet": {
+      "Flask.dispatch_request": true
+    },
+    "expected_selected": {
+      "Flask.dispatch_request": true
+    },
+    "unsupported_selected": {},
+    "citations": [
+      {
+        "chunk_id": "fa7a557f-672c-5d55-84de-0242ea4c64b1",
+        "path": "src/flask/app.py",
+        "start_line": 966,
+        "end_line": 990
+      }
+    ],
+    "citation_lines_match": {
+      "Flask.dispatch_request": true
+    },
+    "technologies": [],
+    "expected_technology_in_packet": null,
+    "abstained": false,
+    "early_abstain": false,
+    "desired_abstain": false,
+    "answer": "Flask.dispatch_request calls `self.raise_routing_exception(req)` when `req.routing_exception is not None`. Flask.dispatch_request returns `self.make_default_options_response(ctx)` when `getattr(rule, \"provide_automatic_options\", False) and req.method == \"OPTIONS\"`. Flask.dispatch_request calls `self.make_default_options_response` with `(ctx)`. Flask.dispatch_request returns `self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)`. Flask.dispatch_request calls `self.ensure_sync` with `(self.view_functions[rule.endpoint])`. `self.view_functions` is indexed by `rule.endpoint`. Flask.dispatch_request calls that result with `(**view_args)`.",
+    "pass": "cold"
+  },
+  "with_cues": [
+    {
+      "id": "signature_generation",
+      "kind": "single_method",
+      "question": "How does a signature get generated?",
+      "repository": "https://github.com/pallets/itsdangerous",
+      "note": "The implementation is Signer.get_signature. derive_key is a resolved callee; algorithm.get_signature is not.",
+      "expected": [
+        "Signer.get_signature"
+      ],
+      "unsupported": [],
+      "error": null,
+      "strategy": "implementation",
+      "model_calls": 0,
+      "retrieval_seconds": 0.6932197689966415,
+      "packet": [
+        "Signer.get_signature",
+        "NoneAlgorithm.get_signature",
+        "SigningAlgorithm.get_signature",
+        "HMACAlgorithm.get_signature",
+        "NoneAlgorithm",
+        "Signer.sign",
+        "want_bytes",
+        "Signer.derive_key",
+        "base64_encode",
+        "TimestampSigner.sign",
+        "_ReverseAlgorithm.get_signature",
+        "_ReverseAlgorithm"
+      ],
+      "selected": [
+        "Signer.get_signature",
+        "Signer.sign",
+        "Signer.derive_key"
+      ],
+      "expected_in_packet": {
+        "Signer.get_signature": true
+      },
+      "expected_selected": {
+        "Signer.get_signature": true
+      },
+      "unsupported_selected": {},
+      "citations": [
+        {
+          "chunk_id": "46e2754b-b355-5db5-aa1d-51a2d03a4cd8",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 215,
+          "end_line": 220
+        },
+        {
+          "chunk_id": "4da6922c-7ae9-5640-bec5-93ea0aaa3f7c",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 222,
+          "end_line": 225
+        },
+        {
+          "chunk_id": "d13d015a-5e29-5b38-bb5b-fd5362f830c1",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 182,
+          "end_line": 213
+        }
+      ],
+      "citation_lines_match": {
+        "Signer.get_signature": true
+      },
+      "technologies": [],
+      "expected_technology_in_packet": null,
+      "abstained": false,
+      "early_abstain": false,
+      "desired_abstain": false,
+      "answer": "Signer.derive_key assigns `hmac.new(secret_key, digestmod=self.digest_method)` to `mac` when `self.key_derivation == \"hmac\"`. Signer.derive_key calls `mac.update(self.salt)` when `self.key_derivation == \"hmac\"`. Signer.derive_key returns `t.cast(bytes, self.digest_method(self.salt + secret_key).digest())` when `self.key_derivation == \"concat\"`. Signer.derive_key calls `t.cast` with `(bytes, self.digest_method(self.salt + secret_key).digest())`. Signer.derive_key returns `t.cast( bytes, self.digest_method(self.salt + b\"signer\" + secret_key).digest() )` when `self.key_derivation == \"django-concat\"`. Signer.derive_key calls `t.cast` with `( bytes, self.digest_method(self.salt + b\"signer\" + secret_key).digest() )`. Signer.derive_key raises `TypeError(\"Unknown key derivation method\")`. Signer.get_signature assigns `self.derive_key()` to `key`. Signer.get_signature assigns `self.algorithm.get_signature(key, value)` to `sig`. Signer.get_signature returns `base64_encode(sig)`. Signer.get_signature calls `base64_encode` with `(sig)`. Signer.get_signature calls `self.derive_key`, and the index resolved that call to Signer.derive_key. Signer.sign assigns `want_bytes(value)` to `value`. Signer.sign returns `value + self.sep + self.get_signature(value)`. Signer.sign calls `self.get_signature`, and the index resolved that call to Signer.get_signature.",
+      "pass": "with_cues"
+    },
+    {
+      "id": "signing_paraphrase",
+      "kind": "multi_method",
+      "question": "How does a value get signed and later checked?",
+      "repository": "https://github.com/pallets/itsdangerous",
+      "note": "Complementary Signer methods. Other classes and tests are not part of that explanation.",
+      "expected": [
+        "Signer.sign",
+        "Signer.unsign",
+        "Signer.validate"
+      ],
+      "unsupported": [
+        "TimestampSigner.validate",
+        "SigningAlgorithm.verify_signature",
+        "TestSigner.test_signer"
+      ],
+      "error": null,
+      "strategy": "implementation",
+      "model_calls": 0,
+      "retrieval_seconds": 0.8055950679990929,
+      "packet": [
+        "Signer.validate",
+        "Signer.sign",
+        "TimestampSigner.validate",
+        "SigningAlgorithm.verify_signature",
+        "Signer.unsign",
+        "TestSerializer.value",
+        "TestURLSafeSerializer.value",
+        "TestSigner.test_signer",
+        "TestSigner.test_changed_value",
+        "TestTimestampSigner.test_return_timestamp",
+        "TestSerializer.test_loads_unsafe",
+        "TestSerializer.test_fallback_signers"
+      ],
+      "selected": [
+        "Signer.validate",
+        "Signer.sign",
+        "Signer.unsign"
+      ],
+      "expected_in_packet": {
+        "Signer.sign": true,
+        "Signer.unsign": true,
+        "Signer.validate": true
+      },
+      "expected_selected": {
+        "Signer.sign": true,
+        "Signer.unsign": true,
+        "Signer.validate": true
+      },
+      "unsupported_selected": {
+        "TimestampSigner.validate": false,
+        "SigningAlgorithm.verify_signature": false,
+        "TestSigner.test_signer": false
+      },
+      "citations": [
+        {
+          "chunk_id": "db7a47e5-503d-592b-9855-5ba680c3d2e9",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 258,
+          "end_line": 266
+        },
+        {
+          "chunk_id": "4da6922c-7ae9-5640-bec5-93ea0aaa3f7c",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 222,
+          "end_line": 225
+        },
+        {
+          "chunk_id": "660be368-a4e4-5c73-8edd-993716678070",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 244,
+          "end_line": 256
+        }
+      ],
+      "citation_lines_match": {
+        "Signer.sign": true,
+        "Signer.unsign": true,
+        "Signer.validate": true
+      },
+      "technologies": [],
+      "expected_technology_in_packet": null,
+      "abstained": false,
+      "early_abstain": false,
+      "desired_abstain": false,
+      "answer": "Signer.sign assigns `want_bytes(value)` to `value`. Signer.sign returns `value + self.sep + self.get_signature(value)`. Signer.unsign assigns `signed_value.rsplit(self.sep, 1)` to `value, sig`. Signer.unsign returns `value` when `self.verify_signature(value, sig)`. Signer.unsign raises `BadSignature(f\"No {self.sep!r} found in value\")` when `self.sep not in signed_value`. Signer.unsign raises `BadSignature(f\"Signature {sig!r} does not match\", payload=value)`. Signer.validate calls `self.unsign(signed_value)`. Signer.validate returns `True`. Signer.validate returns `False` when `BadSignature`.",
+      "pass": "with_cues"
+    },
+    {
+      "id": "cross_file_flow",
+      "kind": "cross_file",
+      "question": "Where does the payload go after Serializer.dumps returns?",
+      "repository": "https://github.com/pallets/itsdangerous",
+      "note": "Resolved callees are dump_payload, make_signer, and want_bytes. self.make_signer(salt).sign is unresolved, so Signer.sign is not a supported target.",
+      "expected": [
+        "Serializer.dumps",
+        "Serializer.dump_payload",
+        "Serializer.make_signer",
+        "want_bytes"
+      ],
+      "unsupported": [
+        "Signer.sign"
+      ],
+      "error": null,
+      "strategy": "implementation",
+      "model_calls": 0,
+      "retrieval_seconds": 0.7900429020010051,
+      "packet": [
+        "Serializer.dumps",
+        "Serializer"
+      ],
+      "selected": [
+        "Serializer.dumps"
+      ],
+      "expected_in_packet": {
+        "Serializer.dumps": true,
+        "Serializer.dump_payload": false,
+        "Serializer.make_signer": false,
+        "want_bytes": false
+      },
+      "expected_selected": {
+        "Serializer.dumps": true,
+        "Serializer.dump_payload": false,
+        "Serializer.make_signer": false,
+        "want_bytes": false
+      },
+      "unsupported_selected": {
+        "Signer.sign": false
+      },
+      "citations": [
+        {
+          "chunk_id": "b15a2d44-0a2f-56a6-80dc-04eec085ad84",
+          "path": "src/itsdangerous/serializer.py",
+          "start_line": 309,
+          "end_line": 320
+        }
+      ],
+      "citation_lines_match": {
+        "Serializer.dumps": true,
+        "Serializer.dump_payload": false,
+        "Serializer.make_signer": false,
+        "want_bytes": false
+      },
+      "technologies": [],
+      "expected_technology_in_packet": null,
+      "abstained": false,
+      "early_abstain": false,
+      "desired_abstain": false,
+      "answer": "Serializer.dumps assigns `self.make_signer(salt).sign(payload)` to `rv`. Serializer.dumps returns `rv.decode(\"utf-8\")` when `self.is_text_serializer`. Serializer.dumps calls `rv.decode` with `(\"utf-8\")`. Serializer.dumps returns `rv`.",
+      "pass": "with_cues"
+    },
+    {
+      "id": "caller_impact",
+      "kind": "caller_impact",
+      "question": "What could be affected if Signer.sign changes?",
+      "repository": "https://github.com/pallets/itsdangerous",
+      "note": "No resolved CALLS edge points at Signer.sign. Serializer.dumps and the tests mention sign, and those edges are unresolved.",
+      "expected": [],
+      "unsupported": [
+        "Serializer.dumps",
+        "TestSigner.test_signer"
+      ],
+      "error": null,
+      "strategy": "implementation",
+      "model_calls": 0,
+      "retrieval_seconds": 0.8260952479977277,
+      "packet": [
+        "Signer.sign",
+        "Signer",
+        "TimestampSigner.sign",
+        "Serializer.make_signer",
+        "want_bytes",
+        "TestSigner.test_changed_value",
+        "TestSigner.test_signer",
+        "TestSigner.signer"
+      ],
+      "selected": [
+        "Signer.sign"
+      ],
+      "expected_in_packet": {},
+      "expected_selected": {},
+      "unsupported_selected": {
+        "Serializer.dumps": false,
+        "TestSigner.test_signer": false
+      },
+      "citations": [
+        {
+          "chunk_id": "4da6922c-7ae9-5640-bec5-93ea0aaa3f7c",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 222,
+          "end_line": 225
+        }
+      ],
+      "citation_lines_match": {},
+      "technologies": [],
+      "expected_technology_in_packet": null,
+      "abstained": false,
+      "early_abstain": false,
+      "desired_abstain": false,
+      "answer": "Signer.sign assigns `want_bytes(value)` to `value`. Signer.sign returns `value + self.sep + self.get_signature(value)`.",
+      "pass": "with_cues"
+    },
+    {
+      "id": "dependency_usage",
+      "kind": "dependency",
+      "question": "Where is the itsdangerous library used?",
+      "repository": "https://github.com/pallets/flask",
+      "note": "Flask records itsdangerous as a dependency. The import in src/flask/sessions.py is unresolved, so no in-repo symbol is a resolved usage target.",
+      "expected": [],
+      "unsupported": [],
+      "error": null,
+      "strategy": "model",
+      "model_calls": 1,
+      "retrieval_seconds": 2.2039421389999916,
+      "packet": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        "github_link",
+        "setup",
+        null
+      ],
+      "selected": [],
+      "expected_in_packet": {},
+      "expected_selected": {},
+      "unsupported_selected": {},
+      "citations": [],
+      "citation_lines_match": {},
+      "technologies": [
+        "amqp"
+      ],
+      "expected_technology_in_packet": false,
+      "abstained": true,
+      "early_abstain": false,
+      "desired_abstain": false,
+      "answer": "The repository evidence did not produce a cited claim.",
+      "pass": "with_cues"
+    },
+    {
+      "id": "ambiguous_authentication",
+      "kind": "ambiguous",
+      "question": "How does this repository handle authentication?",
+      "repository": "https://github.com/pallets/flask",
+      "note": "A broad question should not be answered as one definitive method.",
+      "expected": [],
+      "unsupported": [],
+      "error": null,
+      "strategy": "abstain",
+      "model_calls": 0,
+      "retrieval_seconds": 1.1194559099967591,
+      "packet": [
+        "auth",
+        null,
+        null,
+        null,
+        "create_app",
+        "_async_app.handle",
+        "test_template_loader_debugging._TestHandler.handle",
+        "test_login_required",
+        "AuthActions.login",
+        "AuthActions",
+        "test_author_required",
+        "_async_app"
+      ],
+      "selected": [],
+      "expected_in_packet": {},
+      "expected_selected": {},
+      "unsupported_selected": {},
+      "citations": [],
+      "citation_lines_match": {},
+      "technologies": [],
+      "expected_technology_in_packet": null,
+      "abstained": true,
+      "early_abstain": true,
+      "desired_abstain": true,
+      "answer": "The retrieved evidence is not sufficient to explain this.",
+      "pass": "with_cues"
+    },
+    {
+      "id": "insufficient_payroll",
+      "kind": "insufficient",
+      "question": "How does the repository calculate payroll tax withholding?",
+      "repository": "https://github.com/pallets/flask",
+      "note": "That behavior is not in the indexed Flask source.",
+      "expected": [],
+      "unsupported": [],
+      "error": null,
+      "strategy": "abstain",
+      "model_calls": 0,
+      "retrieval_seconds": 1.6768335399974603,
+      "packet": [
+        null,
+        "Scaffold.url_value_preprocessor",
+        null,
+        "Blueprint.record",
+        "Scaffold.context_processor",
+        null,
+        "SessionMixinProxy",
+        "App.shell_context_processor",
+        "__getattr__",
+        "RequestProxy",
+        "_AppCtxGlobalsProxy",
+        "AppContextProxy"
+      ],
+      "selected": [],
+      "expected_in_packet": {},
+      "expected_selected": {},
+      "unsupported_selected": {},
+      "citations": [],
+      "citation_lines_match": {},
+      "technologies": [],
+      "expected_technology_in_packet": null,
+      "abstained": true,
+      "early_abstain": true,
+      "desired_abstain": true,
+      "answer": "The retrieved evidence is not sufficient to explain this.",
+      "pass": "with_cues"
+    },
+    {
+      "id": "insufficient_hello",
+      "kind": "insufficient",
+      "question": "Where is the request dispatcher?",
+      "repository": "https://github.com/octocat/Hello-World",
+      "note": "The indexed tree has no implementation to explain.",
+      "expected": [],
+      "unsupported": [],
+      "error": null,
+      "strategy": "abstain",
+      "model_calls": 0,
+      "retrieval_seconds": 0.05984816599811893,
+      "packet": [],
+      "selected": [],
+      "expected_in_packet": {},
+      "expected_selected": {},
+      "unsupported_selected": {},
+      "citations": [],
+      "citation_lines_match": {},
+      "technologies": [],
+      "expected_technology_in_packet": null,
+      "abstained": true,
+      "early_abstain": true,
+      "desired_abstain": true,
+      "answer": "The retrieved evidence is not sufficient to explain this.",
+      "pass": "with_cues"
+    },
+    {
+      "id": "cue_dispatch",
+      "kind": "single_method",
+      "question": "How does Flask match an incoming request to a view and return the result?",
+      "repository": "https://github.com/pallets/flask",
+      "note": "The current behavior cues select this method. The comparison runs the same question with those cues turned off.",
+      "expected": [
+        "Flask.dispatch_request"
+      ],
+      "unsupported": [],
+      "error": null,
+      "strategy": "implementation",
+      "model_calls": 0,
+      "retrieval_seconds": 2.63173966499744,
+      "packet": [
+        "Flask.dispatch_request",
+        "Flask.full_dispatch_request",
+        "result",
+        "AppContext.request",
+        "Flask.preprocess_request",
+        "test_inject_blueprint_url_defaults.view",
+        "test_basic_view.Index.dispatch_request",
+        "test_basic_view.Index",
+        "test_basic_view",
+        "test_custom_config_class.Flask",
+        "test_endpoint_override.Index",
+        "test_route_decorator_custom_endpoint_with_dots.view"
+      ],
+      "selected": [
+        "Flask.dispatch_request"
+      ],
+      "expected_in_packet": {
+        "Flask.dispatch_request": true
+      },
+      "expected_selected": {
+        "Flask.dispatch_request": true
+      },
+      "unsupported_selected": {},
+      "citations": [
+        {
+          "chunk_id": "fa7a557f-672c-5d55-84de-0242ea4c64b1",
+          "path": "src/flask/app.py",
+          "start_line": 966,
+          "end_line": 990
+        }
+      ],
+      "citation_lines_match": {
+        "Flask.dispatch_request": true
+      },
+      "technologies": [],
+      "expected_technology_in_packet": null,
+      "abstained": false,
+      "early_abstain": false,
+      "desired_abstain": false,
+      "answer": "Flask.dispatch_request calls `self.raise_routing_exception(req)` when `req.routing_exception is not None`. Flask.dispatch_request returns `self.make_default_options_response(ctx)` when `getattr(rule, \"provide_automatic_options\", False) and req.method == \"OPTIONS\"`. Flask.dispatch_request calls `self.make_default_options_response` with `(ctx)`. Flask.dispatch_request returns `self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)`. Flask.dispatch_request calls `self.ensure_sync` with `(self.view_functions[rule.endpoint])`. `self.view_functions` is indexed by `rule.endpoint`. Flask.dispatch_request calls that result with `(**view_args)`.",
+      "pass": "with_cues"
+    }
+  ],
+  "without_cues": [
+    {
+      "id": "signature_generation",
+      "kind": "single_method",
+      "question": "How does a signature get generated?",
+      "repository": "https://github.com/pallets/itsdangerous",
+      "note": "The implementation is Signer.get_signature. derive_key is a resolved callee; algorithm.get_signature is not.",
+      "expected": [
+        "Signer.get_signature"
+      ],
+      "unsupported": [],
+      "error": null,
+      "strategy": "implementation",
+      "model_calls": 0,
+      "retrieval_seconds": 0.7481061479993514,
+      "packet": [
+        "Signer.get_signature",
+        "NoneAlgorithm.get_signature",
+        "SigningAlgorithm.get_signature",
+        "HMACAlgorithm.get_signature",
+        "NoneAlgorithm",
+        "Signer.sign",
+        "want_bytes",
+        "Signer.derive_key",
+        "base64_encode",
+        "TimestampSigner.sign",
+        "_ReverseAlgorithm.get_signature",
+        "_ReverseAlgorithm"
+      ],
+      "selected": [
+        "Signer.get_signature",
+        "Signer.sign",
+        "Signer.derive_key"
+      ],
+      "expected_in_packet": {
+        "Signer.get_signature": true
+      },
+      "expected_selected": {
+        "Signer.get_signature": true
+      },
+      "unsupported_selected": {},
+      "citations": [
+        {
+          "chunk_id": "46e2754b-b355-5db5-aa1d-51a2d03a4cd8",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 215,
+          "end_line": 220
+        },
+        {
+          "chunk_id": "4da6922c-7ae9-5640-bec5-93ea0aaa3f7c",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 222,
+          "end_line": 225
+        },
+        {
+          "chunk_id": "d13d015a-5e29-5b38-bb5b-fd5362f830c1",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 182,
+          "end_line": 213
+        }
+      ],
+      "citation_lines_match": {
+        "Signer.get_signature": true
+      },
+      "technologies": [],
+      "expected_technology_in_packet": null,
+      "abstained": false,
+      "early_abstain": false,
+      "desired_abstain": false,
+      "answer": "Signer.derive_key assigns `hmac.new(secret_key, digestmod=self.digest_method)` to `mac` when `self.key_derivation == \"hmac\"`. Signer.derive_key calls `mac.update(self.salt)` when `self.key_derivation == \"hmac\"`. Signer.derive_key returns `t.cast(bytes, self.digest_method(self.salt + secret_key).digest())` when `self.key_derivation == \"concat\"`. Signer.derive_key calls `t.cast` with `(bytes, self.digest_method(self.salt + secret_key).digest())`. Signer.derive_key returns `t.cast( bytes, self.digest_method(self.salt + b\"signer\" + secret_key).digest() )` when `self.key_derivation == \"django-concat\"`. Signer.derive_key calls `t.cast` with `( bytes, self.digest_method(self.salt + b\"signer\" + secret_key).digest() )`. Signer.derive_key raises `TypeError(\"Unknown key derivation method\")`. Signer.get_signature assigns `self.derive_key()` to `key`. Signer.get_signature assigns `self.algorithm.get_signature(key, value)` to `sig`. Signer.get_signature returns `base64_encode(sig)`. Signer.get_signature calls `base64_encode` with `(sig)`. Signer.get_signature calls `self.derive_key`, and the index resolved that call to Signer.derive_key. Signer.sign assigns `want_bytes(value)` to `value`. Signer.sign returns `value + self.sep + self.get_signature(value)`. Signer.sign calls `self.get_signature`, and the index resolved that call to Signer.get_signature.",
+      "pass": "without_cues"
+    },
+    {
+      "id": "signing_paraphrase",
+      "kind": "multi_method",
+      "question": "How does a value get signed and later checked?",
+      "repository": "https://github.com/pallets/itsdangerous",
+      "note": "Complementary Signer methods. Other classes and tests are not part of that explanation.",
+      "expected": [
+        "Signer.sign",
+        "Signer.unsign",
+        "Signer.validate"
+      ],
+      "unsupported": [
+        "TimestampSigner.validate",
+        "SigningAlgorithm.verify_signature",
+        "TestSigner.test_signer"
+      ],
+      "error": null,
+      "strategy": "implementation",
+      "model_calls": 0,
+      "retrieval_seconds": 0.7069194510040688,
+      "packet": [
+        "Signer.validate",
+        "Signer.sign",
+        "TimestampSigner.validate",
+        "SigningAlgorithm.verify_signature",
+        "Signer.unsign",
+        "TestSerializer.value",
+        "TestURLSafeSerializer.value",
+        "TestSigner.test_signer",
+        "TestSigner.test_changed_value",
+        "TestTimestampSigner.test_return_timestamp",
+        "TestSerializer.test_loads_unsafe",
+        "TestSerializer.test_fallback_signers"
+      ],
+      "selected": [
+        "Signer.validate",
+        "Signer.sign",
+        "Signer.unsign"
+      ],
+      "expected_in_packet": {
+        "Signer.sign": true,
+        "Signer.unsign": true,
+        "Signer.validate": true
+      },
+      "expected_selected": {
+        "Signer.sign": true,
+        "Signer.unsign": true,
+        "Signer.validate": true
+      },
+      "unsupported_selected": {
+        "TimestampSigner.validate": false,
+        "SigningAlgorithm.verify_signature": false,
+        "TestSigner.test_signer": false
+      },
+      "citations": [
+        {
+          "chunk_id": "db7a47e5-503d-592b-9855-5ba680c3d2e9",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 258,
+          "end_line": 266
+        },
+        {
+          "chunk_id": "4da6922c-7ae9-5640-bec5-93ea0aaa3f7c",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 222,
+          "end_line": 225
+        },
+        {
+          "chunk_id": "660be368-a4e4-5c73-8edd-993716678070",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 244,
+          "end_line": 256
+        }
+      ],
+      "citation_lines_match": {
+        "Signer.sign": true,
+        "Signer.unsign": true,
+        "Signer.validate": true
+      },
+      "technologies": [],
+      "expected_technology_in_packet": null,
+      "abstained": false,
+      "early_abstain": false,
+      "desired_abstain": false,
+      "answer": "Signer.sign assigns `want_bytes(value)` to `value`. Signer.sign returns `value + self.sep + self.get_signature(value)`. Signer.unsign assigns `signed_value.rsplit(self.sep, 1)` to `value, sig`. Signer.unsign returns `value` when `self.verify_signature(value, sig)`. Signer.unsign raises `BadSignature(f\"No {self.sep!r} found in value\")` when `self.sep not in signed_value`. Signer.unsign raises `BadSignature(f\"Signature {sig!r} does not match\", payload=value)`. Signer.validate calls `self.unsign(signed_value)`. Signer.validate returns `True`. Signer.validate returns `False` when `BadSignature`.",
+      "pass": "without_cues"
+    },
+    {
+      "id": "cross_file_flow",
+      "kind": "cross_file",
+      "question": "Where does the payload go after Serializer.dumps returns?",
+      "repository": "https://github.com/pallets/itsdangerous",
+      "note": "Resolved callees are dump_payload, make_signer, and want_bytes. self.make_signer(salt).sign is unresolved, so Signer.sign is not a supported target.",
+      "expected": [
+        "Serializer.dumps",
+        "Serializer.dump_payload",
+        "Serializer.make_signer",
+        "want_bytes"
+      ],
+      "unsupported": [
+        "Signer.sign"
+      ],
+      "error": null,
+      "strategy": "implementation",
+      "model_calls": 0,
+      "retrieval_seconds": 0.7565906910022022,
+      "packet": [
+        "Serializer.dumps",
+        "Serializer"
+      ],
+      "selected": [
+        "Serializer.dumps"
+      ],
+      "expected_in_packet": {
+        "Serializer.dumps": true,
+        "Serializer.dump_payload": false,
+        "Serializer.make_signer": false,
+        "want_bytes": false
+      },
+      "expected_selected": {
+        "Serializer.dumps": true,
+        "Serializer.dump_payload": false,
+        "Serializer.make_signer": false,
+        "want_bytes": false
+      },
+      "unsupported_selected": {
+        "Signer.sign": false
+      },
+      "citations": [
+        {
+          "chunk_id": "b15a2d44-0a2f-56a6-80dc-04eec085ad84",
+          "path": "src/itsdangerous/serializer.py",
+          "start_line": 309,
+          "end_line": 320
+        }
+      ],
+      "citation_lines_match": {
+        "Serializer.dumps": true,
+        "Serializer.dump_payload": false,
+        "Serializer.make_signer": false,
+        "want_bytes": false
+      },
+      "technologies": [],
+      "expected_technology_in_packet": null,
+      "abstained": false,
+      "early_abstain": false,
+      "desired_abstain": false,
+      "answer": "Serializer.dumps assigns `self.make_signer(salt).sign(payload)` to `rv`. Serializer.dumps returns `rv.decode(\"utf-8\")` when `self.is_text_serializer`. Serializer.dumps calls `rv.decode` with `(\"utf-8\")`. Serializer.dumps returns `rv`.",
+      "pass": "without_cues"
+    },
+    {
+      "id": "caller_impact",
+      "kind": "caller_impact",
+      "question": "What could be affected if Signer.sign changes?",
+      "repository": "https://github.com/pallets/itsdangerous",
+      "note": "No resolved CALLS edge points at Signer.sign. Serializer.dumps and the tests mention sign, and those edges are unresolved.",
+      "expected": [],
+      "unsupported": [
+        "Serializer.dumps",
+        "TestSigner.test_signer"
+      ],
+      "error": null,
+      "strategy": "implementation",
+      "model_calls": 0,
+      "retrieval_seconds": 0.674745365002309,
+      "packet": [
+        "Signer.sign",
+        "Signer",
+        "TimestampSigner.sign",
+        "Serializer.make_signer",
+        "want_bytes",
+        "TestSigner.test_changed_value",
+        "TestSigner.test_signer",
+        "TestSigner.signer"
+      ],
+      "selected": [
+        "Signer.sign"
+      ],
+      "expected_in_packet": {},
+      "expected_selected": {},
+      "unsupported_selected": {
+        "Serializer.dumps": false,
+        "TestSigner.test_signer": false
+      },
+      "citations": [
+        {
+          "chunk_id": "4da6922c-7ae9-5640-bec5-93ea0aaa3f7c",
+          "path": "src/itsdangerous/signer.py",
+          "start_line": 222,
+          "end_line": 225
+        }
+      ],
+      "citation_lines_match": {},
+      "technologies": [],
+      "expected_technology_in_packet": null,
+      "abstained": false,
+      "early_abstain": false,
+      "desired_abstain": false,
+      "answer": "Signer.sign assigns `want_bytes(value)` to `value`. Signer.sign returns `value + self.sep + self.get_signature(value)`.",
+      "pass": "without_cues"
+    },
+    {
+      "id": "dependency_usage",
+      "kind": "dependency",
+      "question": "Where is the itsdangerous library used?",
+      "repository": "https://github.com/pallets/flask",
+      "note": "Flask records itsdangerous as a dependency. The import in src/flask/sessions.py is unresolved, so no in-repo symbol is a resolved usage target.",
+      "expected": [],
+      "unsupported": [],
+      "error": null,
+      "strategy": "model",
+      "model_calls": 1,
+      "retrieval_seconds": 1.6132972670020536,
+      "packet": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        "github_link",
+        "setup",
+        null
+      ],
+      "selected": [],
+      "expected_in_packet": {},
+      "expected_selected": {},
+      "unsupported_selected": {},
+      "citations": [],
+      "citation_lines_match": {},
+      "technologies": [
+        "amqp"
+      ],
+      "expected_technology_in_packet": false,
+      "abstained": true,
+      "early_abstain": false,
+      "desired_abstain": false,
+      "answer": "The repository evidence did not produce a cited claim.",
+      "pass": "without_cues"
+    },
+    {
+      "id": "ambiguous_authentication",
+      "kind": "ambiguous",
+      "question": "How does this repository handle authentication?",
+      "repository": "https://github.com/pallets/flask",
+      "note": "A broad question should not be answered as one definitive method.",
+      "expected": [],
+      "unsupported": [],
+      "error": null,
+      "strategy": "abstain",
+      "model_calls": 0,
+      "retrieval_seconds": 0.8217990689954604,
+      "packet": [
+        "auth",
+        null,
+        null,
+        null,
+        "create_app",
+        "_async_app.handle",
+        "test_template_loader_debugging._TestHandler.handle",
+        "test_login_required",
+        "AuthActions.login",
+        "AuthActions",
+        "test_author_required",
+        "_async_app"
+      ],
+      "selected": [],
+      "expected_in_packet": {},
+      "expected_selected": {},
+      "unsupported_selected": {},
+      "citations": [],
+      "citation_lines_match": {},
+      "technologies": [],
+      "expected_technology_in_packet": null,
+      "abstained": true,
+      "early_abstain": true,
+      "desired_abstain": true,
+      "answer": "The retrieved evidence is not sufficient to explain this.",
+      "pass": "without_cues"
+    },
+    {
+      "id": "insufficient_payroll",
+      "kind": "insufficient",
+      "question": "How does the repository calculate payroll tax withholding?",
+      "repository": "https://github.com/pallets/flask",
+      "note": "That behavior is not in the indexed Flask source.",
+      "expected": [],
+      "unsupported": [],
+      "error": null,
+      "strategy": "abstain",
+      "model_calls": 0,
+      "retrieval_seconds": 0.7841001729975687,
+      "packet": [
+        null,
+        "Scaffold.url_value_preprocessor",
+        null,
+        "Blueprint.record",
+        "Scaffold.context_processor",
+        null,
+        "SessionMixinProxy",
+        "App.shell_context_processor",
+        "__getattr__",
+        "RequestProxy",
+        "_AppCtxGlobalsProxy",
+        "AppContextProxy"
+      ],
+      "selected": [],
+      "expected_in_packet": {},
+      "expected_selected": {},
+      "unsupported_selected": {},
+      "citations": [],
+      "citation_lines_match": {},
+      "technologies": [],
+      "expected_technology_in_packet": null,
+      "abstained": true,
+      "early_abstain": true,
+      "desired_abstain": true,
+      "answer": "The retrieved evidence is not sufficient to explain this.",
+      "pass": "without_cues"
+    },
+    {
+      "id": "insufficient_hello",
+      "kind": "insufficient",
+      "question": "Where is the request dispatcher?",
+      "repository": "https://github.com/octocat/Hello-World",
+      "note": "The indexed tree has no implementation to explain.",
+      "expected": [],
+      "unsupported": [],
+      "error": null,
+      "strategy": "abstain",
+      "model_calls": 0,
+      "retrieval_seconds": 0.05075373600266175,
+      "packet": [],
+      "selected": [],
+      "expected_in_packet": {},
+      "expected_selected": {},
+      "unsupported_selected": {},
+      "citations": [],
+      "citation_lines_match": {},
+      "technologies": [],
+      "expected_technology_in_packet": null,
+      "abstained": true,
+      "early_abstain": true,
+      "desired_abstain": true,
+      "answer": "The retrieved evidence is not sufficient to explain this.",
+      "pass": "without_cues"
+    },
+    {
+      "id": "cue_dispatch",
+      "kind": "single_method",
+      "question": "How does Flask match an incoming request to a view and return the result?",
+      "repository": "https://github.com/pallets/flask",
+      "note": "The current behavior cues select this method. The comparison runs the same question with those cues turned off.",
+      "expected": [
+        "Flask.dispatch_request"
+      ],
+      "unsupported": [],
+      "error": null,
+      "strategy": "abstain",
+      "model_calls": 0,
+      "retrieval_seconds": 0.8106966720006312,
+      "packet": [
+        "result",
+        "AppContext.request",
+        "Flask.preprocess_request",
+        "test_inject_blueprint_url_defaults.view",
+        "test_basic_view.Index.dispatch_request",
+        "test_basic_view.Index",
+        "test_basic_view",
+        "test_custom_config_class.Flask",
+        "test_endpoint_override.Index",
+        "test_route_decorator_custom_endpoint_with_dots.view",
+        "test_subdomain.view",
+        "test_method_based_view.Index"
+      ],
+      "selected": [],
+      "expected_in_packet": {
+        "Flask.dispatch_request": false
+      },
+      "expected_selected": {
+        "Flask.dispatch_request": false
+      },
+      "unsupported_selected": {},
+      "citations": [],
+      "citation_lines_match": {
+        "Flask.dispatch_request": false
+      },
+      "technologies": [],
+      "expected_technology_in_packet": null,
+      "abstained": true,
+      "early_abstain": true,
+      "desired_abstain": false,
+      "answer": "The retrieved evidence is not sufficient to explain this.",
+      "pass": "without_cues"
+    }
+  ],
+  "summary": {
+    "with_cues": {
+      "expected_symbols_selected": 6,
+      "expected_symbols": 9,
+      "unsupported_symbols_selected": 0,
+      "early_abstain_when_desired": 3,
+      "desired_abstain": 3,
+      "model_calls": 1
+    },
+    "without_cues": {
+      "expected_symbols_selected": 5,
+      "expected_symbols": 9,
+      "unsupported_symbols_selected": 0,
+      "early_abstain_when_desired": 3,
+      "desired_abstain": 3,
+      "model_calls": 1
+    }
+  }
+}
