@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 
 from app.core.config import settings
-from app.services.llm.base import BaseLLMProvider
+from app.services.llm.base import BaseLLMProvider, LLMProviderError
 from app.services.llm.claude_provider import ClaudeProvider
 from app.services.llm.codex_provider import CodexProvider
 from app.services.llm.copilot_provider import CopilotProvider
@@ -41,7 +41,7 @@ class LLMFactory:
             return OllamaProvider(model=model)
         if selected == "openai":
             return OpenAIProvider(model=model)
-        raise ValueError(f"Unsupported LLM provider: {selected}")
+        raise LLMProviderError("the model provider is unavailable")
 
     @staticmethod
     def configured_model(provider: str | None = None) -> str:

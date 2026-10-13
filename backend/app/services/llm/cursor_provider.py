@@ -1,18 +1,29 @@
 from __future__ import annotations
 
+import json
 import os
 import tempfile
+import urllib.error
+import urllib.request
 from collections.abc import Callable
 
 from app.core.config import settings
 from app.services.llm.base import BaseLLMProvider, LLMProviderError
 from app.services.llm.cli_runner import json_result_text, run_cli
+from app.services.llm.cursor_bridge import ask_command, bridge_endpoint, completion_prompt
 
 Runner = Callable[[list[str], str, float], str]
 
 
 class CursorProvider(BaseLLMProvider):
-    """Ask a Cursor model for text only. The call has no workspace and no tools."""
+    """Ask a Cursor model for text.
+
+    When CURSOR_BRIDGE_URL is set, the packet goes to the host bridge and this
+    process does not see the Cursor login. Otherwise the CLI runs here, in ask
+    mode with --sandbox enabled, inside an empty temporary directory.
+    --force and --yolo are not used. The sandbox smoke test does not prove
+    that every filesystem or command action is blocked.
+    """
 
     def __init__(
         self,
@@ -33,29 +44,15 @@ class CursorProvider(BaseLLMProvider):
     def generate(self, system_message: str, user_message: str, max_output_tokens: int) -> str:
         if not user_message.strip() or max_output_tokens < 1:
             raise LLMProviderError("the model provider is unavailable")
+        bridge = os.getenv("CURSOR_BRIDGE_URL", "").strip()
+        if bridge:
+            return self._from_bridge(bridge, system_message, user_message, max_output_tokens)
 
-        prompt = (
-            f"{system_message}\n\n{user_message}\n\n"
-            "Reply with one JSON object only. "
-            f"Keep the response within {max_output_tokens} tokens."
-        )
+        prompt = completion_prompt(system_message, user_message, max_output_tokens)
         try:
             with tempfile.TemporaryDirectory(prefix="repona-cursor-") as workspace:
                 stdout = self._runner(
-                    [
-                        self.executable,
-                        "--print",
-                        "--mode",
-                        "ask",
-                        "--trust",
-                        "--workspace",
-                        workspace,
-                        "--model",
-                        self.model,
-                        "--output-format",
-                        "json",
-                        prompt,
-                    ],
+                    ask_command(self.executable, self.model, workspace, prompt),
                     workspace,
                     self.timeout,
                 )
@@ -65,3 +62,36 @@ class CursorProvider(BaseLLMProvider):
             raise LLMProviderError("the model provider is unavailable") from None
 
         return json_result_text(stdout)
+
+    def _from_bridge(self, bridge: str, system_message: str, user_message: str, max_output_tokens: int) -> str:
+        token = os.getenv("CURSOR_BRIDGE_TOKEN", "")
+        if len(token) < 16:
+            raise LLMProviderError("the model provider is unavailable")
+        endpoint = bridge_endpoint(bridge)
+        payload = json.dumps(
+            {
+                "system_message": system_message,
+                "user_message": user_message,
+                "max_output_tokens": max_output_tokens,
+                "model": self.model,
+            }
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            endpoint,
+            data=payload,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Content-Length": str(len(payload)),
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout + 30) as response:
+                body = json.loads(response.read().decode("utf-8"))
+        except (OSError, urllib.error.URLError, json.JSONDecodeError, UnicodeError, TimeoutError):
+            raise LLMProviderError("the model provider is unavailable") from None
+        result = body.get("result") if isinstance(body, dict) else None
+        if not isinstance(result, str) or not result.strip():
+            raise LLMProviderError("the model provider is unavailable")
+        return result

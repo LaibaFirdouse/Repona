@@ -6,7 +6,7 @@ import subprocess
 from app.services.llm.base import LLMProviderError
 
 
-def run_cli(command: list[str], cwd: str, timeout: float) -> str:
+def run_cli(command: list[str], cwd: str, timeout: float, env: dict[str, str] | None = None) -> str:
     """Run a local model CLI. The prompt stays in the command and out of errors."""
     try:
         completed = subprocess.run(
@@ -17,6 +17,7 @@ def run_cli(command: list[str], cwd: str, timeout: float) -> str:
             text=True,
             stdin=subprocess.DEVNULL,
             check=False,
+            env=env,
         )
     except (OSError, subprocess.TimeoutExpired):
         raise LLMProviderError("the model provider is unavailable") from None
