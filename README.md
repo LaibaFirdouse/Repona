@@ -1,107 +1,427 @@
 # Repona
 
-Repona indexes a Git repository and answers questions about the code in plain language. Each answer names the file and the lines it came from.
+Repona indexes a Git repository and answers questions about its code in plain language. Each answer includes citations identifying the source file and line range.
 
-The page is for a public GitHub URL. The API can also index a private repository if you pass a token that can read its contents.
+It combines symbol search, full-text search, vector retrieval, and code relationships to build evidence for repository questions. A configured language model generates the answer, and Repona validates its citations against the retrieved source.
+
+Repona supports public GitHub repositories without a token and private repositories when supplied with a GitHub personal access token that can read their contents.
+
+## Features
+
+- **Hybrid retrieval:** Combines symbol-name search, full-text search, and semantic vector search.
+- **Code intelligence:** Extracts declarations, function calls, and dependency relationships.
+- **Graph-based context:** Uses Neo4j to store code relationships and dependencies.
+- **Source-grounded answers:** Generates explanations from retrieved repository evidence.
+- **Citation validation:** Checks that citations refer to retrieved source spans and quoted text appears in the cited source.
+- **Evidence-based abstention:** Avoids unnecessary model calls when the evidence is insufficient.
+- **Generation-based indexing:** Keeps the previous ready generation active until a new generation is ready.
+- **Local execution:** Runs the API and data services locally, with a host-side bridge connecting the API to the Cursor CLI.
+
+## Architecture
+
+```text
+                         User
+                           |
+                           v
+                  Web Interface
+                  frontend/index.html
+                           |
+                           v
+                  FastAPI Application
+                      :8000
+                           |
+              +------------+------------+
+              |                         |
+              v                         v
+       Repository Indexing        Question Answering
+              |                         |
+              v                         v
+       Git Snapshot              Hybrid Retrieval
+              |                         |
+              |                +--------+--------+
+              |                |        |        |
+              |                v        v        v
+              |             Postgres  Qdrant   Neo4j
+              |                |        |        |
+              |                +--------+--------+
+              |                         |
+              |                         v
+              |                  Evidence Packet
+              |                         |
+              |                         v
+              |                  Cursor Bridge
+              |                  127.0.0.1:8765
+              |                         |
+              |                         v
+              |                     Cursor CLI
+              |                         |
+              |                         v
+              |                  Generated Answer
+              |                         |
+              +-------------------------+
+                                        |
+                                        v
+                              Citation Validation
+                                        |
+                                        v
+                                  Final Answer
+```
+
+The diagram shows the logical flow. The API, database services, and bridge run in separate processes or containers as described below.
+
+### Technology stack
+
+| Component | Technology | Responsibility |
+|---|---|---|
+| API and web interface | FastAPI, HTML | Repository indexing and question answering |
+| Catalog | PostgreSQL | Repository records, chunks, dependencies, and generations |
+| Vector retrieval | Qdrant | Semantic search over embedded chunks |
+| Embeddings | `all-MiniLM-L6-v2` | 384-dimensional text embeddings |
+| Code relationship graph | Neo4j | Call and dependency relationships |
+| Source parsing | Tree-sitter | Extracting code structure |
+| Answer generation | Cursor CLI through a host-side bridge | Generating answers from evidence |
+| Runtime | Docker Compose and Python | Running the API, data services, and bridge |
 
 ## Requirements
 
-- Docker
-- An API key for the model the container will call. The image does not include the Cursor, Claude, Codex, or Copilot command-line tools.
+- Docker and Docker Compose.
+- Python 3.12 for the host-side bridge.
+- Cursor CLI (`agent`) installed and authenticated.
+- Sufficient disk space for repository snapshots and the embedding model.
+- A GitHub personal access token for private repositories.
 
-## Install
+The Docker image does not include the Cursor, Claude, Codex, or Copilot command-line tools.
 
-Put `CURSOR_BRIDGE_TOKEN` in `.env`. Start the host bridge, then start Compose. The API calls that bridge for answers.
+The accepted API configuration uses Cursor through the host bridge. The bridge uses your existing Cursor CLI login; the API container does not need access to your Cursor home directory.
+
+## Installation
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/LaibaFirdouse/Repona.git
+cd Repona
+```
+
+### 2. Configure environment variables
+
+Create the environment file:
 
 ```bash
 cp .env.example .env
-docker compose up -d --build
 ```
 
-Compose creates a bridge network and names it `repo-intelligence-network`. The app, Postgres, Qdrant, and Neo4j all join that network. Inside it the app uses `postgres:5432`, `qdrant:6333`, and `bolt://neo4j:7687`. The page is published on host port 8000, which maps to container port 8000. Postgres is also on host port 5433, Qdrant on 6333, and Neo4j bolt on 7687.
+Set `CURSOR_BRIDGE_TOKEN` to a strong, private token of at least 16 characters.
 
-Indexed repositories are stored in the `app_data` volume, mounted at `/app/data` in the container. Postgres, Qdrant, and Neo4j use their own named volumes. The first image build downloads the embedding model, so it takes a while. Startup does not download an Ollama model.
+For private repositories, also set `CREDENTIAL_KEY` before starting the API. Use a separate long secret for encrypting stored repository credentials.
 
-```bash
-docker compose stop api
-docker compose start api
-docker compose logs api
-docker compose ps
-```
+Keep `.env` private and never commit credentials.
 
-`docker compose stop api` leaves the three stores running. `docker compose start api` brings the API container back. Do not run `docker compose down -v`. That deletes the volumes.
-
-To run the API on the host instead, stop the API container first, then start Python on another port if 8000 is still taken:
+### 3. Start the data services
 
 ```bash
-docker compose stop api
 docker compose up -d postgres qdrant neo4j
+```
+
+Compose creates the PostgreSQL database `repo_intelligence`, but the API uses a separate database named `repona`. Create it if it does not already exist:
+
+```bash
+docker exec repo-intelligence-postgres \
+  psql -U postgres \
+  -c 'CREATE DATABASE repona'
+```
+
+The API uses PostgreSQL on host port `5433`, Qdrant on `6333`, and Neo4j Bolt on `7687`.
+
+### 4. Install and start the Cursor bridge
+
+Create a Python virtual environment:
+
+```bash
 python -m venv .venv
 .venv/bin/pip install -r requirements.txt
-PYTHONPATH=backend .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
 ```
 
-The host process reads `.env`. `DATABASE_URL` must use `localhost` and port 5433. `NEO4J_URI` must use `localhost:7687`. Qdrant is `http://localhost:6333` when `QDRANT_URL` is unset. The host process stores git data and snapshots under `./data`. The container stores them in the `app_data` volume. Those directories are separate. `.env.example` sets `LLM_PROVIDER=cursor` for this host process. Without `.env`, it looks for Postgres on port 5432.
+Authenticate the Cursor CLI if necessary:
 
-`GET /api/v1/health` returns `ok` when the process is up. It does not check the stores or the model.
+```bash
+agent login
+agent status
+```
 
-## Use the page
+Load the environment variables and start the bridge:
 
-Open http://127.0.0.1:8000 and paste a public GitHub URL. Indexing keeps that request open until the repository is ready. A small project takes a few minutes. The next message in the box is a question about that repository. The browser stores the repository id locally, so later questions go to the same one.
+```bash
+set -a
+. ./.env
+set +a
+
+PYTHONPATH=backend \
+  .venv/bin/python -m app.services.llm.cursor_bridge
+```
+
+Keep this terminal running.
+
+The bridge listens on `127.0.0.1:8765`. It accepts authenticated requests containing the question packet and invokes the Cursor CLI using the host's existing login.
+
+Compose does not start the bridge automatically.
+
+### 5. Build and start the API
+
+In another terminal:
+
+```bash
+docker compose up -d --build api
+```
+
+The first image build downloads the embedding model, so it may take longer.
+
+The accepted API container uses host networking and `LLM_PROVIDER=cursor`. It reaches the host bridge at `127.0.0.1:8765` and the data services through their published host ports.
+
+The host bridge must be running before model-backed questions can succeed.
+
+### 6. Open Repona
+
+Visit:
+
+**http://127.0.0.1:8000**
+
+Paste a GitHub repository URL and wait for indexing to finish. Then ask questions about the repository.
+
+The browser stores the repository ID and user ID locally, so subsequent questions use the same repository.
 
 ## Configuration
 
-`LLM_PROVIDER` chooses the model for a host process. Allowed values are `cursor`, `claude`, `codex`, `copilot`, `opencode`, `zai`, `ollama`, and `openai`. Each one has a model name in `.env` (`CURSOR_MODEL`, `CLAUDE_MODEL`, and so on). `openai` needs `OPENAI_API_KEY`. `zai` needs `ZAI_API_KEY`. A missing key, a rejected key, a rate limit, a network failure, and a timeout all return HTTP 503 with `the model provider is unavailable`. The response does not include the key or the provider body. A failed provider is not replaced by another one.
+### Model providers
 
-The API container uses host networking and `LLM_PROVIDER=cursor`. It calls `CURSOR_BRIDGE_URL` (`http://127.0.0.1:8765`), a bridge on the host that holds the existing Cursor login. The bridge accepts the question packet only. The Cursor home is not mounted into the container. Postgres, Qdrant, and Neo4j stay in Docker and are reached through their published host ports.
+`LLM_PROVIDER` selects the provider for a host process. Supported values are:
 
-The API does not call Ollama. A question can still name another provider, and that request is answered by the provider you name.
+- `cursor`
+- `claude`
+- `codex`
+- `copilot`
+- `opencode`
+- `zai`
+- `ollama`
+- `openai`
 
-The bridge accepts `system_message`, `user_message`, `max_output_tokens`, and `model`. Any other field is rejected. A missing or wrong bearer token is rejected. `/health` returns only `{"status":"ok"}`. Compose does not start the bridge, so start it on the host before asking a question. The Cursor CLI in this run is `2026.10.01-e373342`, model `composer-2.5-fast`.
+Each provider has its own model setting in `.env`, such as `CURSOR_MODEL` or `CLAUDE_MODEL`.
 
-`--mode ask` and `--sandbox enabled` are set, and `--force` and `--yolo` are not. The CLI help still says `--print` can use write and shell tools. One probe with the same flags refused to create a file inside or outside its workspace, and neither file appeared. That does not prove every command or filesystem action is blocked.
+`openai` requires `OPENAI_API_KEY`, while `zai` requires `ZAI_API_KEY`.
 
-A live explanation in the accepted run took about 14–28 seconds to generate after retrieval. Payroll, authentication, and the Hello-World dispatcher abstained before the model. The numbers are in `evaluation/cursor-baseline.json`.
+The accepted API configuration uses Cursor through the host bridge. **The API does not call Ollama**, and Ollama settings have been removed from the API's configuration. An Ollama process may still be running independently on the host.
 
-A public repository needs no token. A private one needs two things, and only through the API:
+The API can also accept a supported provider and model override on an individual `/api/v1/ask` request. Requests without an override use the configured provider. The web interface does not provide a model selector.
 
-- `CREDENTIAL_KEY` in `.env`, any long secret you choose. The app refuses to store a token when this is empty. Add it before you start the API.
-- `access_token` on `POST /api/v1/repository`. For GitHub this is a personal access token with access to the repository contents. It is not an OpenAI or Cursor key.
+If the selected provider fails because of a missing or rejected key, a rate limit, a network error, or a timeout, the API returns HTTP 503 with a generic provider-unavailable message. It does not silently switch to another provider.
 
-`tracked_branch` is optional. Leave it off and Repona uses the default branch. The first successful index sticks to that branch. A later request for a different branch is rejected.
+### Cursor bridge
 
-## API
+The API uses `CURSOR_BRIDGE_URL`, configured as:
 
-Use the same `user_id` for the index call and later questions. Any string up to 36 characters is fine. The page generates one and stores it in the browser. There is no login.
+```text
+http://127.0.0.1:8765
+```
 
-Indexing blocks until the build finishes. `action` is `serve` when you can ask. `wait` means this commit is not ready yet, often because another request is still indexing it. Send the same request again.
+The bridge accepts these fields:
+
+- `system_message`
+- `user_message`
+- `max_output_tokens`
+- `model`
+
+Other fields are rejected. Requests without the correct bearer token are rejected.
+
+The bridge's `/health` endpoint returns:
+
+```json
+{"status":"ok"}
+```
+
+The bridge invokes Cursor CLI in Ask mode with sandbox mode enabled. It does not use `--force` or `--yolo`.
+
+The CLI help nevertheless states that print mode can access shell and write tools. A probe with the same flags did not create a file inside or outside its workspace, but this does not prove that every command or filesystem operation is blocked. Treat the bridge as a local development component, not as a fully security-isolated execution environment.
+
+The accepted run used:
+
+- Cursor CLI: `2026.10.01-e373342`
+- Model: `composer-2.5-fast`
+
+### Private repositories
+
+Private repository indexing requires two separate credentials, supplied through the API:
+
+1. **`CREDENTIAL_KEY`** in `.env`. The application refuses to store a repository access token when this is unset.
+2. **`access_token`** in `POST /api/v1/repository`. For GitHub, this must be a personal access token with access to the repository contents.
+
+The GitHub token is not a Cursor or model-provider API key.
+
+### Tracked branch
+
+`tracked_branch` is optional. If omitted, Repona uses the repository's default branch.
+
+The first successful index establishes the tracked branch. A later request to change it is rejected.
+
+## Using the API
+
+Use the same `user_id` when indexing a repository and asking questions about it. Any string up to 36 characters is accepted. The web interface generates a value and stores it in the browser.
+
+There is no user login.
+
+### Index a repository
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/repository \
   -H "Content-Type: application/json" \
-  -d '{"repo_url":"https://github.com/pallets/itsdangerous","user_id":"local-user"}'
+  -d '{
+    "repo_url": "https://github.com/pallets/itsdangerous",
+    "user_id": "local-user"
+  }'
 ```
+
+The response includes the repository ID and an action indicating whether the generation is ready to serve.
+
+### Ask a question
+
+Replace `<id from the first response>` with the returned repository ID:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/ask \
   -H "Content-Type: application/json" \
-  -d '{"repository_id":"<id from the first response>","user_id":"local-user","question":"Which functions call derive_key?"}'
+  -d '{
+    "repository_id": "<id from the first response>",
+    "user_id": "local-user",
+    "question": "Which functions call derive_key?"
+  }'
 ```
 
-Read `answer` and `citations`. You can also set `provider` to `cursor`, `claude`, `codex`, `copilot`, `opencode`, `zai`, or `ollama`, and `model` to that provider's model id. Leave both off to use `.env`. `openai` is selected with `LLM_PROVIDER`, not with the `provider` field.
+Read the `answer` and `citations` fields in the response.
+
+You can optionally set `provider` to `cursor`, `claude`, `codex`, `copilot`, `opencode`, `zai`, or `ollama`, and set `model` to that provider's model ID. If both are omitted, Repona uses the configured provider.
+
+`openai` is selected through `LLM_PROVIDER`, not through the request's `provider` field.
+
+### Indexing behavior
+
+Indexing blocks until the build finishes. The action is:
+
+- `serve`: the requested generation is ready to query.
+- `wait`: the commit is not ready yet, often because another request is still indexing it.
+
+When the response says `wait`, send the same request again. The page displays the result but does not poll automatically.
 
 ## What gets indexed
 
-Repona shallow-fetches the tracked branch. It keeps source files for programming languages, plus JSON, Markdown, YAML, TOML, SQL, shell, Dockerfiles, `requirements.txt`, `go.mod`, `CMakeLists.txt`, Makefiles, `Gemfile`, and `Rakefile`. It skips `.git`, `node_modules`, `build`, `dist`, and lockfiles.
+Repona shallow-fetches the tracked branch and creates a snapshot of the indexed commit.
 
-Declarations and calls are read when the language has a grammar. Python, JavaScript, and TypeScript use their own parser. Other languages use tree-sitter grammars, which download on first use. A language with no grammar is still stored as text, so a question can cite the file.
+It keeps supported programming-language files, plus JSON, Markdown, YAML, TOML, SQL, shell scripts, Dockerfiles, and dependency manifests such as:
 
-Postgres holds the catalog. Neo4j holds calls and dependencies. Qdrant holds embeddings from `all-MiniLM-L6-v2`. A question is searched by symbol name, by the words in the file, and by those embeddings. The model writes the answer from that evidence. Citations are the passages included in that evidence.
+- `requirements.txt`
+- `package.json`
+- `pyproject.toml`
+- `go.mod`
+- `CMakeLists.txt`
+- Makefiles
+- `Gemfile`
+- `Rakefile`
 
-## Limits
+It skips `.git`, `node_modules`, `build`, `dist`, and lockfiles.
 
-Small public repositories are the intended size. A very large repository can take a long time, and the browser waits on the indexing request until it returns.
+Python, JavaScript, and TypeScript use dedicated parsing paths. Other languages use tree-sitter grammars when available. A language without a suitable grammar is still stored as text, allowing its contents to be retrieved and cited.
 
-Every visitor to one running copy uses the same `LLM_PROVIDER`. The page does not choose a model per question.
+The indexed source snapshot is the authority for answering questions. Chunks contain byte ranges into that snapshot, and citations are mapped back to source locations.
 
-`action: "wait"` means the commit is not ready to query. Repeat the request after indexing finishes. The page shows the message and does not poll.
+### Storage responsibilities
+
+| Store | Data |
+|---|---|
+| PostgreSQL | Repository catalog, members, generations, files, chunks, and detected dependencies |
+| Qdrant | Embeddings of source chunks |
+| Neo4j | Call and dependency relationships |
+| Git directory and snapshot | Source for the indexed commit |
+
+Qdrant uses `all-MiniLM-L6-v2` embeddings with 384 dimensions and cosine similarity.
+
+A ready generation of the same commit is served without fetching again. A new commit requires a new generation. The new generation becomes active only after indexing finishes, so questions continue to use the previous ready generation until cutover.
+
+The Docker setup stores indexed repositories in the `app_data` volume mounted at `/app/data`. The host process stores Git data and snapshots under `./data`. These are separate storage locations and are not automatically interchangeable.
+
+## How answering works
+
+1. Repona checks that the user is an active member of the repository.
+2. It checks whether the tracked branch still points to the indexed commit.
+3. It retrieves relevant evidence through symbol search, full-text search, and Qdrant vector search.
+4. It combines the hits into a bounded evidence packet containing source spans and code relationships.
+5. An answerability gate decides whether the packet can support a response.
+6. Eligible questions are sent to the configured model provider.
+7. Repona validates citations against the retrieved spans before returning the answer.
+
+Package-specific questions also retrieve chunks mentioning the named package.
+
+If the evidence is insufficient, Repona abstains before calling the model. This behavior is covered by the accepted evaluation cases for payroll, authentication, and the Hello-World dispatcher.
+
+If the selected provider fails, Repona returns HTTP 503 rather than substituting another provider.
+
+## Evaluation
+
+The accepted Cursor baseline is recorded in:
+
+`evaluation/cursor-baseline.json`
+
+The live evaluation covered eight questions:
+
+| Case | Result |
+|---|---|
+| Flask dispatch | Pass |
+| `Signer.sign` | Pass |
+| Signing followed by validation | Pass |
+| `escape` → `_escape_inner` | Pass |
+| Where `itsdangerous` is used | Pass |
+| Payroll withholding | Correctly abstains |
+| Authentication | Correctly abstains |
+| Hello-World dispatcher | Correctly abstains |
+
+The five answerable cases used live Cursor generation. The three unsupported cases abstained before calling the model.
+
+In the accepted run, model generation took approximately 14–28 seconds after retrieval. Retrieval can add significant latency; one live Flask request took approximately 48.9 seconds overall.
+
+These measurements describe the recorded evaluation, not a guarantee of latency for every repository or question.
+
+## Operations
+
+Check the running services:
+
+```bash
+docker compose ps
+docker compose logs api
+```
+
+Stop and restart the API without stopping the data services:
+
+```bash
+docker compose stop api
+docker compose start api
+```
+
+`GET /api/v1/health` returns `ok` when the API process is running. It does not check PostgreSQL, Qdrant, Neo4j, or Cursor availability.
+
+After a reboot, start the data services and API with Compose and start the host bridge separately. If the bridge is unavailable, model-backed questions return HTTP 503.
+
+**Do not run `docker compose down -v` unless you intend to delete the persistent volumes and indexed data.**
+
+## Limitations
+
+- The application is designed for local use and does not provide user authentication.
+- The web interface does not allow model selection per question.
+- The API and host bridge must both be available for Cursor-backed answers.
+- Indexing blocks until the requested generation is ready; large repositories can take substantially longer than small ones.
+- The page does not automatically poll while indexing is in progress.
+- Answer quality depends on retrieval coverage and the evidence included in the packet.
+- The Cursor CLI sandbox has not been proven to block every possible command or filesystem operation.
+- The host and container store indexed source data in separate locations.
+
+## Project goal
+
+Repona makes unfamiliar codebases easier to understand by connecting natural-language questions to indexed source code, structural relationships, and verifiable citations.
+
+**The core principle: answers should be grounded in repository evidence, and insufficient evidence should lead to abstention rather than speculation.**
