@@ -176,7 +176,7 @@ docker compose up -d --build api
 
 The first image build downloads the embedding model, so it may take longer.
 
-The accepted API container uses host networking and `LLM_PROVIDER=cursor`. It reaches the host bridge at `127.0.0.1:8765` and the data services through their published host ports.
+The accepted API container uses host networking and `LLM_PROVIDER=cursor`. It reaches the host bridge at `127.0.0.1:8765`. Postgres, Qdrant, and Neo4j publish host ports `5433`, `6333`, and `7687`, and the API connects to `127.0.0.1` on those ports.
 
 The host bridge must be running before model-backed questions can succeed.
 
@@ -211,7 +211,7 @@ Each provider has its own model setting in `.env`, such as `CURSOR_MODEL` or `CL
 
 The accepted API configuration uses Cursor through the host bridge. **The API does not call Ollama**, and Ollama settings have been removed from the API's configuration. An Ollama process may still be running independently on the host.
 
-The API can also accept a supported provider and model override on an individual `/api/v1/ask` request. Requests without an override use the configured provider. The web interface does not provide a model selector.
+An `/api/v1/ask` request may set `provider` to `cursor`, `claude`, `codex`, `copilot`, `opencode`, `zai`, or `ollama`, and `model` to that provider's model ID. `openai` is valid as `LLM_PROVIDER` and is rejected as a request field. A request that omits both uses the configured provider. The web interface does not send either field.
 
 If the selected provider fails because of a missing or rejected key, a rate limit, a network error, or a timeout, the API returns HTTP 503 with a generic provider-unavailable message. It does not silently switch to another provider.
 
@@ -230,7 +230,7 @@ The bridge accepts these fields:
 - `max_output_tokens`
 - `model`
 
-Other fields are rejected. Requests without the correct bearer token are rejected.
+Other fields are rejected. Requests without the correct bearer token are rejected. `CURSOR_BRIDGE_TOKEN` authenticates the API's call to the bridge. It does not authenticate a person using the page or the API.
 
 The bridge's `/health` endpoint returns:
 
@@ -266,7 +266,7 @@ The first successful index establishes the tracked branch. A later request to ch
 
 Use the same `user_id` when indexing a repository and asking questions about it. Any string up to 36 characters is accepted. The web interface generates a value and stores it in the browser.
 
-There is no user login.
+There is no user login. The bridge token does not change that: anyone who can reach port 8000 can index a repository and ask a question.
 
 ### Index a repository
 
@@ -411,7 +411,7 @@ After a reboot, start the data services and API with Compose and start the host 
 
 ## Limitations
 
-- The application is designed for local use and does not provide user authentication.
+- The application is designed for local use and does not provide user authentication. The bridge token only authenticates calls to the bridge.
 - The web interface does not allow model selection per question.
 - The API and host bridge must both be available for Cursor-backed answers.
 - Indexing blocks until the requested generation is ready; large repositories can take substantially longer than small ones.
