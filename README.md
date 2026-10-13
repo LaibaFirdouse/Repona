@@ -6,26 +6,32 @@ The page is for a public GitHub URL. The API can also index a private repository
 
 ## Requirements
 
-- Docker, for Postgres, Qdrant, and Neo4j
-- Python 3.12
-- Git
-- The model command named by `LLM_PROVIDER`, already installed and signed in on this machine
-
-The API runs on the host so it can call that command. The three stores run in Docker.
+- Docker
+- An API key for the model the container will call. The image does not include the Cursor, Claude, Codex, or Copilot command-line tools.
 
 ## Install
 
+Put `OPENAI_API_KEY` in `.env`. Compose passes that value into the app container. The container uses OpenAI unless you set `CONTAINER_LLM_PROVIDER` to `zai` or `ollama`.
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+The app, Postgres, Qdrant, and Neo4j join `repo-intelligence-network`. Inside that network the app reaches them as `postgres`, `qdrant`, and `neo4j`. The page is published on http://127.0.0.1:8000. Postgres is also on host port 5433, Qdrant on 6333, and Neo4j bolt on 7687.
+
+Indexed repositories are stored in the `app_data` volume. The first image build downloads the embedding model, so it takes a while.
+
+To run the API on the host instead, so it can call a local model command, start only the stores and point `.env` at `localhost`:
+
 ```bash
 docker compose up -d postgres qdrant neo4j
-cp .env.example .env
 python -m venv .venv
 .venv/bin/pip install -r requirements.txt
 PYTHONPATH=backend .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Copy `.env` before you start the app. The example file points Postgres at port 5433, which is the port Compose publishes. Without that file the app looks for Postgres on 5432 and will not connect.
-
-The page is http://127.0.0.1:8000. Qdrant is on 6333. Neo4j bolt is on 7687. The example `.env` already has the Neo4j password Compose uses, and it sets the model to Cursor. Change `LLM_PROVIDER` in `.env` before startup if you want a different one, then restart the API after any later change.
+That host process needs Python 3.12 and Git. `.env.example` uses port 5433 and `LLM_PROVIDER=cursor`. Without `.env`, the process looks for Postgres on port 5432. Do not run this process and the `api` container at the same time. Both bind port 8000.
 
 `GET /api/v1/health` returns `ok` when the process is up. It does not check the stores or the model.
 
@@ -36,6 +42,8 @@ Open http://127.0.0.1:8000 and paste a public GitHub URL. Indexing keeps that re
 ## Configuration
 
 `LLM_PROVIDER` chooses the model for every person using this copy of the app. Allowed values are `cursor`, `claude`, `codex`, `copilot`, `opencode`, `zai`, `ollama`, and `openai`. Each one has a model name in `.env` (`CURSOR_MODEL`, `CLAUDE_MODEL`, and so on). `openai` also needs `OPENAI_API_KEY`. `zai` needs `ZAI_API_KEY`. Ollama is expected at `http://localhost:11434` unless you change `OLLAMA_BASE_URL`.
+
+The container reads `CONTAINER_LLM_PROVIDER`, default `openai`, plus `OPENAI_API_KEY`, `OPENAI_MODEL`, `ZAI_API_KEY`, and `CREDENTIAL_KEY` from the project `.env`. Its database addresses are set in `docker-compose.yml` and point at the other services on `repo-intelligence-network`, not at `localhost`.
 
 A public repository needs no token. A private one needs two things, and only through the API:
 
