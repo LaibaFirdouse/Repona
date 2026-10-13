@@ -38,7 +38,8 @@ def question_plan(
 
     `answer` is serve, wait, revoke, or unavailable.
     `build` is none, start, or adopt.
-    A matching commit is served from the active generation, including during a rebuild.
+    A ready generation of the same commit is served and does not fetch.
+    A version difference does not write into that git directory.
     A different commit is not served from the previous generation.
     """
     if upstream == "unauthorized":
@@ -46,12 +47,12 @@ def question_plan(
     if upstream != "authorized" or not remote_sha:
         return "unavailable", "none"
     same_commit = bool(active_ready and source_valid and active_sha == remote_sha)
-    current = same_commit and versions_match
-    answer = "serve" if same_commit else "wait"
-    if current:
-        return answer, "none"
+    if same_commit:
+        # versions_match is accepted from the caller and does not start a fetch.
+        del versions_match
+        return "serve", "none"
     if refresh_state == "running" and lease_held:
-        return answer, "none"
+        return "wait", "none"
     if refresh_state == "running":
-        return answer, "adopt"
-    return answer, "start"
+        return "wait", "adopt"
+    return "wait", "start"

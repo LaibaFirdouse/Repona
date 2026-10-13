@@ -45,6 +45,10 @@ class QuestionPlanTests(unittest.TestCase):
         answer, build = question_plan("authorized", "a" * 40, "a" * 40, True, True, False, "idle", False)
         self.assertEqual((answer, build), ("wait", "start"))
 
+    def test_matching_commit_does_not_fetch_when_versions_differ(self) -> None:
+        answer, build = question_plan("authorized", "a" * 40, "a" * 40, True, False, True, "idle", False)
+        self.assertEqual((answer, build), ("serve", "none"))
+
     def test_versions_match_requires_every_indexing_version(self) -> None:
         generation = type(
             "Generation",
