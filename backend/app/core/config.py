@@ -46,6 +46,9 @@ class Settings:
     )
     ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b")
     ollama_timeout: int = _get_int_env("OLLAMA_TIMEOUT", 180)
+    # Runtime window sent as num_ctx. This is separate from the evidence byte caps and the output cap.
+    ollama_num_ctx: int = _get_int_env("OLLAMA_NUM_CTX", 4096)
+    context_margin_tokens: int = _get_int_env("CONTEXT_MARGIN_TOKENS", 256)
     cursor_model: str = os.getenv("CURSOR_MODEL", "composer-2.5-fast")
     cursor_timeout: int = _get_int_env("CURSOR_TIMEOUT", 180)
     claude_model: str = os.getenv("CLAUDE_MODEL", "sonnet")

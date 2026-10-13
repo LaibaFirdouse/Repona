@@ -7,6 +7,7 @@ import urllib.request
 from pathlib import Path
 
 from app.core.config import settings
+from app.retrieval.model_call import log_ollama_timing
 from app.services.llm.base import BaseLLMProvider, LLMProviderError
 
 
@@ -95,7 +96,7 @@ class OllamaProvider(BaseLLMProvider):
             ],
             "stream": False,
             "format": "json",
-            "options": {"num_predict": max_output_tokens},
+            "options": {"num_predict": max_output_tokens, "num_ctx": settings.ollama_num_ctx},
         }
         request = urllib.request.Request(
             f"{reachable_base_url}/api/chat",
@@ -118,4 +119,5 @@ class OllamaProvider(BaseLLMProvider):
         content = message.get("content") if isinstance(message, dict) else None
         if not isinstance(content, str) or not content.strip():
             raise LLMProviderError("the model provider is unavailable")
+        log_ollama_timing(payload_response, max_output_tokens)
         return content

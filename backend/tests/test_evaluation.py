@@ -1,6 +1,7 @@
 import unittest
 
 from app.evaluation.record import case_record
+from app.evaluation.selection import SELECTION
 from app.retrieval.packet import NO_CITED_CLAIM
 
 
@@ -80,6 +81,34 @@ class EvaluationRecordTests(unittest.TestCase):
         self.assertEqual(record["action"], "wait")
         self.assertIsNone(record["model_seconds"])
         self.assertFalse(record["no_claim_line"])
+
+
+class SelectionSuiteTests(unittest.TestCase):
+    def test_the_suite_covers_each_selection_kind_without_overlapping_targets(self) -> None:
+        kinds = {case["kind"] for case in SELECTION}
+        self.assertEqual(
+            kinds,
+            {
+                "single_method",
+                "multi_method",
+                "cross_file",
+                "caller_impact",
+                "dependency",
+                "ambiguous",
+                "insufficient",
+            },
+        )
+        ids = [case["id"] for case in SELECTION]
+        self.assertEqual(len(ids), len(set(ids)))
+        cross = next(case for case in SELECTION if case["kind"] == "cross_file")
+        self.assertIn("Signer.sign", cross["unsupported"])
+        self.assertNotIn("Signer.sign", cross["expected"])
+        caller = next(case for case in SELECTION if case["kind"] == "caller_impact")
+        self.assertEqual(caller["expected"], ())
+        for case in SELECTION:
+            self.assertFalse(set(case["expected"]) & set(case["unsupported"]))
+            self.assertTrue(case["question"])
+            self.assertTrue(case["note"])
 
 
 if __name__ == "__main__":

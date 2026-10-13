@@ -91,6 +91,24 @@ def name_only_chunks(chunks: list[ChunkChoice]) -> list[ChunkChoice]:
     return sorted(parts, key=lambda chunk: (chunk.ordinal, chunk.chunk_id))
 
 
+def preserve_named_spans(spans: list[ChunkChoice], named: list[ChunkChoice], limit: int) -> list[ChunkChoice]:
+    """Keep spans for symbols the question names, then the existing order, within the span cap.
+
+    Fusion order is unchanged. A named span that would fall past the cap is moved into the kept set.
+    """
+    if limit < 1:
+        return []
+    named_ids = []
+    front: list[ChunkChoice] = []
+    for choice in named:
+        if choice.chunk_id in named_ids:
+            continue
+        named_ids.append(choice.chunk_id)
+        front.append(choice)
+    rest = [span for span in spans if span.chunk_id not in named_ids]
+    return (front + rest)[:limit]
+
+
 def materialize_anchors(
     fused: list[str],
     hits_by_anchor: dict[str, list[str]],

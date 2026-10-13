@@ -26,6 +26,7 @@ ENV PYTHONPATH=/app/backend \
 
 USER repona
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+RUN python -c "from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct')"
 
 USER root
 COPY docker/entrypoint.sh /entrypoint.sh
