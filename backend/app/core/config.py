@@ -37,9 +37,9 @@ class Settings:
     api_v1_prefix: str = os.getenv("API_V1_PREFIX", "/api/v1")
     database_url: str = os.getenv(
         "DATABASE_URL",
-        "postgresql+psycopg://postgres:postgres@localhost:5432/repo_intelligence",
+        "postgresql+psycopg://postgres:postgres@127.0.0.1:5433/repona",
     )
-    llm_provider: str = os.getenv("LLM_PROVIDER", "openai").strip().lower()
+    llm_provider: str = os.getenv("LLM_PROVIDER", "cursor").strip().lower()
     ollama_base_url: str = os.getenv(
         "OLLAMA_BASE_URL",
         "http://localhost:11434",
@@ -70,10 +70,10 @@ class Settings:
     llm_context_tokens: int = _get_int_env("LLM_CONTEXT_TOKENS", 128000)
     llm_max_claims: int = _get_int_env("LLM_MAX_CLAIMS", 16)
     llm_max_response_bytes: int = _get_int_env("LLM_MAX_RESPONSE_BYTES", 65536)
-    neo4j_uri: str = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+    neo4j_uri: str = os.getenv("NEO4J_URI", "bolt://127.0.0.1:7687")
     neo4j_user: str = os.getenv("NEO4J_USER", "neo4j")
     neo4j_password: str | None = os.getenv("NEO4J_PASSWORD")
-    qdrant_url: str = os.getenv("QDRANT_URL", "http://localhost:6333")
+    qdrant_url: str = os.getenv("QDRANT_URL", "http://127.0.0.1:6333")
     credential_key: str = os.getenv("CREDENTIAL_KEY", "")
     retrieval_lane_limit: int = _get_int_env("RETRIEVAL_LANE_LIMIT", 8)
     retrieval_vector_raw_limit: int = _get_int_env("RETRIEVAL_VECTOR_RAW_LIMIT", 64)

@@ -262,7 +262,7 @@ The first successful index establishes the tracked branch. A later request to ch
 
 ## Using the API
 
-Use the same `user_id` when indexing a repository and asking questions about it. Any string up to 36 characters is accepted. The web interface generates a value and stores it in the browser.
+Use the same `user_id` when indexing a repository and asking questions about it. Any string up to 36 characters is accepted. The bundled demo page uses the fixed id `tester` and remembers the last indexed repository URL in the browser. API clients should choose their own stable id per person or session.
 
 There is no user login. The bridge token does not change that: anyone who can reach port 8000 can index a repository and ask a question.
 
@@ -342,7 +342,7 @@ Qdrant uses `all-MiniLM-L6-v2` embeddings with 384 dimensions and cosine similar
 
 A ready generation of the same commit is served without fetching again. A new commit requires a new generation. The new generation becomes active only after indexing finishes, so questions continue to use the previous ready generation until cutover.
 
-The Docker setup stores indexed repositories in the `app_data` volume mounted at `/app/data`. The host process stores Git data and snapshots under `./data`. These are separate storage locations and are not automatically interchangeable.
+The Docker API container stores Git data and snapshots in the `app_data` volume at `/app/data`. A Python process started on the host (for example the Cursor bridge or a local API run) uses `./data` under the repository root. Those trees are separate; repository rows record absolute paths, so do not switch between host and container indexing without migrating data or re-indexing.
 
 ## How answering works
 
@@ -380,6 +380,8 @@ The live evaluation covered eight questions:
 
 The five answerable cases used live Cursor generation. The three unsupported cases in that run abstained before the model. The current application calls the model for those questions too and answers from the retrieved packet when the topic is absent.
 
+When you re-run the selection suite locally, treat `grounded_absence_when_desired` in the summary as the live check for those unsupported topics. The `early_abstain_when_desired` count reflects the historical pre-model gate only.
+
 In the accepted run, model generation took approximately 14–28 seconds after retrieval. Retrieval can add significant latency; one live Flask request took approximately 48.9 seconds overall.
 
 These measurements describe the recorded evaluation, not a guarantee of latency for every repository or question.
@@ -409,6 +411,7 @@ After a reboot, start the data services and API with Compose and start the host 
 ## Limitations
 
 - The application is designed for local use and does not provide user authentication. The bridge token only authenticates calls to the bridge.
+- The demo page uses a shared `tester` user id; it is not suitable for multi-tenant use without changing that contract or adding access control.
 - The web interface does not allow model selection per question.
 - The API and host bridge must both be available for Cursor-backed answers.
 - Indexing blocks until the requested generation is ready; large repositories can take substantially longer than small ones.
@@ -421,4 +424,4 @@ After a reboot, start the data services and API with Compose and start the host 
 
 Repona makes unfamiliar codebases easier to understand by connecting natural-language questions to indexed source code, structural relationships, and verifiable citations.
 
-**The core principle: answers should be grounded in repository evidence, and insufficient evidence should lead to abstention rather than speculation.**
+**The core principle: answers should be grounded in repository evidence. When the packet cannot support a claim, Repona returns a fixed refusal line instead of invented prose; when the topic is absent from the repository, the model still answers from what was retrieved and says what is missing.**
