@@ -13,7 +13,7 @@ Repona supports public GitHub repositories without a token and private repositor
 - **Graph-based context:** Uses Neo4j to store code relationships and dependencies.
 - **Source-grounded answers:** Generates explanations from retrieved repository evidence.
 - **Citation validation:** Checks that citations refer to retrieved source spans and quoted text appears in the cited source.
-- **Evidence-based abstention:** Avoids unnecessary model calls when the evidence is insufficient.
+- **Grounded refusals:** When the asked behavior is not in the retrieved source, the model says so and cites what the repository does contain.
 - **Generation-based indexing:** Keeps the previous ready generation active until a new generation is ready.
 - **Local execution:** Runs the API and data services locally, with a host-side bridge connecting the API to the Cursor CLI.
 
@@ -352,13 +352,12 @@ The Docker setup stores indexed repositories in the `app_data` volume mounted at
 2. It checks whether the tracked branch still points to the indexed commit.
 3. It retrieves relevant evidence through symbol search, full-text search, and Qdrant vector search.
 4. It combines the hits into a bounded evidence packet containing source spans and code relationships.
-5. An answerability gate decides whether the packet can support a response.
-6. Eligible questions are sent to the configured model provider.
-7. Repona validates citations against the retrieved spans before returning the answer.
+5. Repona sends the packet to the configured model provider. If retrieval found no code spans, the packet still lists indexed file paths so the model can explain what is missing.
+6. Repona validates citations against the retrieved spans before returning the answer.
 
 Package-specific questions also retrieve chunks mentioning the named package.
 
-If the evidence is insufficient, Repona abstains before calling the model. This behavior is covered by the accepted evaluation cases for payroll, authentication, and the Hello-World dispatcher.
+If the model returns no claim that cites the packet, the answer is a fixed refusal line rather than invented prose.
 
 If the selected provider fails, Repona returns HTTP 503 rather than substituting another provider.
 
@@ -377,11 +376,11 @@ The live evaluation covered eight questions:
 | Signing followed by validation | Pass |
 | `escape` → `_escape_inner` | Pass |
 | Where `itsdangerous` is used | Pass |
-| Payroll withholding | Correctly abstains |
-| Authentication | Correctly abstains |
-| Hello-World dispatcher | Correctly abstains |
+| Payroll withholding | Correctly abstains (pre-model gate in that run) |
+| Authentication | Correctly abstains (pre-model gate in that run) |
+| Hello-World dispatcher | Correctly abstains (pre-model gate in that run) |
 
-The five answerable cases used live Cursor generation. The three unsupported cases abstained before calling the model.
+The five answerable cases used live Cursor generation. The three unsupported cases in that run abstained before the model. The current application calls the model for those questions too and answers from the retrieved packet when the topic is absent.
 
 In the accepted run, model generation took approximately 14–28 seconds after retrieval. Retrieval can add significant latency; one live Flask request took approximately 48.9 seconds overall.
 

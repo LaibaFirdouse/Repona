@@ -138,14 +138,11 @@ def route_explanation(
     """Send an answerable packet to the model. Do not return prewritten sentences.
 
     A named method, a behavior cue, or a structural explanation makes the
-    question eligible. Eligibility is not the answer. Abstain before the model
-    when the packet cannot support one. Dependency and impact questions may
-    still use the model and the records already in the packet.
+    question eligible. Eligibility is not the answer. When the packet does not
+    establish the asked behavior, the model still answers and says what is absent.
+    Dependency and impact questions use the same model path.
     """
-    if named is not None or behavior is not None or (decision == "explain" and claims):
-        return "model", None
-    if decision == "abstain" and not defer_abstain:
-        return "abstain", None
+    del named, behavior, decision, claims, defer_abstain
     return "model", None
 
 

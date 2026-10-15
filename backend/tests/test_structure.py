@@ -320,8 +320,8 @@ class ExplanationRouteTests(unittest.TestCase):
         self.assertEqual(route_explanation(None, behavior, "explain", [{"text": "structure"}], defer_abstain=False), ("model", None))
         self.assertEqual(route_explanation(None, None, "explain", [{"text": "grounded"}], defer_abstain=False), ("model", None))
 
-    def test_insufficient_evidence_abstains_before_the_model(self) -> None:
-        self.assertEqual(route_explanation(None, None, "abstain", [], defer_abstain=False), ("abstain", None))
+    def test_missing_evidence_still_goes_to_the_model(self) -> None:
+        self.assertEqual(route_explanation(None, None, "abstain", [], defer_abstain=False), ("model", None))
 
     def test_dependency_and_resolved_caller_questions_keep_the_model_path(self) -> None:
         resolved = edge("caller-id", "target-id", "issue_token")
