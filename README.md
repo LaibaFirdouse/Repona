@@ -186,9 +186,7 @@ Visit:
 
 **http://127.0.0.1:8000**
 
-Paste a GitHub repository URL and wait for indexing to finish. Then ask questions about the repository.
-
-The browser stores the repository ID and user ID locally, so subsequent questions use the same repository.
+Paste a GitHub repository URL, choose **Index**, then write a question and choose **Ask**. The page uses the shared tester id `tester` and remembers the last indexed repository in the browser.
 
 ## Configuration
 

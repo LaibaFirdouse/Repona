@@ -6,194 +6,141 @@
   <title>Repona</title>
   <style>
     :root {
-      color-scheme: light;
-      --ink: #1c1915;
-      --muted: #6b645c;
-      --line: #e4ddd4;
-      --paper: #f7f4ef;
-      --card: #fffdf9;
-      --accent: #8c3a2f;
+      color-scheme: dark;
+      --ink: #f3efe8;
+      --muted: #a39a90;
+      --line: #3a342e;
+      --paper: #141210;
+      --card: #1e1b18;
+      --accent: #e7a18a;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      font-family: ui-sans-serif, sans-serif;
       color: var(--ink);
       background: var(--paper);
     }
     .app {
-      max-width: 42rem;
+      max-width: 40rem;
       margin: 0 auto;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      padding: 1.25rem 1rem 0;
+      padding: 1.5rem 1rem 2rem;
     }
     header {
       display: flex;
       justify-content: space-between;
       gap: 1rem;
       align-items: baseline;
-      padding-bottom: 0.75rem;
-      border-bottom: 1px solid var(--line);
+      margin-bottom: 1.25rem;
     }
-    h1 {
-      margin: 0;
-      font-size: 1.35rem;
-      font-weight: 600;
-      letter-spacing: 0.01em;
-    }
-    .repo {
+    h1 { margin: 0; font-size: 1.4rem; font-weight: 600; }
+    .tester {
       margin: 0;
       color: var(--muted);
-      font-family: ui-sans-serif, sans-serif;
-      font-size: 0.82rem;
-      text-align: right;
-      overflow-wrap: anywhere;
+      font-size: 0.85rem;
     }
-    .thread {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 0.85rem;
-      padding: 1.25rem 0 1rem;
-    }
-    .empty {
-      margin: auto 0;
-      color: var(--muted);
-      line-height: 1.5;
-    }
-    .bubble {
-      max-width: 36rem;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-    }
-    .bubble.user {
-      align-self: flex-end;
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 0.9rem 0.9rem 0.2rem 0.9rem;
-      padding: 0.7rem 0.9rem;
-    }
-    .bubble.assistant { align-self: flex-start; }
-    .citations {
-      margin: 0.45rem 0 0;
-      padding: 0;
-      list-style: none;
-      color: var(--muted);
-      font-family: ui-sans-serif, sans-serif;
-      font-size: 0.82rem;
-    }
+    .tester code { color: var(--ink); }
     form {
-      position: sticky;
-      bottom: 0;
-      display: flex;
-      gap: 0.6rem;
-      padding: 0.75rem 0 1rem;
-      background: linear-gradient(transparent, var(--paper) 0.6rem);
-    }
-    textarea {
-      flex: 1;
-      resize: none;
-      min-height: 3.2rem;
-      max-height: 8rem;
-      padding: 0.75rem 0.85rem;
+      display: grid;
+      gap: 0.75rem;
+      padding: 1rem;
+      background: var(--card);
       border: 1px solid var(--line);
       border-radius: 0.8rem;
-      background: var(--card);
+    }
+    label { display: grid; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
+    input, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 0.55rem;
+      background: var(--paper);
       color: var(--ink);
       font: 1rem/1.4 ui-sans-serif, sans-serif;
+      padding: 0.65rem 0.75rem;
     }
-    textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+    textarea { min-height: 4.5rem; resize: vertical; }
+    input:focus, textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+    .actions { display: flex; gap: 0.6rem; justify-content: flex-end; }
     button {
-      align-self: flex-end;
       border: 0;
-      border-radius: 0.8rem;
+      border-radius: 0.55rem;
       background: var(--accent);
-      color: white;
+      color: #1c120e;
       font: 600 0.95rem/1 ui-sans-serif, sans-serif;
-      padding: 0.85rem 1rem;
+      padding: 0.75rem 0.95rem;
       cursor: pointer;
     }
     button:disabled { opacity: 0.55; cursor: progress; }
+    .status { margin: 1rem 0 0; color: var(--muted); min-height: 1.2rem; }
+    .answer {
+      margin-top: 1rem;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.5;
+    }
+    .citations { margin: 0.75rem 0 0; padding-left: 1.1rem; color: var(--muted); }
   </style>
 </head>
 <body>
   <div class="app">
     <header>
       <h1>Repona</h1>
-      <p class="repo" id="repo"></p>
+      <p class="tester">Tester id <code id="tester">tester</code></p>
     </header>
-    <div class="thread" id="thread">
-      <p class="empty" id="empty">Paste a public GitHub URL. After it is indexed, ask a question about the repository.</p>
-    </div>
     <form id="composer">
-      <label class="visually-hidden" for="prompt" style="position:absolute;left:-9999px">Repository URL or question</label>
-      <textarea id="prompt" rows="2" placeholder="Paste a public GitHub URL, or ask a question" autofocus></textarea>
-      <button id="send" type="submit">Send</button>
+      <label>GitHub URL
+        <input id="url" type="url" placeholder="https://github.com/pallets/itsdangerous" required>
+      </label>
+      <label>GitHub token, only for a private repository
+        <input id="token" type="password" autocomplete="off">
+      </label>
+      <label>Question
+        <textarea id="question" placeholder="Which functions call derive_key?"></textarea>
+      </label>
+      <div class="actions">
+        <button id="index" type="submit">Index</button>
+        <button id="ask" type="button">Ask</button>
+      </div>
     </form>
+    <p class="status" id="status"></p>
+    <div class="answer" id="answer"></div>
+    <ul class="citations" id="citations"></ul>
   </div>
   <script>
-    const thread = document.getElementById("thread");
-    const empty = document.getElementById("empty");
-    const repoLabel = document.getElementById("repo");
-    const form = document.getElementById("composer");
-    const prompt = document.getElementById("prompt");
-    const send = document.getElementById("send");
-    const storageKey = "repona.session";
+    const testerId = "tester";
+    const urlInput = document.getElementById("url");
+    const tokenInput = document.getElementById("token");
+    const questionInput = document.getElementById("question");
+    const indexButton = document.getElementById("index");
+    const askButton = document.getElementById("ask");
+    const status = document.getElementById("status");
+    const answer = document.getElementById("answer");
+    const citations = document.getElementById("citations");
+    const storageKey = "repona.tester";
     const saved = JSON.parse(localStorage.getItem(storageKey) || "{}");
-    const session = {
-      userId: saved.userId || crypto.randomUUID(),
-      repositoryId: saved.repositoryId || "",
-      url: saved.url || "",
-    };
-    localStorage.setItem(storageKey, JSON.stringify(session));
-    if (session.url) repoLabel.textContent = session.url;
+    let repositoryId = saved.repositoryId || "";
+    if (saved.url) urlInput.value = saved.url;
 
-    function repositoryUrl(text) {
-      const value = text.trim();
-      if (!value || /\s/.test(value)) return null;
-      const withScheme = /^https?:\/\//i.test(value) ? value : `https://${value}`;
-      let url;
-      try { url = new URL(withScheme); } catch { return null; }
-      const host = url.hostname.toLowerCase().replace(/^www\./, "");
-      if (host !== "github.com") return null;
-      if (url.protocol !== "https:" && url.protocol !== "http:") return null;
-      const parts = url.pathname.split("/").filter(Boolean);
-      if (parts.length < 2) return null;
-      const name = parts[1].replace(/\.git$/i, "");
-      if (!name) return null;
-      return `https://github.com/${parts[0]}/${name}`;
+    function remember(id, url) {
+      repositoryId = id;
+      localStorage.setItem(storageKey, JSON.stringify({ repositoryId: id, url }));
     }
 
-    function remember(repositoryId, url) {
-      session.repositoryId = repositoryId;
-      session.url = url;
-      repoLabel.textContent = url;
-      localStorage.setItem(storageKey, JSON.stringify(session));
+    function setBusy(busy) {
+      indexButton.disabled = busy;
+      askButton.disabled = busy;
     }
 
-    function addMessage(role, text, citations) {
-      if (empty.isConnected) empty.remove();
-      const item = document.createElement("div");
-      item.className = `bubble ${role}`;
-      item.textContent = text;
-      if (citations && citations.length) {
-        const list = document.createElement("ul");
-        list.className = "citations";
-        for (const citation of citations) {
-          const line = document.createElement("li");
-          const start = citation.start_line;
-          const end = citation.end_line;
-          line.textContent = start && end ? `${citation.path}, lines ${start}–${end}` : citation.path;
-          list.appendChild(line);
-        }
-        item.appendChild(list);
+    function showCitations(items) {
+      citations.replaceChildren();
+      for (const citation of items || []) {
+        const line = document.createElement("li");
+        const start = citation.start_line;
+        const end = citation.end_line;
+        line.textContent = start && end ? `${citation.path}, lines ${start}–${end}` : citation.path;
+        citations.appendChild(line);
       }
-      thread.appendChild(item);
-      item.scrollIntoView({ block: "nearest" });
     }
 
     async function errorText(response) {
@@ -202,64 +149,79 @@
       return "The request failed.";
     }
 
-    async function indexRepository(url) {
-      const response = await fetch("/api/v1/repository", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repo_url: url, user_id: session.userId }),
-      });
-      if (!response.ok) throw new Error(await errorText(response));
-      const body = await response.json();
-      remember(body.repository_id, body.normalized_url);
-      if (body.action === "serve") {
-        addMessage("assistant", `Indexed ${body.normalized_url} on ${body.tracked_branch}. Ask a question about it.`);
-        return;
-      }
-      addMessage("assistant", body.message || "The repository is still being indexed.");
-    }
-
-    async function askQuestion(question) {
-      if (!session.repositoryId) {
-        addMessage("assistant", "Paste a public GitHub URL before asking a question.");
-        return;
-      }
-      const response = await fetch("/api/v1/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          repository_id: session.repositoryId,
-          user_id: session.userId,
-          question,
-        }),
-      });
-      if (!response.ok) throw new Error(await errorText(response));
-      const body = await response.json();
-      const answer = (body.answer || "").trim();
-      addMessage("assistant", answer || body.message || "No answer was returned.", body.citations || []);
-    }
-
-    form.addEventListener("submit", async (event) => {
+    async function indexRepository(event) {
       event.preventDefault();
-      const text = prompt.value.trim();
-      if (!text || send.disabled) return;
-      prompt.value = "";
-      addMessage("user", text);
-      send.disabled = true;
+      const repoUrl = urlInput.value.trim();
+      if (!repoUrl) return;
+      setBusy(true);
+      status.textContent = "Indexing. A public repository can take a few minutes.";
+      answer.textContent = "";
+      showCitations([]);
       try {
-        const url = repositoryUrl(text);
-        if (url) {
-          addMessage("assistant", "Indexing the repository. A public GitHub repository can take a few minutes.");
-          await indexRepository(url);
+        const payload = { repo_url: repoUrl, user_id: testerId };
+        const token = tokenInput.value.trim();
+        if (token) payload.access_token = token;
+        const response = await fetch("/api/v1/repository", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) throw new Error(await errorText(response));
+        const body = await response.json();
+        remember(body.repository_id, body.normalized_url);
+        urlInput.value = body.normalized_url || repoUrl;
+        if (body.action === "serve") {
+          status.textContent = `Indexed ${body.normalized_url} on ${body.tracked_branch}.`;
         } else {
-          await askQuestion(text);
+          status.textContent = body.message || "This commit is not ready yet. Index it again.";
         }
       } catch (error) {
-        addMessage("assistant", error.message || "The request failed.");
+        status.textContent = error.message || "The request failed.";
       } finally {
-        send.disabled = false;
-        prompt.focus();
+        setBusy(false);
       }
-    });
+    }
+
+    async function askQuestion() {
+      const question = questionInput.value.trim();
+      if (!question) {
+        status.textContent = "Write a question first.";
+        return;
+      }
+      if (!repositoryId) {
+        status.textContent = "Index a repository before asking.";
+        return;
+      }
+      setBusy(true);
+      status.textContent = "Asking.";
+      answer.textContent = "";
+      showCitations([]);
+      try {
+        const response = await fetch("/api/v1/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            repository_id: repositoryId,
+            user_id: testerId,
+            question,
+          }),
+        });
+        if (!response.ok) throw new Error(await errorText(response));
+        const body = await response.json();
+        answer.textContent = (body.answer || "").trim() || body.message || "No answer was returned.";
+        showCitations(body.citations);
+        status.textContent = body.action === "wait"
+          ? (body.message || "This commit is not ready yet.")
+          : "";
+      } catch (error) {
+        status.textContent = error.message || "The request failed.";
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    document.getElementById("composer").addEventListener("submit", indexRepository);
+    askButton.addEventListener("click", askQuestion);
   </script>
 </body>
 </html>

@@ -253,6 +253,7 @@ class RefreshService:
         if user is None:
             user = User(id=user_id)
             db.add(user)
+            db.flush()
         repository = db.query(Repository).filter(Repository.normalized_url == normalized).one_or_none()
         if repository is None:
             host = urlsplit(normalized).hostname or ""
