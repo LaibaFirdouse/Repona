@@ -109,6 +109,15 @@ def _record(db, generation_id: str, case: dict, trace: dict, answered, model_cal
     technologies = [item.get("name") for item in trace.get("packet_technologies") or []]
     strategy = trace.get("answer_strategy")
     abstained = strategy == "abstain" or answer in {NO_CITED_CLAIM, INSUFFICIENT_EVIDENCE}
+    early_abstain = strategy == "abstain" and model_calls == 0
+    unsupported_selected = {name: name in cited_names for name in unsupported}
+    desired_abstain = bool(case["abstain"])
+    grounded_absence = _grounded_absence(
+        desired_abstain,
+        early_abstain,
+        model_calls,
+        unsupported_selected,
+    )
     return {
         "id": case["id"],
         "kind": case["kind"],
@@ -125,14 +134,15 @@ def _record(db, generation_id: str, case: dict, trace: dict, answered, model_cal
         "selected": cited_names,
         "expected_in_packet": {name: name in packet_names for name in expected},
         "expected_selected": {name: name in cited_names for name in expected},
-        "unsupported_selected": {name: name in cited_names for name in unsupported},
+        "unsupported_selected": unsupported_selected,
         "citations": citations,
         "citation_lines_match": _citation_hits(citations, case.get("lines") or {}, packet),
         "technologies": technologies,
         "expected_technology_in_packet": _technology_present(case, technologies),
         "abstained": abstained,
-        "early_abstain": strategy == "abstain" and model_calls == 0,
-        "desired_abstain": bool(case["abstain"]),
+        "early_abstain": early_abstain,
+        "grounded_absence": grounded_absence,
+        "desired_abstain": desired_abstain,
         "answer": answer,
     }
 
@@ -171,11 +181,27 @@ def _technology_present(case: dict, technologies: list[str]) -> bool | None:
     return any(name == expected for name in technologies)
 
 
+def _grounded_absence(
+    desired_abstain: bool,
+    early_abstain: bool,
+    model_calls: int,
+    unsupported_selected: dict[str, bool],
+) -> bool:
+    if not desired_abstain:
+        return False
+    if early_abstain:
+        return True
+    if model_calls <= 0:
+        return False
+    return not any(unsupported_selected.values())
+
+
 def _summary(records: list[dict]) -> dict:
     expected_hits = 0
     expected_total = 0
     unsupported_hits = 0
     abstain_hits = 0
+    grounded_hits = 0
     abstain_total = 0
     model_calls = 0
     for record in records:
@@ -186,12 +212,14 @@ def _summary(records: list[dict]) -> dict:
         if record["desired_abstain"]:
             abstain_total += 1
             abstain_hits += int(record["early_abstain"])
+            grounded_hits += int(record["grounded_absence"])
         model_calls += int(record["model_calls"] or 0)
     return {
         "expected_symbols_selected": expected_hits,
         "expected_symbols": expected_total,
         "unsupported_symbols_selected": unsupported_hits,
         "early_abstain_when_desired": abstain_hits,
+        "grounded_absence_when_desired": grounded_hits,
         "desired_abstain": abstain_total,
         "model_calls": model_calls,
     }

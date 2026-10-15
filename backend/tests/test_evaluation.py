@@ -1,6 +1,7 @@
 import unittest
 
 from app.evaluation.record import case_record
+from app.evaluation.run_selection import _grounded_absence
 from app.evaluation.selection import SELECTION
 from app.retrieval.packet import NO_CITED_CLAIM
 
@@ -81,6 +82,21 @@ class EvaluationRecordTests(unittest.TestCase):
         self.assertEqual(record["action"], "wait")
         self.assertIsNone(record["model_seconds"])
         self.assertFalse(record["no_claim_line"])
+
+
+class GroundedAbsenceTests(unittest.TestCase):
+    def test_legacy_early_abstain_still_counts(self) -> None:
+        self.assertTrue(
+            _grounded_absence(True, early_abstain=True, model_calls=0, unsupported_selected={"payroll": False})
+        )
+
+    def test_live_path_requires_no_unsupported_citations(self) -> None:
+        self.assertTrue(
+            _grounded_absence(True, early_abstain=False, model_calls=1, unsupported_selected={"auth": False})
+        )
+        self.assertFalse(
+            _grounded_absence(True, early_abstain=False, model_calls=1, unsupported_selected={"auth": True})
+        )
 
 
 class SelectionSuiteTests(unittest.TestCase):

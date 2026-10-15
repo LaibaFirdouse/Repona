@@ -126,7 +126,8 @@ def _record(db, generation_id: str, case: dict, trace: dict, answered, model_cal
         "citation_lines_match": cited,
         "quotes_in_cited_source": _quotes_supported(answer, citations, packet),
         "no_claim_line": answer in {NO_CITED_CLAIM, INSUFFICIENT_EVIDENCE},
-        "abstained": trace.get("answer_strategy") == "abstain",
+        "abstained": trace.get("answer_strategy") == "abstain"
+        or answer in {NO_CITED_CLAIM, INSUFFICIENT_EVIDENCE},
         "answer": answer,
     }
 
