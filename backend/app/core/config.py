@@ -86,6 +86,7 @@ class Settings:
     neo4j_user: str = os.getenv("NEO4J_USER", "neo4j")
     neo4j_password: str | None = os.getenv("NEO4J_PASSWORD")
     qdrant_url: str = os.getenv("QDRANT_URL", "http://127.0.0.1:6333")
+    qdrant_api_key: str = os.getenv("QDRANT_API_KEY", "")
     credential_key: str = os.getenv("CREDENTIAL_KEY", "")
     retrieval_lane_limit: int = _get_int_env("RETRIEVAL_LANE_LIMIT", 8)
     retrieval_vector_raw_limit: int = _get_int_env("RETRIEVAL_VECTOR_RAW_LIMIT", 64)

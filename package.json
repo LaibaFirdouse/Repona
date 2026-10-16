@@ -4,6 +4,7 @@
   "scripts": {
     "build": "PYTHONPATH=backend .venv/bin/python -m compileall -q backend/app",
     "verify:postgres": "PYTHONPATH=backend .venv/bin/python scripts/verify_neon_postgres.py",
+    "verify:qdrant": "PYTHONPATH=backend .venv/bin/python scripts/verify_qdrant.py",
     "start": "PYTHONPATH=backend .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000"
   },
   "dependencies": {

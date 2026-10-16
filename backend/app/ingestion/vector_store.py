@@ -6,6 +6,7 @@ import json
 import urllib.error
 import urllib.request
 
+from app.core.config import settings
 from app.ingestion.assemble import ChunkRecord, GenerationDraft
 from app.ingestion.versions import CHUNKING_VERSION, PARSER_VERSION
 from app.storage.identity import point_id
@@ -144,12 +145,20 @@ def _existing_points(base_url: str, collection: str, identifiers: list[str]) -> 
     return found
 
 
+def _request_headers() -> dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    key = settings.qdrant_api_key.strip()
+    if key:
+        headers["api-key"] = key
+    return headers
+
+
 def _request(base_url: str, path: str, method: str, payload: dict | None = None, required: bool = False, timeout: int = 30):
     data = None if payload is None else json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
         base_url.rstrip("/") + path,
         data=data,
-        headers={"Content-Type": "application/json"},
+        headers=_request_headers(),
         method=method,
     )
     try:

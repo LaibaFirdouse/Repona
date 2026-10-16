@@ -49,7 +49,7 @@ Over-limit requests return **HTTP 429** with `Retry-After`. Counters are in-memo
 |---|---|---|
 | PostgreSQL | Neon (see [`docs/NEON.md`](NEON.md)) or Supabase | Pooled `DATABASE_URL` from `neon deploy` |
 | Neo4j | AuraDB Free | `NEO4J_URI=bolt+s://…`, `NEO4J_USER`, `NEO4J_PASSWORD` |
-| Qdrant | Qdrant Cloud free cluster **or** Qdrant container on the VM | `QDRANT_URL` |
+| Qdrant | Qdrant Cloud free cluster **or** Qdrant container on the VM | `QDRANT_URL`, `QDRANT_API_KEY` (Cloud) |
 | Git + snapshots | EBS volume on the VM | Docker volume at `/app/data` |
 
 ## AWS compute (one EC2, one app image)
@@ -73,7 +73,7 @@ The repo ships a **single production image** that contains both the API and the 
 git clone https://github.com/LaibaFirdouse/Repona.git
 cd Repona
 cp .env.hosted.example .env
-# Edit .env: CURSOR_API_KEY, DATABASE_URL, QDRANT_URL, NEO4J_*
+# Edit .env: CURSOR_API_KEY, DATABASE_URL, QDRANT_URL, QDRANT_API_KEY, NEO4J_*
 
 docker compose -f docker-compose.hosted.yml up -d --build
 docker compose -f docker-compose.hosted.yml ps

@@ -21,6 +21,7 @@ services:
       CURSOR_AGENT_BIN: agent
       DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
       QDRANT_URL: ${QDRANT_URL:?set QDRANT_URL in .env}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:?set QDRANT_API_KEY in .env}
       NEO4J_URI: ${NEO4J_URI:?set NEO4J_URI in .env}
       NEO4J_USER: ${NEO4J_USER:-neo4j}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env}
