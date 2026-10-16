@@ -18,6 +18,13 @@ class VectorStoreError(RuntimeError):
 
 _POINT_BATCH = 64
 _LOOKUP_BATCH = 256
+_PAYLOAD_INDEX_FIELDS = (
+    "repository_id",
+    "parser_version",
+    "chunking_version",
+    "embedding_config_fingerprint",
+    "file_id",
+)
 
 
 def collection_config(base_url: str, name: str) -> tuple[int, str]:
@@ -33,14 +40,33 @@ def ensure_collection(base_url: str, name: str, dimensions: int, distance: str =
         stored_distance = existing["result"]["config"]["params"]["vectors"]["distance"]
         if size != dimensions or stored_distance != distance:
             raise VectorStoreError(f"collection {name} has size {size} and distance {stored_distance}")
-        return
-    _request(
-        base_url,
-        f"/collections/{name}",
-        method="PUT",
-        payload={"vectors": {"size": dimensions, "distance": distance}},
-        required=True,
-    )
+    else:
+        _request(
+            base_url,
+            f"/collections/{name}",
+            method="PUT",
+            payload={"vectors": {"size": dimensions, "distance": distance}},
+            required=True,
+        )
+    _ensure_payload_indexes(base_url, name)
+
+
+def _ensure_payload_indexes(base_url: str, collection: str) -> None:
+    """Qdrant Cloud requires keyword indexes before payload filters in search."""
+    for field_name in _PAYLOAD_INDEX_FIELDS:
+        try:
+            _request(
+                base_url,
+                f"/collections/{collection}/index",
+                method="PUT",
+                payload={"field_name": field_name, "field_schema": "keyword"},
+                required=True,
+            )
+        except VectorStoreError as error:
+            message = str(error).lower()
+            if "already exists" in message or "already indexed" in message:
+                continue
+            raise
 
 
 def upsert_missing_points(
