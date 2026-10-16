@@ -51,6 +51,7 @@ class Settings:
     context_margin_tokens: int = _get_int_env("CONTEXT_MARGIN_TOKENS", 256)
     cursor_model: str = os.getenv("CURSOR_MODEL", "composer-2.5-fast")
     cursor_timeout: int = _get_int_env("CURSOR_TIMEOUT", 180)
+    cursor_api_key: str = os.getenv("CURSOR_API_KEY", "")
     claude_model: str = os.getenv("CLAUDE_MODEL", "sonnet")
     claude_timeout: int = _get_int_env("CLAUDE_TIMEOUT", 180)
     codex_model: str = os.getenv("CODEX_MODEL", "gpt-5.6-luna")
@@ -80,6 +81,10 @@ class Settings:
     retrieval_span_limit: int = _get_int_env("RETRIEVAL_SPAN_LIMIT", 12)
     retrieval_edge_limit: int = _get_int_env("RETRIEVAL_EDGE_LIMIT", 24)
     debug: bool = _get_bool_env("DEBUG", True)
+    rate_limit_enabled: bool = _get_bool_env("RATE_LIMIT_ENABLED", True)
+    rate_limit_trust_proxy: bool = _get_bool_env("RATE_LIMIT_TRUST_PROXY", False)
+    rate_limit_ask_per_minute: int = _get_int_env("RATE_LIMIT_ASK_PER_MINUTE", 12)
+    rate_limit_index_per_hour: int = _get_int_env("RATE_LIMIT_INDEX_PER_HOUR", 4)
 
 
 settings = Settings()

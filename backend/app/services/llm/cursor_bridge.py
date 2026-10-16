@@ -84,16 +84,19 @@ def ask_command(executable: str, model: str, workspace: str, prompt: str) -> lis
     ]
 
 
-def bridge_environment() -> dict[str, str]:
-    """Give the CLI the host login environment, without the bridge credential."""
+def cursor_cli_environment() -> dict[str, str]:
+    """Environment for the Cursor CLI, without bridge routing variables."""
     env = os.environ.copy()
     env.pop("CURSOR_BRIDGE_TOKEN", None)
     env.pop("CURSOR_BRIDGE_URL", None)
     return env
 
 
+bridge_environment = cursor_cli_environment
+
+
 def run_ask(command: list[str], cwd: str, timeout: float) -> str:
-    return run_cli(command, cwd, timeout, env=bridge_environment())
+    return run_cli(command, cwd, timeout, env=cursor_cli_environment())
 
 
 def parse_packet(body: object, default_model: str) -> tuple[str, str, int, str]:
