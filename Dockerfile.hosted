@@ -1,0 +1,40 @@
+# Production image: Repona API + Cursor agent CLI in one container.
+FROM python:3.12-slim-bookworm
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git curl ca-certificates bash \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch \
+    && python -c "import importlib.metadata as m; print('torch==' + m.version('torch'))" > /tmp/torch-constraint.txt \
+    && pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -c /tmp/torch-constraint.txt -r requirements.txt
+
+RUN useradd --create-home --uid 1000 repona
+
+COPY --chown=repona:repona backend ./backend
+COPY --chown=repona:repona frontend ./frontend
+
+ENV PYTHONPATH=/app/backend \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    HOME=/home/repona \
+    HF_HOME=/home/repona/.cache/huggingface \
+    SENTENCE_TRANSFORMERS_HOME=/home/repona/.cache/sentence-transformers \
+    PATH=/home/repona/.local/bin:/usr/local/bin:/usr/bin:/bin \
+    CURSOR_AGENT_BIN=agent
+
+USER repona
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+RUN python -c "from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct')"
+RUN curl https://cursor.com/install -fsS | bash \
+    && agent --version
+
+USER root
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod 755 /entrypoint.sh && sed -i 's/\r$//' /entrypoint.sh
+EXPOSE 8000
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

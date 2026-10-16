@@ -240,6 +240,10 @@ The bridge invokes Cursor CLI in Ask mode with sandbox mode enabled. It does not
 
 The CLI help nevertheless states that print mode can access shell and write tools. A probe with the same flags did not create a file inside or outside its workspace, but this does not prove that every command or filesystem operation is blocked. Treat the bridge as a local development component, not as a fully security-isolated execution environment.
 
+### Rate limiting
+
+Per-IP limits are **on by default** for `POST /api/v1/ask` and `POST /api/v1/repository`. Defaults: **12 asks per minute** and **4 index requests per hour** per address. Over-limit calls receive **HTTP 429** with a `Retry-After` header. Set `RATE_LIMIT_ENABLED=false` in `.env` to disable. See `.env.example` for `RATE_LIMIT_*` variables.
+
 The accepted run used:
 
 - Cursor CLI: `2026.10.01-e373342`
@@ -386,6 +390,10 @@ In the accepted run, model generation took approximately 14–28 seconds after r
 
 These measurements describe the recorded evaluation, not a guarantee of latency for every repository or question.
 
+## Public hosting
+
+For a **single shared site** without user login, build **`Dockerfile.hosted`** (API + Cursor CLI in one image), run **`docker-compose.hosted.yml`** on an EC2 instance, and set **`CURSOR_API_KEY`** in `.env`. Per-IP rate limits apply by default. Details are in [`docs/HOSTING.md`](docs/HOSTING.md).
+
 ## Operations
 
 Check the running services:
@@ -410,7 +418,8 @@ After a reboot, start the data services and API with Compose and start the host 
 
 ## Limitations
 
-- The application is designed for local use and does not provide user authentication. The bridge token only authenticates calls to the bridge.
+- The application does not provide user authentication. On a public deployment, anyone who can reach the URL can index and ask until rate limits apply; model cost is charged to the operator’s provider key.
+- The bridge token only authenticates calls to the Cursor bridge; public hosting in `docs/HOSTING.md` uses `CURSOR_API_KEY` and the CLI instead.
 - The demo page uses a shared `tester` user id; it is not suitable for multi-tenant use without changing that contract or adding access control.
 - The web interface does not allow model selection per question.
 - The API and host bridge must both be available for Cursor-backed answers.

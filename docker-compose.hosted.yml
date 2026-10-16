@@ -1,0 +1,45 @@
+# AWS EC2 (or any VM): one container with API + Cursor agent CLI.
+# Copy .env.hosted.example to .env and fill secrets before starting.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.hosted
+    image: repona-hosted:latest
+    container_name: repona-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      LLM_PROVIDER: cursor
+      CURSOR_MODEL: ${CURSOR_MODEL:-composer-2.5-fast}
+      CURSOR_TIMEOUT: ${CURSOR_TIMEOUT:-180}
+      CURSOR_API_KEY: ${CURSOR_API_KEY:?set CURSOR_API_KEY in .env}
+      CURSOR_BRIDGE_URL: ""
+      CURSOR_AGENT_BIN: agent
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      QDRANT_URL: ${QDRANT_URL:?set QDRANT_URL in .env}
+      NEO4J_URI: ${NEO4J_URI:?set NEO4J_URI in .env}
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env}
+      CREDENTIAL_KEY: ${CREDENTIAL_KEY:-}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_TRUST_PROXY: ${RATE_LIMIT_TRUST_PROXY:-false}
+      RATE_LIMIT_ASK_PER_MINUTE: ${RATE_LIMIT_ASK_PER_MINUTE:-12}
+      RATE_LIMIT_INDEX_PER_HOUR: ${RATE_LIMIT_INDEX_PER_HOUR:-4}
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: "*"
+    volumes:
+      - repona_data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  repona_data:
