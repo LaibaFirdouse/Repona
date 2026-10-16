@@ -1,0 +1,13 @@
+{
+  "name": "repona",
+  "private": true,
+  "scripts": {
+    "build": "PYTHONPATH=backend .venv/bin/python -m compileall -q backend/app",
+    "verify:postgres": "PYTHONPATH=backend .venv/bin/python scripts/verify_neon_postgres.py",
+    "start": "PYTHONPATH=backend .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000"
+  },
+  "dependencies": {
+    "@neon/config": "^1.9.2",
+    "@neon/env": "^1.6.3"
+  }
+}

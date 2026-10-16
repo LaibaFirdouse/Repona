@@ -29,16 +29,27 @@ def _get_int_env(name: str, default: int) -> int:
     return int(raw_value)
 
 
+def normalize_database_url(url: str) -> str:
+    """Map Neon-style postgres URLs to SQLAlchemy's psycopg driver."""
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url.removeprefix("postgresql://")
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg://" + url.removeprefix("postgres://")
+    return url
+
+
+def _database_url_from_env() -> str:
+    default = "postgresql+psycopg://postgres:postgres@127.0.0.1:5433/repona"
+    return normalize_database_url(os.getenv("DATABASE_URL", default))
+
+
 @dataclass(frozen=True)
 class Settings:
     app_name: str = os.getenv("APP_NAME", "Repository Intelligence Agent API")
     app_env: str = os.getenv("APP_ENV", "local")
     app_version: str = os.getenv("APP_VERSION", "0.1.0")
     api_v1_prefix: str = os.getenv("API_V1_PREFIX", "/api/v1")
-    database_url: str = os.getenv(
-        "DATABASE_URL",
-        "postgresql+psycopg://postgres:postgres@127.0.0.1:5433/repona",
-    )
+    database_url: str = _database_url_from_env()
     llm_provider: str = os.getenv("LLM_PROVIDER", "cursor").strip().lower()
     ollama_base_url: str = os.getenv(
         "OLLAMA_BASE_URL",

@@ -47,7 +47,7 @@ Over-limit requests return **HTTP 429** with `Retry-After`. Counters are in-memo
 
 | Store | Suggested host | Env |
 |---|---|---|
-| PostgreSQL | Neon or Supabase | `DATABASE_URL` with `sslmode=require`, database `repona` |
+| PostgreSQL | Neon (see [`docs/NEON.md`](NEON.md)) or Supabase | Pooled `DATABASE_URL` from `neon deploy` |
 | Neo4j | AuraDB Free | `NEO4J_URI=bolt+s://…`, `NEO4J_USER`, `NEO4J_PASSWORD` |
 | Qdrant | Qdrant Cloud free cluster **or** Qdrant container on the VM | `QDRANT_URL` |
 | Git + snapshots | EBS volume on the VM | Docker volume at `/app/data` |
