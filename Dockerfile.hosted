@@ -16,6 +16,7 @@ RUN useradd --create-home --uid 1000 repona
 
 COPY --chown=repona:repona backend ./backend
 COPY --chown=repona:repona frontend ./frontend
+COPY scripts ./scripts
 
 ENV PYTHONPATH=/app/backend \
     PYTHONUNBUFFERED=1 \
