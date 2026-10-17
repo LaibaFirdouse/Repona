@@ -5,10 +5,20 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 LEASE = timedelta(minutes=10)
+HEARTBEAT_STALE = timedelta(minutes=2)
 
 
 def lease_deadline(now: datetime) -> datetime:
     return now + LEASE
+
+
+def refresh_lease_held(lease_expires_at: datetime | None, heartbeat_at: datetime | None, now: datetime) -> bool:
+    """True while an indexer is likely still running (lease valid and heartbeat fresh)."""
+    if lease_expires_at is None or lease_expires_at <= now:
+        return False
+    if heartbeat_at is None:
+        return True
+    return (now - heartbeat_at) <= HEARTBEAT_STALE
 
 
 def serving_action(upstream: str, remote_sha: str | None, active_sha: str | None) -> str:

@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import PROJECT_ROOT, settings
 from app.ingestion.claims import insert_reader_pin
-from app.ingestion.coordination import lease_deadline
+from app.ingestion.coordination import lease_deadline, refresh_lease_held
+from app.ingestion.host_paths import repair_repository_data_paths, reset_expired_refresh
 from app.ingestion.materialize import read_commit_blobs
 from app.ingestion.persist import GenerationWriteError
 from app.ingestion.pipeline import complete_owned_refresh, ingest_commit
@@ -110,6 +111,7 @@ class RefreshService:
         if repository is not None and repository.tracked_branch != branch:
             raise RefreshError(400, "this repository is tracked on a different branch")
         repository = self._join(db, normalized, branch, user_id, token)
+        self._prepare_repository(db, repository)
         return self._apply(db, repository, user_id, token, result.sha)
 
     def ask(self, db: Session, repository_id_value: str, user_id: str) -> RefreshOutcome:
@@ -136,6 +138,7 @@ class RefreshService:
             raise RefreshError(403, "this repository is not public")
         if result.upstream != "authorized":
             raise RefreshError(503, "the repository host is unavailable")
+        self._prepare_repository(db, repository)
         return self._apply(db, repository, user_id, token, result.sha)
 
     def _apply(self, db: Session, repository: Repository, user_id: str, token: str, remote_sha: str) -> RefreshOutcome:
@@ -144,7 +147,7 @@ class RefreshService:
         git_dir = _absolute(repository.git_dir)
         source_valid = _source_is_valid(git_dir, revision)
         now = datetime.utcnow()
-        lease_held = bool(repository.refresh_lease_expires_at and repository.refresh_lease_expires_at > now)
+        lease_held = refresh_lease_held(repository.refresh_lease_expires_at, repository.refresh_heartbeat_at, now)
         answer, build = question_plan(
             "authorized",
             remote_sha,
@@ -194,9 +197,23 @@ class RefreshService:
             "A newer commit is being indexed. The previous generation is not being served.",
         )
 
+    def _prepare_repository(self, db: Session, repository: Repository) -> None:
+        if repair_repository_data_paths(db, repository):
+            db.commit()
+            db.refresh(repository)
+        if reset_expired_refresh(db, repository):
+            db.commit()
+            db.refresh(repository)
+
     def _run(self, db: Session, repository: Repository, user_id: str, token: str, remote_sha: str, resume: bool) -> None:
         git_dir = _absolute(repository.git_dir)
-        fetched = self.fetch(git_dir, repository.normalized_url, repository.tracked_branch, token)
+        try:
+            fetched = self.fetch(git_dir, repository.normalized_url, repository.tracked_branch, token)
+        except (OSError, PermissionError, RuntimeError) as error:
+            raise RefreshError(
+                500,
+                "indexing failed on the server; check disk space and that data paths point at this host",
+            ) from error
         if fetched != remote_sha:
             raise RefreshError(503, "the fetched commit does not match the branch head")
 
@@ -220,8 +237,8 @@ class RefreshService:
                     self.complete(git_dir=git_dir, **arguments)
                 else:
                     self.ingest(git_dir=git_dir, commit_sha=remote_sha, model_revision=MODEL_REVISION, **arguments)
-            except GenerationWriteError:
-                return
+            except GenerationWriteError as error:
+                raise RefreshError(409, str(error)) from error
             except ChecklistError as error:
                 raise RefreshError(500, str(error)) from error
 

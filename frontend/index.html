@@ -143,10 +143,31 @@
       }
     }
 
+    function sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
     async function errorText(response) {
       const body = await response.json().catch(() => null);
-      if (body && typeof body.detail === "string" && body.detail) return body.detail;
+      if (body && typeof body.detail === "string" && body.detail) {
+        if (response.status === 503 && body.detail === "the model provider is unavailable") {
+          return "Answer generation is unavailable on the server. Check Cursor configuration.";
+        }
+        return body.detail;
+      }
       return "The request failed.";
+    }
+
+    async function postIndex(repoUrl, token) {
+      const payload = { repo_url: repoUrl, user_id: testerId };
+      if (token) payload.access_token = token;
+      const response = await fetch("/api/v1/repository", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error(await errorText(response));
+      return response.json();
     }
 
     async function indexRepository(event) {
@@ -158,22 +179,21 @@
       answer.textContent = "";
       showCitations([]);
       try {
-        const payload = { repo_url: repoUrl, user_id: testerId };
         const token = tokenInput.value.trim();
-        if (token) payload.access_token = token;
-        const response = await fetch("/api/v1/repository", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (!response.ok) throw new Error(await errorText(response));
-        const body = await response.json();
+        let body = await postIndex(repoUrl, token);
+        let polls = 0;
+        while (body.action === "wait" && polls < 120) {
+          status.textContent = body.message || "Still indexing. Waiting…";
+          await sleep(5000);
+          body = await postIndex(repoUrl, token);
+          polls += 1;
+        }
         remember(body.repository_id, body.normalized_url);
         urlInput.value = body.normalized_url || repoUrl;
         if (body.action === "serve") {
           status.textContent = `Indexed ${body.normalized_url} on ${body.tracked_branch}.`;
         } else {
-          status.textContent = body.message || "This commit is not ready yet. Index it again.";
+          status.textContent = body.message || "This commit is not ready yet. Try Index again in a minute.";
         }
       } catch (error) {
         status.textContent = error.message || "The request failed.";
@@ -208,11 +228,14 @@
         });
         if (!response.ok) throw new Error(await errorText(response));
         const body = await response.json();
-        answer.textContent = (body.answer || "").trim() || body.message || "No answer was returned.";
         showCitations(body.citations);
-        status.textContent = body.action === "wait"
-          ? (body.message || "This commit is not ready yet.")
-          : "";
+        if (body.action === "wait") {
+          answer.textContent = "";
+          status.textContent = body.message || "This commit is not ready yet. Index again or wait a moment.";
+        } else {
+          answer.textContent = (body.answer || "").trim() || "No answer was returned.";
+          status.textContent = "";
+        }
       } catch (error) {
         status.textContent = error.message || "The request failed.";
       } finally {

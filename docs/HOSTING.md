@@ -109,3 +109,19 @@ Local dev still uses **`docker-compose.yml`** (host bridge). Hosted AWS uses **`
 
 1. Managed databases (Neon, Aura, Qdrant Cloud).
 2. On EC2: `docker compose -f docker-compose.hosted.yml up -d`.
+
+## Reliable indexing on the VM
+
+| Topic | Guidance |
+|---|---|
+| First demo repo | Use a **small** public repo (e.g. `https://github.com/pallets/itsdangerous`). Avoid indexing this monorepo on **t4g.small** until you upsize RAM. |
+| Shared Postgres | If you indexed on a laptop then moved to EC2, run **`npm run repair:catalog`** on the VM (or `scripts/repair_catalog.py --all --reset-expired-refresh`) so `git_dir` and snapshot paths point at `/app/data`. |
+| Interrupted index | Wait up to **10 minutes** for the refresh lease to expire, or run repair with **`--reset-expired-refresh`**. The demo page **polls Index** while `action` is `wait`. |
+| Stuck “newer commit is being indexed” | Usually means no **ready** generation for the current commit, or a refresh still holds the lease. Index again after repair; do not Ask until Index returns **`serve`**. |
+
+After pulling a new API image:
+
+```bash
+docker compose -f docker-compose.hosted.yml up -d --build
+docker exec repona-api env PYTHONPATH=/app/backend python /app/scripts/repair_catalog.py --all --reset-expired-refresh
+```

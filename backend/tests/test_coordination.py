@@ -7,6 +7,7 @@ from app.ingestion.coordination import (
     gc_may_claim,
     gc_may_delete_worktree,
     pin_may_insert,
+    refresh_lease_held,
     refresh_may_activate,
     serving_action,
 )
@@ -123,6 +124,20 @@ class CoordinationTests(unittest.TestCase):
         )
         self.assertTrue(edge_set_matches({"a", "b"}, {"b", "a"}))
         self.assertFalse(edge_set_matches({"a"}, {"a", "b"}))
+
+
+class RefreshLeaseTests(unittest.TestCase):
+    def test_stale_heartbeat_allows_adopt(self) -> None:
+        now = datetime(2026, 1, 1, 12, 0, 0)
+        expires = now + timedelta(minutes=10)
+        heartbeat = now - timedelta(minutes=3)
+        self.assertFalse(refresh_lease_held(expires, heartbeat, now))
+
+    def test_fresh_heartbeat_holds_lease(self) -> None:
+        now = datetime(2026, 1, 1, 12, 0, 0)
+        expires = now + timedelta(minutes=10)
+        heartbeat = now - timedelta(minutes=1)
+        self.assertTrue(refresh_lease_held(expires, heartbeat, now))
 
 
 if __name__ == "__main__":
