@@ -90,13 +90,13 @@
     </header>
     <form id="composer">
       <label>GitHub URL
-        <input id="url" type="url" placeholder="https://github.com/pallets/itsdangerous" required>
+        <input id="url" type="url" placeholder="https://github.com/owner/repository" required>
       </label>
       <label>GitHub token, only for a private repository
         <input id="token" type="password" autocomplete="off">
       </label>
       <label>Question
-        <textarea id="question" placeholder="Which functions call derive_key?"></textarea>
+        <textarea id="question" placeholder="Ask about behavior, symbols, or files in the indexed commit…"></textarea>
       </label>
       <div class="actions">
         <button id="index" type="submit">Index</button>
@@ -170,6 +170,19 @@
       return response.json();
     }
 
+    function urlMatchesIndexed(repoUrl) {
+      const savedUrl = (JSON.parse(localStorage.getItem(storageKey) || "{}").url || "").trim();
+      return Boolean(repositoryId && savedUrl && repoUrl === savedUrl);
+    }
+
+    urlInput.addEventListener("input", () => {
+      const repoUrl = urlInput.value.trim();
+      if (repoUrl && !urlMatchesIndexed(repoUrl)) {
+        repositoryId = "";
+        status.textContent = "Index this repository before asking.";
+      }
+    });
+
     async function indexRepository(event) {
       event.preventDefault();
       const repoUrl = urlInput.value.trim();
@@ -182,8 +195,8 @@
         const token = tokenInput.value.trim();
         let body = await postIndex(repoUrl, token);
         let polls = 0;
-        while (body.action === "wait" && polls < 120) {
-          status.textContent = body.message || "Still indexing. Waiting…";
+        while (body.action === "wait" && polls < 360) {
+          status.textContent = body.message || "Still indexing. Large repositories can take up to 30 minutes.";
           await sleep(5000);
           body = await postIndex(repoUrl, token);
           polls += 1;

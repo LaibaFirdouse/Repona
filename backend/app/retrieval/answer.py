@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from time import perf_counter
@@ -15,11 +16,13 @@ from app.ingestion.claims import renew_reader_pin
 from app.ingestion.materialize import read_commit_blobs
 from app.ingestion.validation import (
     ChecklistError,
+    _git_text,
     generation_link_is_valid,
     point_is_valid,
     validate_worktree_bytes,
 )
 from app.ingestion.vector_store import VectorStoreError, collection_config, search_points
+from app.retrieval.vector_filter import vector_query_filter
 from app.ingestion.versions import LEXICAL_INDEX_VERSION
 from app.models.catalog import (
     Chunk,
@@ -176,6 +179,65 @@ class AnswerService:
         )
         self.graph_session_factory = graph_session_factory
         self.qdrant_url = settings.qdrant_url if qdrant_url is None else qdrant_url
+        self._collection_config_cache: dict[tuple[str, str], tuple[int, str]] = {}
+        self._neo4j_driver = None
+
+    def _cached_collection_config(self, collection: str) -> tuple[int, str]:
+        key = (self.qdrant_url.rstrip("/"), collection)
+        cached = self._collection_config_cache.get(key)
+        if cached is not None:
+            return cached
+        cached = collection_config(self.qdrant_url, collection)
+        self._collection_config_cache[key] = cached
+        return cached
+
+    def _search_lanes(
+        self,
+        generation: IndexGeneration,
+        question: str,
+    ) -> tuple[list[LaneHit], list[LaneHit], list[LaneHit], float, float, float]:
+        from app.db.session import SessionLocal
+
+        generation_id = generation.id
+
+        def run_name() -> tuple[list[LaneHit], float]:
+            db = SessionLocal()
+            try:
+                gen = db.get(IndexGeneration, generation_id)
+                started = perf_counter()
+                hits = _name_hits(db, gen, question)
+                return hits, perf_counter() - started
+            finally:
+                db.close()
+
+        def run_text() -> tuple[list[LaneHit], float]:
+            db = SessionLocal()
+            try:
+                gen = db.get(IndexGeneration, generation_id)
+                started = perf_counter()
+                hits = _text_hits(db, gen, question)
+                return hits, perf_counter() - started
+            finally:
+                db.close()
+
+        def run_vector() -> tuple[list[LaneHit], float]:
+            db = SessionLocal()
+            try:
+                gen = db.get(IndexGeneration, generation_id)
+                started = perf_counter()
+                hits = self._vector_hits(db, gen, question)
+                return hits, perf_counter() - started
+            finally:
+                db.close()
+
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            name_future = pool.submit(run_name)
+            text_future = pool.submit(run_text)
+            vector_future = pool.submit(run_vector)
+            name_hits, name_seconds = name_future.result()
+            text_hits, text_seconds = text_future.result()
+            vector_hits, vector_seconds = vector_future.result()
+        return name_hits, text_hits, vector_hits, name_seconds, text_seconds, vector_seconds
 
     def answer(
         self,
@@ -196,17 +258,11 @@ class AnswerService:
         if generation is None or revision is None or repository is None or generation.lexical_index_version != LEXICAL_INDEX_VERSION:
             raise RetrievalError(409, "this generation cannot be searched")
         self._ensure_open(db, outcome.pin_id)
-        stage = perf_counter()
-        name_hits = _name_hits(db, generation, question)
-        name_seconds = perf_counter() - stage
+        name_hits, text_hits, vector_hits, name_seconds, text_seconds, vector_seconds = self._search_lanes(
+            generation,
+            question,
+        )
         self._ensure_open(db, outcome.pin_id)
-        stage = perf_counter()
-        text_hits = _text_hits(db, generation, question)
-        text_seconds = perf_counter() - stage
-        self._ensure_open(db, outcome.pin_id)
-        stage = perf_counter()
-        vector_hits = self._vector_hits(db, generation, question)
-        vector_seconds = perf_counter() - stage
         lanes = [consecutive_ranks(name_hits), consecutive_ranks(text_hits), consecutive_ranks(vector_hits)]
         fused = fuse_anchors(lanes)
         if trace is not None:
@@ -419,19 +475,22 @@ class AnswerService:
         if not file_ids:
             return []
         try:
-            size, distance = collection_config(self.qdrant_url, generation.qdrant_collection)
+            size, distance = self._cached_collection_config(generation.qdrant_collection)
         except VectorStoreError as error:
             raise RetrievalError(503, str(error)) from error
         vector = self.embed(question)
-        query_filter = {
-            "must": [
-                {"key": "repository_id", "match": {"value": generation.repository_id}},
-                {"key": "parser_version", "match": {"value": generation.parser_version}},
-                {"key": "chunking_version", "match": {"value": generation.chunking_version}},
-                {"key": "embedding_config_fingerprint", "match": {"value": generation.embedding_config_fingerprint}},
-                {"key": "file_id", "match": {"any": file_ids}},
-            ]
+        query_filter = vector_query_filter(
+            generation,
+            file_ids,
+            settings.retrieval_vector_max_file_filter,
+        )
+        generation_links = {
+            row.chunk_id: row
+            for row in db.query(GenerationChunk)
+            .filter(GenerationChunk.index_generation_id == generation.id)
+            .all()
         }
+        generation_files = set(file_ids)
         kept: list[LaneHit] = []
         seen: set[str] = set()
         examined = 0
@@ -450,6 +509,13 @@ class AnswerService:
                 raise RetrievalError(503, str(error)) from error
             if not batch:
                 break
+            chunk_ids = [str((point.get("payload") or {}).get("chunk_id") or "") for point in batch]
+            chunk_ids = [item for item in chunk_ids if item]
+            chunks = (
+                {row.id: row for row in db.query(Chunk).filter(Chunk.id.in_(chunk_ids)).all()}
+                if chunk_ids
+                else {}
+            )
             for point in batch:
                 examined += 1
                 payload = point.get("payload") or {}
@@ -457,9 +523,19 @@ class AnswerService:
                 if not chunk_id or chunk_id in seen:
                     continue
                 seen.add(chunk_id)
-                if not _point_matches(db, generation, point, payload, size, distance):
+                chunk = chunks.get(chunk_id)
+                link = generation_links.get(chunk_id)
+                if not _point_matches_cached(
+                    generation,
+                    chunk,
+                    link,
+                    chunk.file_id in generation_files if chunk is not None else False,
+                    point,
+                    payload,
+                    size,
+                    distance,
+                ):
                     continue
-                chunk = db.get(Chunk, chunk_id)
                 if chunk is None:
                     continue
                 kept.append(LaneHit(chunk.symbol_id or chunk.file_id, chunk.id, len(kept) + 1))
@@ -539,10 +615,12 @@ class AnswerService:
             raise RetrievalError(503, "neo4j is not configured")
         from neo4j import GraphDatabase
 
-        driver = GraphDatabase.driver(settings.neo4j_uri, auth=(settings.neo4j_user, settings.neo4j_password))
-        session = driver.session()
-        session.close = _close_graph(session.close, driver.close)
-        return session
+        if self._neo4j_driver is None:
+            self._neo4j_driver = GraphDatabase.driver(
+                settings.neo4j_uri,
+                auth=(settings.neo4j_user, settings.neo4j_password),
+            )
+        return self._neo4j_driver.session()
 
     def _ensure_open(self, db: Session, pin_id: str) -> None:
         now = datetime.utcnow()
@@ -809,6 +887,43 @@ def _text_hits(db: Session, generation: IndexGeneration, question: str) -> list[
     return [LaneHit(row.symbol_id or row.file_id, row.chunk_id, index) for index, row in enumerate(rows, start=1)]
 
 
+def _point_matches_cached(
+    generation: IndexGeneration,
+    chunk: Chunk | None,
+    link: GenerationChunk | None,
+    file_linked: bool,
+    point: dict,
+    payload: dict,
+    size: int,
+    distance: str,
+) -> bool:
+    if chunk is None or not point_is_valid(
+        payload,
+        chunk_id_value=chunk.id,
+        repository_id=generation.repository_id,
+        file_id_value=chunk.file_id,
+        parser_version=generation.parser_version,
+        chunking_version=generation.chunking_version,
+        span_hash=chunk.span_hash,
+        embedding_input_hash=str(payload.get("embedding_input_hash") or ""),
+        fingerprint=str(payload.get("embedding_config_fingerprint") or ""),
+        point_identifier=str(point.get("id") or ""),
+        collection_size=size,
+        collection_distance=distance,
+        expected_size=generation.vector_dimensions,
+    ):
+        return False
+    return generation_link_is_valid(
+        link_exists=link is not None,
+        link_fingerprint=None if link is None else link.embedding_config_fingerprint,
+        link_input_hash=None if link is None else link.embedding_input_hash,
+        payload_fingerprint=str(payload.get("embedding_config_fingerprint") or ""),
+        payload_input_hash=str(payload.get("embedding_input_hash") or ""),
+        generation_fingerprint=generation.embedding_config_fingerprint,
+        file_linked=file_linked,
+    )
+
+
 def _point_matches(db: Session, generation: IndexGeneration, point: dict, payload: dict, size: int, distance: str) -> bool:
     chunk = db.get(Chunk, str(payload.get("chunk_id") or ""))
     link = (
@@ -921,9 +1036,17 @@ def _roles(db: Session, generation_id: str, identifiers: list[str]) -> dict[str,
 def _require_fresh_tree(repository: Repository, revision: SourceRevision) -> dict:
     if not revision.snapshot_path:
         raise RetrievalError(409, "the generation is stale and is not being served")
+    snapshot = Path(revision.snapshot_path)
+    if not snapshot.is_dir():
+        raise RetrievalError(409, "the generation is stale and is not being served")
     try:
+        head = _git_text(snapshot, "rev-parse", "HEAD")
+        if head != revision.commit_sha:
+            raise ChecklistError("snapshot HEAD does not match the indexed commit")
+        if settings.retrieval_light_snapshot_validate:
+            return {}
         blobs = read_commit_blobs(_absolute(repository.git_dir), revision.commit_sha)
-        validate_worktree_bytes(_absolute(repository.git_dir), revision.commit_sha, Path(revision.snapshot_path), blobs)
+        validate_worktree_bytes(_absolute(repository.git_dir), revision.commit_sha, snapshot, blobs)
     except (ChecklistError, OSError, RuntimeError) as error:
         raise RetrievalError(409, "the generation is stale and is not being served") from error
     return {blob.relative_path: blob for blob in blobs}
@@ -941,19 +1064,31 @@ def _load_span_text(db: Session, generation_id: str, revision: SourceRevision, s
         )
         file = db.get(File, chunk.file_id) if chunk is not None else None
         symbol = db.get(Symbol, chunk.symbol_id) if chunk is not None and chunk.symbol_id else None
-        blob = None if file is None else blobs.get(file.relative_path)
-        if chunk is None or file is None or link is None or blob is None or revision.snapshot_path is None:
+        file_path = root / file.relative_path
+        if chunk is None or file is None or link is None or revision.snapshot_path is None or not file_path.is_file():
             raise RetrievalError(409, "the generation is stale and is not being served")
-        payload = (root / file.relative_path).read_bytes()
-        source = payload[chunk.start_byte:chunk.end_byte]
-        if (
+        blob = None if file is None else blobs.get(file.relative_path)
+        if blob is not None:
+            source = blob.payload[chunk.start_byte : chunk.end_byte]
+            payload = blob.payload
+        else:
+            if file_path.stat().st_size != file.byte_size:
+                raise RetrievalError(409, "the generation is stale and is not being served")
+            with file_path.open("rb") as handle:
+                handle.seek(chunk.start_byte)
+                source = handle.read(chunk.end_byte - chunk.start_byte)
+            payload = None
+        if blob is not None and (
             blob.git_blob_id != file.git_blob_id
             or content_hash(blob.payload) != file.content_hash
-            or content_hash(payload) != file.content_hash
-            or len(payload) != file.byte_size
             or len(blob.payload) != file.byte_size
-            or content_hash(source) != chunk.span_hash
         ):
+            raise RetrievalError(409, "the generation is stale and is not being served")
+        if payload is not None and (
+            content_hash(payload) != file.content_hash or len(payload) != file.byte_size
+        ):
+            raise RetrievalError(409, "the generation is stale and is not being served")
+        if content_hash(source) != chunk.span_hash:
             raise RetrievalError(409, "the generation is stale and is not being served")
         loaded.append(
             {

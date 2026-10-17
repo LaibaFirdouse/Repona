@@ -25,6 +25,10 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     def on_startup() -> None:
         create_database_tables()
+        if settings.embed_warmup_on_startup:
+            from app.services.refresh_service import _embed
+
+            _embed("warmup")
 
     return app
 

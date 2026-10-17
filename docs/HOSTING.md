@@ -110,11 +110,22 @@ Local dev still uses **`docker-compose.yml`** (host bridge). Hosted AWS uses **`
 1. Managed databases (Neon, Aura, Qdrant Cloud).
 2. On EC2: `docker compose -f docker-compose.hosted.yml up -d`.
 
+## Ask latency (large repos)
+
+| Variable | Default | Effect |
+|---|---|---|
+| `RETRIEVAL_LIGHT_SNAPSHOT_VALIDATE` | `true` | Checks snapshot `HEAD` only instead of re-reading every blob on each ask. |
+| `RETRIEVAL_VECTOR_MAX_FILE_FILTER` | `256` | Drops the huge Qdrant `file_id` list for big generations; membership is verified in Postgres. |
+| `EMBED_WARMUP_ON_STARTUP` | `true` | Loads the embedding model when the API starts so the first question is not cold. |
+
+Co-locate Neon, Qdrant, and Neo4j in the same region as EC2 when you can. Run `npm run benchmark` before and after tuning.
+
 ## Reliable indexing on the VM
 
 | Topic | Guidance |
 |---|---|
-| First demo repo | Use a **small** public repo (e.g. `https://github.com/pallets/itsdangerous`). Avoid indexing this monorepo on **t4g.small** until you upsize RAM. |
+| Visitor repos | Any **public** GitHub URL. Each visitor indexes their own choice (same shared `tester` id on the demo page). Large monorepos need more RAM (**t4g.medium+**) and longer index waits (the page polls up to **30 minutes**). |
+| Dev benchmarks | `npm run benchmark` defaults to this monorepo URL for latency work — not enforced in the UI. |
 | Shared Postgres | If you indexed on a laptop then moved to EC2, run **`npm run repair:catalog`** on the VM (or `scripts/repair_catalog.py --all --reset-expired-refresh`) so `git_dir` and snapshot paths point at `/app/data`. |
 | Interrupted index | Wait up to **10 minutes** for the refresh lease to expire, or run repair with **`--reset-expired-refresh`**. The demo page **polls Index** while `action` is `wait`. |
 | Stuck “newer commit is being indexed” | Usually means no **ready** generation for the current commit, or a refresh still holds the lease. Index again after repair; do not Ask until Index returns **`serve`**. |
