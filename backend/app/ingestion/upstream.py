@@ -88,6 +88,8 @@ def _probe(command: list[str], runner, timeout: int) -> Probe:
 
 def _failure(completed) -> str:
     text = _stderr(completed).lower()
+    if "repository not found" in text:
+        return "not_found"
     permission = any(
         phrase in text
         for phrase in (
@@ -95,7 +97,6 @@ def _failure(completed) -> str:
             "permission denied",
             "could not read username",
             "terminal prompts disabled",
-            "repository not found",
             "403",
             "401",
         )

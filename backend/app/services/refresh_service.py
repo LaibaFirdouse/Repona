@@ -98,12 +98,14 @@ class RefreshService:
             result = self.probe_head(normalized, token)
             branch = result.branch or ""
         repository = db.query(Repository).filter(Repository.normalized_url == normalized).one_or_none()
+        if result.upstream == "not_found":
+            raise RefreshError(404, "repository was not found")
         if result.upstream == "unauthorized":
             if repository is not None:
                 self._revoke(db, user_id, repository.id)
             if token:
                 raise RefreshError(403, "the access token cannot read this repository")
-            raise RefreshError(403, "this repository is not public")
+            raise RefreshError(403, "repository is private or inaccessible")
         if result.upstream != "authorized" or not result.sha:
             raise RefreshError(503, "the repository host is unavailable")
         if not branch:
@@ -131,11 +133,13 @@ class RefreshService:
         )
         token = "" if credential is None else open_token(credential.token_ciphertext, self._key())
         result = self.probe(repository.normalized_url, repository.tracked_branch, token)
+        if result.upstream == "not_found":
+            raise RefreshError(404, "repository was not found")
         if result.upstream == "unauthorized":
             self._revoke(db, user_id, repository.id)
             if token:
                 raise RefreshError(403, "the access token cannot read this repository")
-            raise RefreshError(403, "this repository is not public")
+            raise RefreshError(403, "repository is private or inaccessible")
         if result.upstream != "authorized":
             raise RefreshError(503, "the repository host is unavailable")
         self._prepare_repository(db, repository)

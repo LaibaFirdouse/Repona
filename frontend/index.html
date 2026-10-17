@@ -4,192 +4,1116 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Repona</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
       color-scheme: dark;
-      --ink: #f3efe8;
-      --muted: #a39a90;
-      --line: #3a342e;
-      --paper: #141210;
-      --card: #1e1b18;
-      --accent: #e7a18a;
-      --ready: #8fbc8f;
-      --indexing: #d4a574;
+      --bg: #0c0c14;
+      --bg-elevated: #12121c;
+      --surface: #181824;
+      --surface-hover: #1e1e2c;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.12);
+      --ink: #f4f4f8;
+      --muted: #8b8b9e;
+      --muted-2: #6b6b7d;
+      --accent: #7c3aed;
+      --accent-hover: #6d28d9;
+      --accent-soft: rgba(124, 58, 237, 0.18);
+      --accent-glow: rgba(124, 58, 237, 0.35);
+      --ready: #34d399;
+      --ready-soft: rgba(52, 211, 153, 0.15);
+      --warn: #fbbf24;
+      --warn-soft: rgba(251, 191, 36, 0.15);
+      --danger: #f87171;
+      --radius-lg: 16px;
+      --radius-md: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+      --font: "Inter", ui-sans-serif, system-ui, sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, monospace;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      font-family: ui-sans-serif, sans-serif;
+      font-family: var(--font);
+      font-size: 14px;
       color: var(--ink);
-      background: var(--paper);
+      background: var(--bg);
+      line-height: 1.5;
     }
-    .layout {
+    button, input, textarea { font-family: inherit; }
+    .app {
       display: grid;
-      grid-template-columns: minmax(12rem, 16rem) 1fr;
-      gap: 1rem;
-      max-width: 56rem;
-      margin: 0 auto;
-      padding: 1.5rem 1rem 2rem;
+      grid-template-columns: 280px minmax(0, 1fr) 300px;
+      min-height: 100vh;
     }
-    @media (max-width: 720px) {
-      .layout { grid-template-columns: 1fr; }
+    @media (max-width: 1100px) {
+      .app { grid-template-columns: 260px minmax(0, 1fr); }
+      .panel-right { display: none; }
     }
-    header {
-      grid-column: 1 / -1;
+    @media (max-width: 768px) {
+      .app { grid-template-columns: 1fr; }
+      .panel-left {
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 40;
+        width: min(100%, 300px);
+        transform: translateX(-105%);
+        transition: transform 0.2s ease;
+        box-shadow: var(--shadow);
+      }
+      .panel-left.open { transform: translateX(0); }
+      .btn-menu { display: inline-flex; }
+    }
+    .btn-menu {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--ink);
+      cursor: pointer;
+      font-size: 1.1rem;
+    }
+    .sidebar-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 35;
+    }
+    .sidebar-backdrop.open { display: block; }
+
+    /* —— Left —— */
+    .panel-left {
       display: flex;
-      justify-content: space-between;
+      flex-direction: column;
+      background: var(--bg-elevated);
+      border-right: 1px solid var(--border);
+      padding: 1.25rem 1rem;
       gap: 1rem;
-      align-items: baseline;
     }
-    h1 { margin: 0; font-size: 1.4rem; font-weight: 600; }
-    .tester { margin: 0; color: var(--muted); font-size: 0.85rem; }
-    .tester code { color: var(--ink); }
-    .sidebar {
-      padding: 0.75rem;
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 0.8rem;
-      min-height: 8rem;
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0 0.25rem;
     }
-    .sidebar h2 {
-      margin: 0 0 0.6rem;
-      font-size: 0.75rem;
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), #a855f7);
+      display: grid;
+      place-items: center;
+      font-size: 1.1rem;
+      box-shadow: 0 4px 16px var(--accent-glow);
+    }
+    .brand-text strong { display: block; font-size: 1.05rem; font-weight: 700; letter-spacing: -0.02em; }
+    .brand-text span { font-size: 0.72rem; color: var(--muted); }
+    .btn-primary {
+      width: 100%;
+      border: 0;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, var(--accent), #9333ea);
+      color: #fff;
       font-weight: 600;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: var(--muted);
+      font-size: 0.9rem;
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      box-shadow: 0 4px 20px var(--accent-glow);
+      transition: transform 0.12s, filter 0.12s;
     }
-    .repo-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
-    .repo-list li { margin: 0; }
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .search-box {
+      position: relative;
+    }
+    .search-box input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      color: var(--ink);
+      padding: 0.6rem 0.75rem 0.6rem 2.25rem;
+      font-size: 0.85rem;
+    }
+    .search-box input::placeholder { color: var(--muted-2); }
+    .search-box input:focus { outline: 2px solid var(--accent-soft); border-color: transparent; }
+    .search-icon {
+      position: absolute;
+      left: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted-2);
+      font-size: 0.85rem;
+      pointer-events: none;
+    }
+    .sidebar-section {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .sidebar-section.sidebar-deselect-target {
+      flex: 1;
+      cursor: default;
+    }
+    .sidebar-section.sidebar-deselect-target .repo-list {
+      flex: 0 1 auto;
+      max-height: 45vh;
+    }
+    .sidebar-spacer {
+      flex: 1;
+      min-height: 3rem;
+    }
+    .sidebar-section.sidebar-deselect-target .sidebar-empty {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 4rem;
+    }
+    .panel-right.workspace-empty { display: none; }
+    .workspace-empty-view {
+      flex: 1;
+      min-height: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1.5rem;
+    }
+    .empty-hero {
+      width: min(100%, 480px);
+      padding: 2.5rem 2rem;
+      text-align: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+    }
+    .empty-hero .icon-lg {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 1.25rem;
+      border-radius: 16px;
+      background: var(--accent-soft);
+      display: grid;
+      place-items: center;
+      font-size: 1.75rem;
+    }
+    .empty-hero h3 { margin: 0 0 0.5rem; font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; }
+    .empty-hero p { margin: 0 0 1.5rem; color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+    .empty-actions { display: flex; flex-direction: column; gap: 0.65rem; }
+    .empty-actions .btn-primary { width: 100%; }
+    .empty-repo-pick { margin-top: 1.25rem; text-align: left; }
+    .empty-repo-pick-label {
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted-2);
+      margin-bottom: 0.5rem;
+    }
+    .empty-repo-list { display: flex; flex-direction: column; gap: 0.4rem; max-height: 200px; overflow-y: auto; }
+    .empty-repo-btn {
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-elevated);
+      color: var(--ink);
+      padding: 0.65rem 0.75rem;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .empty-repo-btn:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .workspace-chrome {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .app.no-repo-selected .workspace-chrome { display: none; }
+    .app.no-repo-selected .workspace-empty-view {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+    }
+    .app:not(.no-repo-selected) .workspace-empty-view { display: none; }
+    .app.indexing-active .workspace-empty-view { display: none !important; }
+    .app.indexing-active .workspace-chrome { display: flex !important; }
+    .app.indexing-active .tabs,
+    .app.indexing-active .composer-bar { display: none !important; }
+    .app.indexing-active .view-files { display: none !important; }
+    .app.indexing-active .view-chat { display: flex !important; flex: 1; min-height: 0; }
+    .preview-empty {
+      padding: 1.25rem 1rem;
+      color: var(--muted-2);
+      font-size: 0.82rem;
+      text-align: center;
+    }
+    .sidebar-label {
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted-2);
+      padding: 0 0.35rem;
+    }
+    .repo-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      flex: 1;
+    }
+    .repo-list::-webkit-scrollbar { width: 6px; }
+    .repo-list::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
     .repo-row {
       display: flex;
-      gap: 0.25rem;
+      gap: 0.35rem;
       align-items: stretch;
     }
-    .repo-row.active .repo-item { border-color: var(--accent); background: var(--paper); }
+    .repo-row.active .repo-item {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
     .repo-item {
       flex: 1;
       min-width: 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
       text-align: left;
       border: 1px solid transparent;
-      border-radius: 0.5rem;
+      border-radius: var(--radius-md);
       background: transparent;
       color: var(--ink);
-      font: 0.82rem/1.35 ui-sans-serif, sans-serif;
-      padding: 0.5rem 0.55rem;
+      padding: 0.65rem 0.7rem;
       cursor: pointer;
+      transition: background 0.12s, border-color 0.12s;
     }
-    .repo-item:hover { background: var(--paper); }
-    .repo-delete {
-      flex: 0 0 auto;
-      border: 1px solid var(--line);
-      border-radius: 0.5rem;
-      background: transparent;
-      color: var(--muted);
-      font: 600 0.75rem/1 ui-sans-serif, sans-serif;
-      padding: 0.45rem 0.5rem;
-      cursor: pointer;
+    .repo-item:hover { background: var(--surface-hover); }
+    .repo-icon {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: grid;
+      place-items: center;
+      font-size: 0.75rem;
     }
-    .repo-delete:hover { color: #e8a0a0; border-color: #6a4040; }
+    .repo-item-body { min-width: 0; flex: 1; }
     .repo-item .name {
       display: block;
+      font-weight: 600;
+      font-size: 0.82rem;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .repo-item .meta { color: var(--muted); font-size: 0.72rem; margin-top: 0.15rem; }
-    .repo-item .meta.ready { color: var(--ready); }
-    .repo-item .meta.indexing { color: var(--indexing); }
-    .repo-empty { color: var(--muted); font-size: 0.85rem; margin: 0; }
-    .main { min-width: 0; }
-    form {
-      display: grid;
+    .repo-item .meta {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin-top: 0.2rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .dot.ready { background: var(--ready); box-shadow: 0 0 8px var(--ready-soft); }
+    .dot.indexing { background: var(--warn); animation: pulse 1.2s ease infinite; }
+    .dot.wait { background: var(--muted-2); }
+    @keyframes pulse { 50% { opacity: 0.45; } }
+    .repo-delete {
+      flex: 0 0 auto;
+      align-self: center;
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--muted);
+      font-size: 1.1rem;
+      line-height: 1;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.12s, color 0.12s, border-color 0.12s;
+    }
+    .repo-row:hover .repo-delete { opacity: 1; }
+    .repo-delete:hover { color: var(--danger); border-color: rgba(248, 113, 113, 0.35); }
+    .sidebar-empty {
+      padding: 1.25rem 0.75rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+    .sidebar-footer {
+      margin-top: auto;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.72rem;
+      color: var(--muted-2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .session-pill {
+      padding: 0.25rem 0.5rem;
+      border-radius: 999px;
+      background: var(--ready-soft);
+      color: var(--ready);
+      font-weight: 500;
+      font-size: 0.68rem;
+    }
+
+    /* —— Center —— */
+    .panel-center {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      min-width: 0;
+      flex: 1;
+      background: var(--bg);
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .topbar-repo {
+      display: flex;
+      align-items: center;
       gap: 0.75rem;
-      padding: 1rem;
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 0.8rem;
+      min-width: 0;
     }
-    label { display: grid; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
-    input, textarea {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 0.55rem;
-      background: var(--paper);
+    .topbar-repo h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .badge {
+      font-size: 0.68rem;
+      font-weight: 600;
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .badge.public { color: #93c5fd; border-color: rgba(147, 197, 253, 0.25); }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      padding: 0.35rem 0.65rem;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .status-pill.ready { color: var(--ready); background: var(--ready-soft); border-color: transparent; }
+    .status-pill.indexing { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+    .status-pill.busy { color: #c4b5fd; background: var(--accent-soft); border-color: transparent; }
+    .status-pill.error { color: var(--danger); background: rgba(248, 113, 113, 0.12); border-color: transparent; }
+    .topbar-actions { display: flex; gap: 0.5rem; align-items: center; }
+    .btn-ghost {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
       color: var(--ink);
-      font: 1rem/1.4 ui-sans-serif, sans-serif;
-      padding: 0.65rem 0.75rem;
-    }
-    textarea { min-height: 4.5rem; resize: vertical; }
-    input:focus, textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
-    .actions { display: flex; gap: 0.6rem; justify-content: flex-end; flex-wrap: wrap; }
-    button {
-      border: 0;
-      border-radius: 0.55rem;
-      background: var(--accent);
-      color: #1c120e;
-      font: 600 0.95rem/1 ui-sans-serif, sans-serif;
-      padding: 0.75rem 0.95rem;
+      font-size: 0.8rem;
+      font-weight: 500;
+      padding: 0.45rem 0.75rem;
       cursor: pointer;
     }
-    button.secondary {
+    .btn-ghost:hover:not(:disabled) { background: var(--surface-hover); }
+    .btn-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
+    .tabs {
+      display: flex;
+      gap: 0.25rem;
+      padding: 0 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .tab {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 500;
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    .tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+    .tab:disabled { opacity: 0.35; cursor: default; }
+    .chat-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+    .chat-scroll::-webkit-scrollbar { width: 8px; }
+    .chat-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+    .welcome-card {
+      margin: auto;
+      max-width: 520px;
+      width: 100%;
+      padding: 2rem 1.75rem;
+      text-align: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+    }
+    .welcome-card .icon-lg {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 1rem;
+      border-radius: 14px;
+      background: var(--accent-soft);
+      display: grid;
+      place-items: center;
+      font-size: 1.5rem;
+    }
+    .welcome-card h3 { margin: 0 0 0.35rem; font-size: 1.15rem; font-weight: 600; }
+    .welcome-card p { margin: 0 0 1.25rem; color: var(--muted); font-size: 0.85rem; }
+    .suggestions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      text-align: left;
+    }
+    @media (max-width: 520px) { .suggestions { grid-template-columns: 1fr; } }
+    .suggestion {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-elevated);
+      color: var(--ink);
+      font-size: 0.78rem;
+      padding: 0.65rem 0.75rem;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.12s, background 0.12s;
+    }
+    .suggestion:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .msg-user-wrap { display: flex; justify-content: flex-end; }
+    .msg-user {
+      max-width: min(85%, 560px);
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius-lg) var(--radius-lg) 4px var(--radius-lg);
+      background: linear-gradient(135deg, #5b21b6, var(--accent));
+      color: #fff;
+      font-size: 0.9rem;
+      line-height: 1.45;
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+    .msg-assistant { max-width: min(92%, 720px); }
+    .msg-assistant .body {
+      font-size: 0.9rem;
+      line-height: 1.6;
+      color: var(--ink);
+    }
+    .msg-assistant .body p { margin: 0 0 0.75rem; }
+    .msg-assistant .body p:last-child { margin-bottom: 0; }
+    .msg-assistant .body code {
+      font-family: var(--mono);
+      font-size: 0.82em;
+      background: var(--surface);
+      padding: 0.12rem 0.35rem;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    .code-block {
+      margin: 0.75rem 0;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      background: #0d0d12;
+      overflow: hidden;
+    }
+    .code-block-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.45rem 0.75rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      font-family: var(--mono);
+    }
+    .code-block pre {
+      margin: 0;
+      padding: 0.85rem 1rem;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      line-height: 1.55;
+      color: #e2e8f0;
+    }
+    .sources {
+      margin-top: 1rem;
+    }
+    .sources-label {
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted-2);
+      margin-bottom: 0.5rem;
+    }
+    .source-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+    }
+    .source-chip {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 0.1rem;
+      padding: 0.5rem 0.65rem;
+      min-width: 120px;
+      max-width: 200px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 0.72rem;
+      font: inherit;
+      text-align: left;
+      color: inherit;
+    }
+    .source-chip.primary { border-color: rgba(124, 58, 237, 0.45); background: var(--accent-soft); }
+    .source-chip .path {
+      font-weight: 600;
+      color: var(--ink);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .source-chip .lines { color: var(--muted); font-family: var(--mono); font-size: 0.68rem; }
+    .composer-bar {
+      padding: 1rem 1.5rem 1.25rem;
+      border-top: 1px solid var(--border);
+      background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.25));
+    }
+    .composer-inner {
+      display: flex;
+      gap: 0.65rem;
+      align-items: flex-end;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0.5rem 0.5rem 0.5rem 1rem;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .composer-inner:focus-within { border-color: rgba(124, 58, 237, 0.5); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .composer-inner textarea {
+      flex: 1;
+      border: 0;
       background: transparent;
       color: var(--ink);
-      border: 1px solid var(--line);
+      font-size: 0.9rem;
+      line-height: 1.45;
+      resize: none;
+      min-height: 24px;
+      max-height: 120px;
+      padding: 0.35rem 0;
     }
-    button:disabled { opacity: 0.55; cursor: progress; }
-    .status { margin: 1rem 0 0; color: var(--muted); min-height: 1.2rem; }
-    .chat {
-      margin-top: 1rem;
+    .composer-inner textarea:focus { outline: none; }
+    .composer-inner textarea::placeholder { color: var(--muted-2); }
+    .btn-send {
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      border: 0;
+      border-radius: var(--radius-md);
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
       display: grid;
+      place-items: center;
+      font-size: 1.1rem;
+      transition: background 0.12s;
+    }
+    .btn-send:hover:not(:disabled) { background: var(--accent-hover); }
+    .btn-send:disabled { opacity: 0.4; cursor: not-allowed; }
+    .composer-hint {
+      text-align: center;
+      margin-top: 0.5rem;
+      font-size: 0.68rem;
+      color: var(--muted-2);
+    }
+
+    /* —— Right —— */
+    .panel-right {
+      display: flex;
+      flex-direction: column;
       gap: 1rem;
+      padding: 1.25rem 1rem;
+      background: var(--bg-elevated);
+      border-left: 1px solid var(--border);
+      overflow-y: auto;
     }
-    .turn {
-      padding: 0.85rem 1rem;
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 0.8rem;
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.1rem 1.15rem;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
     }
-    .turn .q { font-weight: 600; margin-bottom: 0.5rem; }
-    .turn .a { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
-    .citations { margin: 0.5rem 0 0; padding-left: 1.1rem; color: var(--muted); font-size: 0.85rem; }
-    .chat-empty { color: var(--muted); font-size: 0.9rem; }
+    .card-title {
+      margin: 0 0 0.85rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted-2);
+    }
+    .repo-card-head {
+      display: flex;
+      gap: 0.65rem;
+      align-items: flex-start;
+      margin-bottom: 0.75rem;
+    }
+    .repo-card-head h3 {
+      margin: 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+    .repo-card-head p {
+      margin: 0.25rem 0 0;
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .stat-row {
+      display: flex;
+      gap: 1rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.75rem;
+    }
+    .stat-row span { color: var(--muted); }
+    .stat-row strong { color: var(--ink); font-weight: 600; }
+    .checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.55rem; }
+    .checklist li {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+    .checklist li.done { color: var(--ink); }
+    .check-icon {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      display: grid;
+      place-items: center;
+      font-size: 0.65rem;
+      flex-shrink: 0;
+    }
+    .checklist li.done .check-icon {
+      background: var(--ready-soft);
+      border-color: transparent;
+      color: var(--ready);
+    }
+    .checklist li.pending .check-icon { color: transparent; }
+    .checklist li.active .check-icon {
+      border-color: var(--warn);
+      color: var(--warn);
+      animation: pulse 1.2s ease infinite;
+    }
+    .card-note { margin: 0.75rem 0 0; font-size: 0.72rem; color: var(--muted-2); }
+
+    /* Modal */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(4px);
+      z-index: 50;
+      display: grid;
+      place-items: center;
+      padding: 1rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .overlay.open { opacity: 1; pointer-events: auto; }
+    .modal {
+      width: min(100%, 440px);
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      box-shadow: var(--shadow);
+    }
+    .modal h3 { margin: 0 0 0.35rem; font-size: 1.1rem; }
+    .modal .sub { margin: 0 0 1.25rem; color: var(--muted); font-size: 0.82rem; }
+    .field { display: grid; gap: 0.35rem; margin-bottom: 1rem; }
+    .field label { font-size: 0.78rem; font-weight: 500; color: var(--muted); }
+    .field input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-elevated);
+      color: var(--ink);
+      padding: 0.65rem 0.75rem;
+      font-size: 0.88rem;
+    }
+    .field input:focus { outline: 2px solid var(--accent-soft); border-color: transparent; }
+    .field.hint label { color: var(--muted-2); font-weight: 400; }
+    .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.5rem; }
+    .btn-secondary {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--ink);
+      font-weight: 500;
+      padding: 0.55rem 1rem;
+      cursor: pointer;
+    }
+    .btn-secondary:hover { background: var(--surface-hover); }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+    .view-chat, .view-files {
+      flex: 1;
+      min-height: 0;
+      flex-direction: column;
+      display: none;
+      overflow: hidden;
+    }
+    .view-chat.active, .view-files.active { display: flex; }
+    .files-layout {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .file-tree-panel {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 1rem 1.5rem;
+    }
+    .file-tree { list-style: none; margin: 0; padding: 0; font-size: 0.82rem; }
+    .file-tree ul { list-style: none; margin: 0; padding-left: 1rem; }
+    .tree-folder, .tree-file {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.35rem;
+      border-radius: 6px;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .tree-file:hover, .tree-folder:hover { background: var(--surface-hover); color: var(--ink); }
+    .tree-file.active { background: var(--accent-soft); color: var(--ink); }
+    .file-search {
+      width: 100%;
+      margin-bottom: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--ink);
+      padding: 0.5rem 0.65rem;
+      font-size: 0.82rem;
+    }
+    .code-viewer {
+      margin-top: 0.75rem;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      background: #0d0d12;
+      overflow: hidden;
+      max-height: 420px;
+      display: flex;
+      flex-direction: column;
+    }
+    .code-viewer-head {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.45rem 0.5rem 0.45rem 0.65rem;
+      font-size: 0.72rem;
+      font-family: var(--mono);
+      color: var(--muted);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .code-viewer-path {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .preview-icon-btn {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-elevated);
+      color: var(--muted);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      font-size: 0.85rem;
+      line-height: 1;
+    }
+    .preview-icon-btn:hover:not(:disabled) {
+      color: var(--ink);
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+    .preview-icon-btn:disabled { opacity: 0.35; cursor: default; }
+    .code-viewer-body {
+      overflow: auto;
+      flex: 1;
+      min-height: 0;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      line-height: 1.45;
+    }
+    .preview-expand-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      background: rgba(0, 0, 0, 0.82);
+      backdrop-filter: blur(6px);
+      display: none;
+      flex-direction: column;
+      padding: 1rem;
+    }
+    .preview-expand-overlay.open { display: flex; }
+    .preview-expand-panel {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-lg);
+      background: #0d0d12;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .preview-expand-panel .code-viewer-body {
+      font-size: 0.8rem;
+      max-height: none;
+    }
+    .preview-expand-panel .code-viewer {
+      max-height: none;
+      flex: 1;
+      min-height: 0;
+      margin: 0;
+      border: 0;
+      border-radius: 0;
+    }
+    .code-line {
+      display: flex;
+      gap: 0.65rem;
+      padding: 0 0.65rem;
+      white-space: pre;
+    }
+    .code-line .ln {
+      flex: 0 0 2.5rem;
+      text-align: right;
+      color: var(--muted-2);
+      user-select: none;
+    }
+    .code-line.highlight { background: rgba(124, 58, 237, 0.22); }
+    .source-chip { cursor: pointer; }
+    .source-chip:hover { border-color: var(--accent); }
+    .msg-pending .body { color: var(--muted); font-style: italic; }
+    .modal-error {
+      margin: 0 0 0.75rem;
+      padding: 0.5rem 0.65rem;
+      border-radius: var(--radius-sm);
+      background: rgba(248, 113, 113, 0.12);
+      color: var(--danger);
+      font-size: 0.8rem;
+      display: none;
+    }
+    .modal-error.visible { display: block; }
+    .tab:not(:disabled) { cursor: pointer; }
+    .tab:not(:disabled):hover { color: var(--ink); }
   </style>
 </head>
 <body>
-  <div class="layout">
-    <header>
-      <h1>Repona</h1>
-      <p class="tester">Session <code id="session-id">…</code></p>
-    </header>
-    <aside class="sidebar">
-      <h2>Indexed repositories</h2>
-      <p class="repo-empty" id="ttl-note" style="margin:0 0 0.6rem;font-size:0.75rem;"></p>
-      <ul class="repo-list" id="repo-list"></ul>
-      <p class="repo-empty" id="repo-empty" hidden>No repositories indexed yet.</p>
-    </aside>
-    <div class="main">
-      <form id="composer">
-        <label>GitHub URL
-          <input id="url" type="url" placeholder="https://github.com/owner/repository" required>
-        </label>
-        <label>GitHub token, only for a private repository
-          <input id="token" type="password" autocomplete="off">
-        </label>
-        <label>Question
-          <textarea id="question" placeholder="Ask about behavior, symbols, or files in the indexed commit…"></textarea>
-        </label>
-        <div class="actions">
-          <button id="index" type="submit">Index</button>
-          <button id="ask" type="button">Ask</button>
-          <button id="refresh-list" type="button" class="secondary">Refresh list</button>
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+  <div class="app no-repo-selected" id="app-root">
+    <aside class="panel-left" id="panel-left">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">◇</div>
+        <div class="brand-text">
+          <strong>Repona</strong>
+          <span>Repository intelligence</span>
         </div>
-      </form>
-      <p class="status" id="status"></p>
-      <div class="chat" id="chat"></div>
+      </div>
+      <button type="button" class="btn-primary" id="new-repo">+ New repository</button>
+      <div class="search-box">
+        <span class="search-icon" aria-hidden="true">⌕</span>
+        <input type="search" id="repo-filter" placeholder="Search repos" autocomplete="off">
+      </div>
+      <div class="sidebar-section sidebar-deselect-target" id="sidebar-repo-area">
+        <div class="sidebar-label">Repositories</div>
+        <ul class="repo-list" id="repo-list"></ul>
+        <p class="sidebar-empty" id="repo-empty" hidden>No repos yet</p>
+        <div class="sidebar-spacer" id="sidebar-spacer" aria-hidden="true"></div>
+      </div>
+      <div class="sidebar-footer">
+        <span id="ttl-note">Private to this browser</span>
+        <span class="session-pill" id="session-pill">Active</span>
+      </div>
+    </aside>
+
+    <main class="panel-center">
+      <header class="topbar">
+        <div class="topbar-repo">
+          <button type="button" class="btn-menu" id="menu-toggle" aria-label="Repositories">☰</button>
+          <h2 id="top-repo-name">Select a repository</h2>
+          <span class="badge public" id="top-badge" hidden>Public</span>
+          <span class="status-pill" id="status-pill">Idle</span>
+        </div>
+        <div class="topbar-actions">
+          <button type="button" class="btn-ghost" id="refresh-list">Refresh</button>
+        </div>
+      </header>
+      <div class="workspace-empty-view" id="workspace-empty"></div>
+      <div class="workspace-chrome">
+        <nav class="tabs" aria-label="Workspace" id="workspace-tabs">
+          <button type="button" class="tab active" data-tab="chat" id="tab-chat">Chat</button>
+          <button type="button" class="tab" data-tab="files" id="tab-files">Files</button>
+        </nav>
+        <div class="view-chat active" id="view-chat">
+          <div class="chat-scroll" id="chat"></div>
+        </div>
+        <div class="view-files" id="view-files">
+          <div class="files-layout">
+            <div class="file-tree-panel">
+              <input type="search" class="file-search" id="file-filter" placeholder="Filter files…" autocomplete="off">
+              <ul class="file-tree" id="file-tree"></ul>
+              <p class="sidebar-empty" id="file-tree-empty" hidden>Index not ready</p>
+            </div>
+          </div>
+        </div>
+        <div class="composer-bar" id="composer-bar">
+          <form id="ask-form" class="composer-inner">
+            <textarea id="question" rows="1" placeholder="Ask about this repository…" aria-label="Question"></textarea>
+            <button type="submit" class="btn-send" id="ask" title="Send" aria-label="Send">↑</button>
+          </form>
+          <p class="composer-hint">Answers use indexed source only</p>
+        </div>
+      </div>
+    </main>
+
+    <aside class="panel-right workspace-empty" id="panel-right">
+      <div class="card" id="repo-info-card">
+        <div class="repo-card-head">
+          <div class="repo-icon" aria-hidden="true">⎇</div>
+          <div>
+            <h3 id="meta-repo-name">—</h3>
+            <p id="meta-repo-desc">Add or select a repo to begin</p>
+          </div>
+        </div>
+        <div class="stat-row" id="meta-stats" hidden>
+          <span>Branch <strong id="meta-branch">main</strong></span>
+        </div>
+      </div>
+      <div class="card">
+        <h4 class="card-title">Status</h4>
+        <ul class="checklist" id="status-checklist">
+          <li class="pending" data-step="fetch"><span class="check-icon">·</span> Fetched</li>
+          <li class="pending" data-step="files"><span class="check-icon">·</span> Processed</li>
+          <li class="pending" data-step="index"><span class="check-icon">·</span> Indexed</li>
+          <li class="pending" data-step="ready"><span class="check-icon">·</span> Ready</li>
+        </ul>
+        <p class="card-note" id="meta-status-note"></p>
+      </div>
+      <div class="card" id="code-viewer-card" hidden>
+        <h4 class="card-title">Preview</h4>
+        <div class="code-viewer" id="code-viewer">
+          <div class="code-viewer-head">
+            <span class="code-viewer-path" id="code-viewer-path">No file</span>
+            <button type="button" class="preview-icon-btn" id="preview-expand" title="Expand preview" aria-label="Expand preview" disabled>⛶</button>
+          </div>
+          <div class="code-viewer-body" id="code-viewer-body">
+            <p class="preview-empty" id="preview-empty">No file selected</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="preview-expand-overlay" id="preview-expand-overlay" role="dialog" aria-modal="true" aria-label="File preview">
+    <div class="preview-expand-panel">
+      <div class="code-viewer-head">
+        <span class="code-viewer-path" id="code-viewer-path-expanded"></span>
+        <button type="button" class="preview-icon-btn" id="preview-collapse" title="Close" aria-label="Close expanded preview">✕</button>
+      </div>
+      <div class="code-viewer-body" id="code-viewer-body-expanded"></div>
     </div>
   </div>
+
+  <div class="overlay" id="new-repo-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal">
+      <h3 id="modal-title">New repository</h3>
+      <p class="sub">Public GitHub URL</p>
+      <form id="index-form">
+        <p class="modal-error" id="modal-error"></p>
+        <div class="field">
+          <label for="url">Repository URL</label>
+          <input id="url" type="text" placeholder="https://github.com/owner/repo" required autocomplete="off">
+        </div>
+        <div class="field hint">
+          <label for="token">Private access token (optional)</label>
+          <input id="token" type="password" autocomplete="off" placeholder="ghp_…">
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="modal-cancel">Cancel</button>
+          <button type="submit" class="btn-primary" id="index" style="width:auto;padding:0.55rem 1.25rem;">Index</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <p class="visually-hidden" id="status" aria-live="polite"></p>
+
   <script>
     const CLIENT_STORAGE = "repona.client_id";
     let clientId = "";
@@ -200,9 +1124,14 @@
     const askButton = document.getElementById("ask");
     const refreshListButton = document.getElementById("refresh-list");
     const status = document.getElementById("status");
+    const statusPill = document.getElementById("status-pill");
     const chat = document.getElementById("chat");
     const repoList = document.getElementById("repo-list");
     const repoEmpty = document.getElementById("repo-empty");
+    const repoFilter = document.getElementById("repo-filter");
+    const fileFilter = document.getElementById("file-filter");
+    const fileTree = document.getElementById("file-tree");
+    const modalError = document.getElementById("modal-error");
     const storageKey = "repona.ui";
     const indexPollMs = 5000;
     const indexPollMax = 360;
@@ -210,23 +1139,124 @@
     let repositoryId = "";
     let indexedRepositories = [];
     let indexRun = 0;
+    let repoFilterQuery = "";
+    let fileFilterQuery = "";
+    let filePaths = [];
+    let chatTurns = [];
+    let activeTab = "chat";
+    let indexingUrl = "";
+    let previewCache = null;
+
+    const SUGGESTIONS = [
+      "How does the main entry point work?",
+      "Where is authentication handled?",
+      "Explain the core request flow",
+      "Which modules define public APIs?",
+    ];
 
     function apiFetch(url, options) {
       const init = options || {};
       return fetch(url, { ...init, credentials: "include" });
     }
 
+    function setStatusLine(text) {
+      status.textContent = text || "";
+    }
+
+    function setPill(kind, label) {
+      statusPill.className = "status-pill" + (kind ? " " + kind : "");
+      statusPill.textContent = label;
+    }
+
+    function friendlyError(message) {
+      const m = (message || "").toLowerCase();
+      if (m.includes("repository was not found")) return "Repo not found";
+      if (m.includes("private or inaccessible")) return "Private — add token";
+      if (m.includes("access token cannot")) return "Bad token";
+      if (m.includes("repository url must be https")) return "Use HTTPS URL";
+      if (m.includes("model provider") || m.includes("unavailable")) return "Model offline";
+      if (m.includes("too many")) return "Rate limited";
+      if (m.includes("session")) return "Session error";
+      if (message && message.length < 40) return message;
+      return "Failed";
+    }
+
+    function normalizeRepoUrl(raw) {
+      let value = (raw || "").trim();
+      if (!value) return value;
+      if (!/^https?:\/\//i.test(value)) {
+        value = value.replace(/^\/+/, "");
+        if (value.startsWith("github.com/") || value.startsWith("www.github.com/")) {
+          value = "https://" + value.replace(/^www\./, "");
+        } else if (value.includes("/") && !value.includes(" ")) {
+          value = "https://github.com/" + value.replace(/^\/+/, "");
+        } else {
+          value = "https://" + value;
+        }
+      }
+      return value;
+    }
+
+    function showModalError(text) {
+      if (!text) {
+        modalError.classList.remove("visible");
+        modalError.textContent = "";
+        return;
+      }
+      modalError.textContent = friendlyError(text);
+      modalError.classList.add("visible");
+    }
+
+    function setActiveTab(tab) {
+      if (!hasRepoSelected() || indexingUrl) return;
+      activeTab = tab;
+      document.getElementById("view-chat").classList.toggle("active", tab === "chat");
+      document.getElementById("view-files").classList.toggle("active", tab === "files");
+      document.getElementById("tab-chat").classList.toggle("active", tab === "chat");
+      document.getElementById("tab-files").classList.toggle("active", tab === "files");
+      document.getElementById("composer-bar").hidden = tab !== "chat";
+      if (tab === "files") loadFileTree();
+    }
+
+    function indexActivityStep(polls, action) {
+      if (action === "serve") return "ready";
+      if (polls <= 0) return "fetch";
+      if (polls <= 2) return "files";
+      return "index";
+    }
+
+    function applyIndexActivity(step) {
+      const map = { fetch: 0, files: 1, index: 2, ready: 3 };
+      const order = ["fetch", "files", "index", "ready"];
+      const idx = map[step] ?? 0;
+      order.forEach((name, i) => {
+        const mode = i < idx ? "done" : i === idx ? "active" : "pending";
+        const el = document.querySelector(`#status-checklist [data-step="${name}"]`);
+        if (!el) return;
+        el.classList.remove("pending", "done", "active");
+        el.classList.add(mode);
+        const icon = el.querySelector(".check-icon");
+        icon.textContent = mode === "done" ? "✓" : mode === "active" ? "…" : "·";
+      });
+      const labels = { fetch: "Fetching…", files: "Processing…", index: "Indexing…", ready: "Ready" };
+      if (step === "ready") {
+        setPill("ready", "Ready");
+        document.getElementById("meta-status-note").textContent = "All set";
+      } else {
+        setPill("indexing", labels[step] || "Indexing…");
+        document.getElementById("meta-status-note").textContent = labels[step] || "Working…";
+      }
+    }
+
     async function ensureClientSession() {
       const hint = localStorage.getItem(CLIENT_STORAGE) || "";
       const qs = hint ? `?client_id=${encodeURIComponent(hint)}` : "";
       const response = await apiFetch(`/api/v1/client${qs}`);
-      if (!response.ok) throw new Error("Could not start a client session.");
+      if (!response.ok) throw new Error("Session error");
       const body = await response.json();
       clientId = body.client_id;
       localStorage.setItem(CLIENT_STORAGE, clientId);
-      document.getElementById("session-id").textContent = clientId.slice(0, 8) + "…";
-      document.getElementById("ttl-note").textContent =
-        `Your repos and chat are private to this browser. Removed after ${body.ttl_hours} hours without activity.`;
+      document.getElementById("ttl-note").textContent = `${body.ttl_hours}h retention`;
       return body;
     }
 
@@ -253,10 +1283,293 @@
       return url;
     }
 
+    function currentRepo() {
+      return indexedRepositories.find((r) => r.repository_id === repositoryId) || null;
+    }
+
+    function hasRepoSelected() {
+      return Boolean(repositoryId);
+    }
+
+    function hasWorkspaceOpen() {
+      return Boolean(repositoryId) || Boolean(indexingUrl);
+    }
+
+    function syncAppShell() {
+      const app = document.getElementById("app-root");
+      const right = document.getElementById("panel-right");
+      const open = hasWorkspaceOpen();
+      app.classList.toggle("no-repo-selected", !open);
+      right.classList.toggle("workspace-empty", !open);
+      const indexing = Boolean(indexingUrl);
+      app.classList.toggle("indexing-active", indexing);
+    }
+
+    function setPreviewExpandEnabled(enabled) {
+      document.getElementById("preview-expand").disabled = !enabled;
+    }
+
+    function renderCodeLines(container, lines, focusStart, focusEnd) {
+      container.replaceChildren();
+      let scrollTarget = null;
+      for (const line of lines || []) {
+        const row = document.createElement("div");
+        row.className = "code-line";
+        if (focusStart && focusEnd && line.n >= focusStart && line.n <= focusEnd) {
+          row.classList.add("highlight");
+          if (line.n === focusStart) scrollTarget = row;
+        }
+        const ln = document.createElement("span");
+        ln.className = "ln";
+        ln.textContent = line.n;
+        const text = document.createElement("span");
+        text.textContent = line.text;
+        row.append(ln, text);
+        container.appendChild(row);
+      }
+      return scrollTarget;
+    }
+
+    function openPreviewExpanded() {
+      if (!previewCache) return;
+      document.getElementById("code-viewer-path-expanded").textContent = previewCache.path;
+      const expandedBody = document.getElementById("code-viewer-body-expanded");
+      const scrollTarget = renderCodeLines(
+        expandedBody,
+        previewCache.lines,
+        previewCache.focusStart,
+        previewCache.focusEnd,
+      );
+      document.getElementById("preview-expand-overlay").classList.add("open");
+      if (scrollTarget) {
+        requestAnimationFrame(() => scrollTarget.scrollIntoView({ block: "center" }));
+      }
+    }
+
+    function closePreviewExpanded() {
+      document.getElementById("preview-expand-overlay").classList.remove("open");
+    }
+
+    function setPreviewPlaceholder(message) {
+      const card = document.getElementById("code-viewer-card");
+      previewCache = null;
+      setPreviewExpandEnabled(false);
+      closePreviewExpanded();
+      if (!hasWorkspaceOpen()) {
+        card.hidden = true;
+        return;
+      }
+      card.hidden = false;
+      document.getElementById("code-viewer-path").textContent = "No file";
+      const bodyEl = document.getElementById("code-viewer-body");
+      bodyEl.replaceChildren();
+      const p = document.createElement("p");
+      p.className = "preview-empty";
+      p.textContent = message || "No file selected";
+      bodyEl.appendChild(p);
+    }
+
+    function renderIndexingCenter() {
+      syncAppShell();
+      setPreviewPlaceholder("Indexing…");
+      chat.replaceChildren();
+      const card = document.createElement("div");
+      card.className = "welcome-card";
+      const label = repoLabel(indexingUrl);
+      card.innerHTML = `
+        <div class="icon-lg" aria-hidden="true">⏳</div>
+        <h3>${escapeHtml(label)}</h3>
+        <p>Indexing in progress</p>
+      `;
+      chat.appendChild(card);
+    }
+
+    function beginIndexingWorkspace(url) {
+      indexingUrl = normalizeRepoUrl(url);
+      const label = repoLabel(indexingUrl);
+      document.getElementById("top-repo-name").textContent = label;
+      document.getElementById("top-badge").hidden = false;
+      document.getElementById("meta-repo-name").textContent = label;
+      document.getElementById("meta-repo-desc").textContent = "Indexing…";
+      document.getElementById("meta-stats").hidden = true;
+      applyIndexActivity("fetch");
+      renderIndexingCenter();
+    }
+
+    function finishIndexingWorkspace() {
+      indexingUrl = "";
+      document.getElementById("app-root").classList.remove("indexing-active");
+    }
+
+    function clearSelection() {
+      if (indexingUrl) return;
+      repositoryId = "";
+      chatTurns = [];
+      questionInput.value = "";
+      saveState({
+        repositoryId: "",
+        url: "",
+        indexPhase: "",
+        indexMessage: "",
+        indexStatus: "",
+        question: "",
+      });
+      document.getElementById("code-viewer-card").hidden = true;
+      renderRepoList();
+      syncAppShell();
+      if (!hasWorkspaceOpen()) {
+        document.getElementById("top-repo-name").textContent = "Repona";
+        document.getElementById("top-badge").hidden = true;
+        statusPill.textContent = "";
+        statusPill.className = "status-pill";
+        renderEmptyWorkspace();
+      }
+    }
+
+    function renderEmptyWorkspace() {
+      const host = document.getElementById("workspace-empty");
+      host.replaceChildren();
+      const hero = document.createElement("div");
+      hero.className = "empty-hero";
+      hero.innerHTML = `
+        <div class="icon-lg" aria-hidden="true">⎇</div>
+        <h3>Index a repository</h3>
+        <p>Add a public GitHub repo or open one you already indexed.</p>
+      `;
+      const actions = document.createElement("div");
+      actions.className = "empty-actions";
+      const addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.className = "btn-primary";
+      addBtn.textContent = "Index new repository";
+      addBtn.addEventListener("click", () => openModal());
+      actions.appendChild(addBtn);
+      if (indexedRepositories.length) {
+        const pick = document.createElement("div");
+        pick.className = "empty-repo-pick";
+        const label = document.createElement("div");
+        label.className = "empty-repo-pick-label";
+        label.textContent = "Open existing";
+        pick.appendChild(label);
+        const list = document.createElement("div");
+        list.className = "empty-repo-list";
+        for (const repo of indexedRepositories) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "empty-repo-btn";
+          btn.textContent = repoLabel(repo.normalized_url);
+          btn.addEventListener("click", () => {
+            closeSidebar();
+            selectRepository(repo);
+          });
+          list.appendChild(btn);
+        }
+        pick.appendChild(list);
+        hero.appendChild(actions);
+        hero.appendChild(pick);
+      } else {
+        hero.appendChild(actions);
+      }
+      host.appendChild(hero);
+    }
+
+    function updateWorkspaceMode() {
+      syncAppShell();
+      if (indexingUrl) return;
+      if (!hasRepoSelected()) {
+        document.getElementById("top-repo-name").textContent = "Repona";
+        document.getElementById("top-badge").hidden = true;
+        statusPill.textContent = "";
+        statusPill.className = "status-pill";
+        renderEmptyWorkspace();
+        return;
+      }
+      const repo = currentRepo();
+      document.getElementById("top-repo-name").textContent = repo
+        ? repoLabel(repo.normalized_url)
+        : repoLabel(urlInput.value.trim()) || "Repository";
+      document.getElementById("top-badge").hidden = false;
+      updateMetaPanel();
+      if (repo && repo.index_state === "ready") {
+        setPreviewPlaceholder("No file selected");
+      }
+    }
+
+    function updateMetaPanel(stateOverride) {
+      if (!hasWorkspaceOpen()) return;
+      const repo = currentRepo();
+      const label = repo
+        ? repoLabel(repo.normalized_url)
+        : indexingUrl
+          ? repoLabel(indexingUrl)
+          : urlInput.value.trim()
+            ? repoLabel(urlInput.value.trim())
+            : "—";
+      document.getElementById("top-repo-name").textContent = label;
+      document.getElementById("meta-repo-name").textContent = label;
+      const indexState = stateOverride || (repo ? repo.index_state : indexingUrl ? "indexing" : "idle");
+      document.getElementById("meta-repo-desc").textContent =
+        indexState === "ready"
+          ? "Ready to query"
+          : indexState === "indexing"
+            ? "Indexing…"
+            : "Needs index";
+      document.getElementById("top-badge").hidden = false;
+      const branchEl = document.getElementById("meta-branch");
+      const stats = document.getElementById("meta-stats");
+      if (repo && repo.tracked_branch) {
+        branchEl.textContent = repo.tracked_branch;
+        stats.hidden = false;
+      } else {
+        stats.hidden = true;
+      }
+      if (!indexingUrl) {
+        updateChecklist(indexState);
+        document.getElementById("meta-status-note").textContent =
+          indexState === "ready" ? "All set" : indexState === "indexing" ? "Working…" : "";
+      }
+    }
+
+    function updateChecklist(indexState) {
+      const steps = ["fetch", "files", "index", "ready"];
+      const li = document.querySelectorAll("#status-checklist li");
+      li.forEach((el) => {
+        el.classList.remove("done", "active", "pending");
+        el.classList.add("pending");
+        el.querySelector(".check-icon").textContent = "·";
+      });
+      if (indexState === "idle" || !indexState) return;
+      if (indexState === "wait") {
+        setStep("fetch", "done");
+        setStep("files", "active");
+        return;
+      }
+      if (indexState === "indexing") {
+        setStep("fetch", "done");
+        setStep("files", "done");
+        setStep("index", "active");
+        return;
+      }
+      if (indexState === "ready") {
+        steps.forEach((s) => setStep(s, "done"));
+      }
+      function setStep(step, mode) {
+        const el = document.querySelector(`#status-checklist [data-step="${step}"]`);
+        if (!el) return;
+        el.classList.remove("pending", "done", "active");
+        el.classList.add(mode);
+        const icon = el.querySelector(".check-icon");
+        icon.textContent = mode === "done" ? "✓" : mode === "active" ? "…" : "·";
+      }
+    }
+
     function setBusy(busy) {
       indexButton.disabled = busy;
       askButton.disabled = busy;
       refreshListButton.disabled = busy;
+      if (busy && statusPill.textContent !== "Indexing…" && statusPill.textContent !== "Thinking…") {
+        /* keep explicit states */
+      }
     }
 
     function sleep(ms) {
@@ -266,65 +1579,90 @@
     async function errorText(response) {
       const body = await response.json().catch(() => null);
       if (body && typeof body.detail === "string" && body.detail) {
-        if (response.status === 503 && body.detail === "the model provider is unavailable") {
-          return "Answer generation is unavailable on the server. Check Cursor configuration.";
-        }
         return body.detail;
       }
-      return "The request failed.";
+      return "Request failed";
+    }
+
+    function filteredRepos() {
+      const q = repoFilterQuery.trim().toLowerCase();
+      if (!q) return indexedRepositories;
+      return indexedRepositories.filter((r) => repoLabel(r.normalized_url).toLowerCase().includes(q));
     }
 
     function renderRepoList() {
       repoList.replaceChildren();
+      const list = filteredRepos();
       if (!indexedRepositories.length) {
         repoEmpty.hidden = false;
+        repoEmpty.textContent = "No repos yet";
         return;
       }
-      repoEmpty.hidden = true;
-      for (const repo of indexedRepositories) {
+      repoEmpty.hidden = list.length > 0;
+      if (!list.length) {
+        repoEmpty.hidden = false;
+        repoEmpty.textContent = "No matches";
+        return;
+      }
+      for (const repo of list) {
         const li = document.createElement("li");
         const row = document.createElement("div");
         row.className = "repo-row" + (repo.repository_id === repositoryId ? " active" : "");
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "repo-item";
+        const icon = document.createElement("span");
+        icon.className = "repo-icon";
+        icon.textContent = "⎇";
+        const body = document.createElement("div");
+        body.className = "repo-item-body";
         const name = document.createElement("span");
         name.className = "name";
         name.textContent = repoLabel(repo.normalized_url);
         const meta = document.createElement("span");
-        meta.className = "meta " + repo.index_state;
-        meta.textContent =
-          repo.index_state === "ready"
-            ? "Ready"
-            : repo.index_state === "indexing"
-              ? "Indexing…"
-              : "Needs index";
-        btn.append(name, meta);
-        btn.addEventListener("click", () => selectRepository(repo));
+        meta.className = "meta";
+        const dot = document.createElement("span");
+        dot.className = "dot " + (repo.index_state === "ready" ? "ready" : repo.index_state === "indexing" ? "indexing" : "wait");
+        const metaText = document.createElement("span");
+        metaText.textContent =
+          repo.index_state === "ready" ? "Ready" : repo.index_state === "indexing" ? "Indexing…" : "Pending";
+        meta.append(dot, metaText);
+        body.append(name, meta);
+        btn.append(icon, body);
+        btn.addEventListener("click", () => {
+          closeSidebar();
+          selectRepository(repo);
+        });
         const del = document.createElement("button");
         del.type = "button";
         del.className = "repo-delete";
-        del.title = "Remove from catalog";
+        del.title = "Remove";
         del.textContent = "×";
         del.addEventListener("click", (event) => deleteRepository(repo, event));
         row.append(btn, del);
         li.appendChild(row);
         repoList.appendChild(li);
       }
+      if (hasRepoSelected()) updateMetaPanel();
+    }
+
+    function openModal() {
+      showModalError("");
+      document.getElementById("new-repo-overlay").classList.add("open");
+      urlInput.focus();
+    }
+
+    function closeModal() {
+      showModalError("");
+      document.getElementById("new-repo-overlay").classList.remove("open");
     }
 
     async function deleteRepository(repo, event) {
       event.stopPropagation();
       const label = repoLabel(repo.normalized_url);
-      if (
-        !confirm(
-          `Remove ${label} from the catalog?\n\nThis deletes its index, chat history, and files from the server. This cannot be undone.`,
-        )
-      ) {
-        return;
-      }
+      if (!confirm(`Remove ${label}?`)) return;
       setBusy(true);
-      status.textContent = `Removing ${label}…`;
+      setPill("busy", "Removing…");
       try {
         const response = await apiFetch(
           `/api/v1/repositories/${encodeURIComponent(repo.repository_id)}?user_id=${encodeURIComponent(clientId)}`,
@@ -332,62 +1670,309 @@
         );
         if (!response.ok) throw new Error(await errorText(response));
         if (repositoryId === repo.repository_id) {
-          repositoryId = "";
-          urlInput.value = "";
-          saveState({
-            repositoryId: "",
-            url: "",
-            indexPhase: "",
-            indexMessage: "",
-            indexStatus: "",
-            question: "",
-          });
-          questionInput.value = "";
-          renderChat([]);
+          clearSelection();
         }
         await fetchRepositories();
-        status.textContent = `Removed ${label}.`;
+        if (hasRepoSelected()) setPill("", "Idle");
+        setStatusLine("Removed");
       } catch (error) {
-        status.textContent = error.message || "Could not remove this repository.";
+        setPill("error", friendlyError(error.message));
+        setStatusLine(friendlyError(error.message));
       } finally {
         setBusy(false);
       }
     }
 
-    function renderChat(messages) {
-      chat.replaceChildren();
-      if (!messages.length) {
-        const empty = document.createElement("p");
-        empty.className = "chat-empty";
-        empty.textContent = "Questions and answers for the selected repository appear here.";
-        chat.appendChild(empty);
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function formatAnswer(text) {
+      const raw = text || "";
+      const parts = raw.split(/(```[\s\S]*?```)/g);
+      const frag = document.createDocumentFragment();
+      for (const part of parts) {
+        if (part.startsWith("```") && part.endsWith("```")) {
+          const inner = part.slice(3, -3);
+          const firstLine = inner.indexOf("\n");
+          let lang = "";
+          let code = inner;
+          if (firstLine > 0) {
+            lang = inner.slice(0, firstLine).trim();
+            code = inner.slice(firstLine + 1);
+          }
+          const block = document.createElement("div");
+          block.className = "code-block";
+          const head = document.createElement("div");
+          head.className = "code-block-head";
+          head.textContent = lang || "code";
+          const pre = document.createElement("pre");
+          pre.textContent = code.trim();
+          block.append(head, pre);
+          frag.appendChild(block);
+        } else if (part.trim()) {
+          const div = document.createElement("div");
+          const paragraphs = part.split(/\n\n+/);
+          for (const p of paragraphs) {
+            const el = document.createElement("p");
+            el.innerHTML = escapeHtml(p.trim()).replace(/`([^`]+)`/g, "<code>$1</code>");
+            div.appendChild(el);
+          }
+          frag.appendChild(div);
+        }
+      }
+      if (!frag.childNodes.length) {
+        const p = document.createElement("p");
+        p.textContent = raw || "—";
+        frag.appendChild(p);
+      }
+      return frag;
+    }
+
+    function renderSources(citations) {
+      const wrap = document.createElement("div");
+      wrap.className = "sources";
+      const label = document.createElement("div");
+      label.className = "sources-label";
+      label.textContent = `Sources · ${citations.length}`;
+      wrap.appendChild(label);
+      const grid = document.createElement("div");
+      grid.className = "source-grid";
+      citations.forEach((citation, i) => {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "source-chip" + (i === 0 ? " primary" : "");
+        const path = document.createElement("span");
+        path.className = "path";
+        const fileName = (citation.path || "").split("/").pop() || citation.path || "file";
+        path.textContent = fileName;
+        path.title = citation.path || "";
+        const lines = document.createElement("span");
+        lines.className = "lines";
+        const start = citation.start_line;
+        const end = citation.end_line;
+        lines.textContent = start && end ? `L${start}–${end}` : citation.path || "";
+        chip.append(path, lines);
+        chip.addEventListener("click", () => openCitation(citation));
+        grid.appendChild(chip);
+      });
+      wrap.appendChild(grid);
+      return wrap;
+    }
+
+    async function openCitation(citation) {
+      if (!repositoryId || !citation.path) return;
+      setActiveTab("files");
+      await showFileContent(citation.path, citation.start_line, citation.end_line);
+    }
+
+    async function loadFileTree() {
+      const empty = document.getElementById("file-tree-empty");
+      if (!repositoryId) {
+        fileTree.replaceChildren();
+        empty.hidden = false;
+        empty.textContent = "Select a repo";
         return;
       }
-      for (const turn of messages) {
-        const block = document.createElement("article");
-        block.className = "turn";
-        const q = document.createElement("div");
-        q.className = "q";
-        q.textContent = turn.question;
-        const a = document.createElement("div");
-        a.className = "a";
-        a.textContent = turn.answer || "(No answer text)";
-        block.append(q, a);
-        if (turn.citations && turn.citations.length) {
-          const ul = document.createElement("ul");
-          ul.className = "citations";
-          for (const citation of turn.citations) {
-            const line = document.createElement("li");
-            const start = citation.start_line;
-            const end = citation.end_line;
-            line.textContent =
-              start && end ? `${citation.path}, lines ${start}–${end}` : citation.path;
-            ul.appendChild(line);
-          }
-          block.appendChild(ul);
-        }
-        chat.appendChild(block);
+      const repo = currentRepo();
+      if (!repo || repo.index_state !== "ready") {
+        fileTree.replaceChildren();
+        empty.hidden = false;
+        empty.textContent = "Index not ready";
+        return;
       }
+      try {
+        const response = await apiFetch(
+          `/api/v1/repositories/${encodeURIComponent(repositoryId)}/files?user_id=${encodeURIComponent(clientId)}`,
+        );
+        if (!response.ok) throw new Error(await errorText(response));
+        const body = await response.json();
+        filePaths = body.paths || [];
+        renderFileTree();
+        empty.hidden = filePaths.length > 0;
+        if (!filePaths.length) empty.textContent = "No files";
+      } catch {
+        fileTree.replaceChildren();
+        empty.hidden = false;
+        empty.textContent = "Could not load";
+      }
+    }
+
+    function renderFileTree() {
+      fileTree.replaceChildren();
+      const q = fileFilterQuery.trim().toLowerCase();
+      const paths = q ? filePaths.filter((p) => p.toLowerCase().includes(q)) : filePaths;
+      const root = buildTree(paths);
+      fileTree.appendChild(renderTreeNode(root, ""));
+    }
+
+    function buildTree(paths) {
+      const root = {};
+      for (const path of paths) {
+        const parts = path.split("/");
+        let node = root;
+        for (let i = 0; i < parts.length; i++) {
+          const part = parts[i];
+          const isFile = i === parts.length - 1;
+          if (!node[part]) node[part] = isFile ? null : {};
+          if (!isFile) node = node[part];
+        }
+      }
+      return root;
+    }
+
+    function renderTreeNode(node, prefix) {
+      const ul = document.createElement("ul");
+      const names = Object.keys(node).sort((a, b) => {
+        const aFile = node[a] === null;
+        const bFile = node[b] === null;
+        if (aFile !== bFile) return aFile ? 1 : -1;
+        return a.localeCompare(b);
+      });
+      for (const name of names) {
+        const li = document.createElement("li");
+        const full = prefix ? `${prefix}/${name}` : name;
+        const child = node[name];
+        if (child === null) {
+          const row = document.createElement("div");
+          row.className = "tree-file";
+          row.textContent = "📄 " + name;
+          row.dataset.path = full;
+          row.addEventListener("click", () => showFileContent(full, null, null));
+          li.appendChild(row);
+        } else {
+          const row = document.createElement("div");
+          row.className = "tree-folder";
+          row.textContent = "📁 " + name;
+          li.appendChild(row);
+          li.appendChild(renderTreeNode(child, full));
+        }
+        ul.appendChild(li);
+      }
+      return ul;
+    }
+
+    async function showFileContent(path, startLine, endLine) {
+      if (!repositoryId) return;
+      document.getElementById("code-viewer-card").hidden = false;
+      document.getElementById("code-viewer-path").textContent = path;
+      const bodyEl = document.getElementById("code-viewer-body");
+      bodyEl.textContent = "Loading…";
+      setPreviewExpandEnabled(false);
+      previewCache = null;
+      const params = new URLSearchParams({
+        user_id: clientId,
+        path,
+      });
+      if (startLine) params.set("start_line", String(startLine));
+      if (endLine) params.set("end_line", String(endLine));
+      try {
+        const response = await apiFetch(
+          `/api/v1/repositories/${encodeURIComponent(repositoryId)}/files/content?${params}`,
+        );
+        if (!response.ok) throw new Error(await errorText(response));
+        const body = await response.json();
+        const focusStart = body.focus_start;
+        const focusEnd = body.focus_end;
+        previewCache = {
+          path,
+          focusStart,
+          focusEnd,
+          lines: body.lines || [],
+        };
+        const scrollTarget = renderCodeLines(bodyEl, previewCache.lines, focusStart, focusEnd);
+        setPreviewExpandEnabled(true);
+        fileTree.querySelectorAll(".tree-file").forEach((el) => {
+          el.classList.toggle("active", el.dataset.path === path);
+        });
+        if (scrollTarget) scrollTarget.scrollIntoView({ block: "center" });
+        if (document.getElementById("preview-expand-overlay").classList.contains("open")) {
+          openPreviewExpanded();
+        }
+      } catch (error) {
+        previewCache = null;
+        setPreviewExpandEnabled(false);
+        bodyEl.textContent = friendlyError(error.message);
+      }
+    }
+
+    function renderWelcome() {
+      chat.replaceChildren();
+      const card = document.createElement("div");
+      card.className = "welcome-card";
+      const repo = currentRepo();
+      const label = repo ? repoLabel(repo.normalized_url) : "this repo";
+      card.innerHTML = `
+        <div class="icon-lg" aria-hidden="true">💬</div>
+        <h3>Ask ${escapeHtml(label)}</h3>
+        <p>Pick a prompt or type below</p>
+      `;
+      const grid = document.createElement("div");
+      grid.className = "suggestions";
+      for (const text of SUGGESTIONS) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "suggestion";
+        btn.textContent = text;
+        btn.addEventListener("click", () => {
+          questionInput.value = text;
+          saveState({ question: text });
+          questionInput.focus();
+        });
+        grid.appendChild(btn);
+      }
+      card.appendChild(grid);
+      chat.appendChild(card);
+    }
+
+    function renderChatTurn(turn) {
+      const userWrap = document.createElement("div");
+      userWrap.className = "msg-user-wrap";
+      const user = document.createElement("div");
+      user.className = "msg-user";
+      user.textContent = turn.question;
+      userWrap.appendChild(user);
+
+      const assistant = document.createElement("div");
+      assistant.className = "msg-assistant" + (turn.pending ? " msg-pending" : "");
+      const body = document.createElement("div");
+      body.className = "body";
+      if (turn.pending) {
+        body.textContent = "Thinking…";
+      } else if (turn.error) {
+        body.textContent = turn.error;
+      } else {
+        body.appendChild(formatAnswer(turn.answer));
+      }
+      assistant.appendChild(body);
+      if (!turn.pending && !turn.error && turn.citations && turn.citations.length) {
+        assistant.appendChild(renderSources(turn.citations));
+      }
+      return [userWrap, assistant];
+    }
+
+    function renderChat(messages) {
+      chatTurns = messages ? messages.map((m) => ({ ...m, pending: false })) : chatTurns;
+      chat.replaceChildren();
+      if (!chatTurns.length) {
+        renderWelcome();
+        return;
+      }
+      for (const turn of chatTurns) {
+        for (const node of renderChatTurn(turn)) chat.appendChild(node);
+      }
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function appendPendingQuestion(question) {
+      if (chat.querySelector(".welcome-card")) chat.replaceChildren();
+      chatTurns = chatTurns.filter((t) => !t.pending);
+      chatTurns.push({ question, answer: "", citations: [], pending: true });
+      for (const node of renderChatTurn(chatTurns[chatTurns.length - 1])) chat.appendChild(node);
       chat.scrollTop = chat.scrollHeight;
     }
 
@@ -397,6 +1982,7 @@
       const body = await response.json();
       indexedRepositories = body.repositories || [];
       renderRepoList();
+      if (!hasRepoSelected()) renderEmptyWorkspace();
     }
 
     async function fetchChatHistory(id) {
@@ -417,21 +2003,28 @@
         url: repo.normalized_url,
         indexPhase: repo.index_state === "ready" ? "ready" : repo.index_state === "indexing" ? "indexing" : "wait",
       });
+      updateWorkspaceMode();
       renderRepoList();
       if (!opts.skipHistory) {
         try {
           await fetchChatHistory(repositoryId);
         } catch (error) {
-          status.textContent = error.message || "Could not load chat history.";
+          setPill("error", friendlyError(error.message));
         }
+      } else {
+        renderWelcome();
       }
       if (repo.index_state === "ready") {
-        status.textContent = `Selected ${repoLabel(repo.normalized_url)} (ready). Ask a question — no re-index needed.`;
+        setPill("ready", "Ready");
         questionInput.focus();
+        updateMetaPanel("ready");
+        setPreviewPlaceholder("No file selected");
+        loadFileTree();
         return;
       }
       if (repo.index_state === "indexing") {
-        status.textContent = "Indexing in progress for this repository…";
+        setPill("indexing", "Indexing…");
+        updateMetaPanel("indexing");
         if (!opts.skipResume) {
           indexRun += 1;
           setBusy(true);
@@ -439,18 +2032,20 @@
             await pollIndexUntilReady(repo.normalized_url, tokenInput.value.trim(), 0);
             await fetchRepositories();
           } catch (error) {
-            status.textContent = error.message || "Could not resume indexing.";
+            setPill("error", friendlyError(error.message));
           } finally {
             setBusy(false);
           }
         }
         return;
       }
-      status.textContent = "This repository needs indexing. Press Index when the URL is correct.";
+      setPill("", "Pending");
+      updateMetaPanel("wait");
     }
 
     async function postIndex(repoUrl, token) {
-      const payload = { repo_url: repoUrl, user_id: clientId };
+      const normalizedUrl = normalizeRepoUrl(repoUrl);
+      const payload = { repo_url: normalizedUrl, user_id: clientId };
       if (token) payload.access_token = token;
       const response = await apiFetch("/api/v1/repository", {
         method: "POST",
@@ -470,32 +2065,52 @@
         url: normalized,
         indexPhase: ready ? "ready" : "indexing",
         indexMessage: body.message || "",
-        indexStatus: ready
-          ? `Indexed ${normalized}${body.tracked_branch ? ` on ${body.tracked_branch}` : ""}.`
-          : "",
+        indexStatus: ready ? "Ready" : "",
       });
       if (normalized) urlInput.value = normalized;
+      if (repositoryId) {
+        if (ready) {
+          finishIndexingWorkspace();
+          syncAppShell();
+          updateMetaPanel("ready");
+          setActiveTab("chat");
+          setPreviewPlaceholder("No file selected");
+        } else {
+          if (!indexingUrl) indexingUrl = normalized;
+          syncAppShell();
+          updateMetaPanel("indexing");
+        }
+      }
     }
 
     async function pollIndexUntilReady(repoUrl, token, startPolls) {
       const runId = indexRun;
+      let polls = startPolls;
+      applyIndexActivity("fetch");
       let body = await postIndex(repoUrl, token);
       applyIndexResponse(body, repoUrl);
-      let polls = startPolls;
+      applyIndexActivity(indexActivityStep(polls, body.action));
       while (body.action === "wait" && polls < indexPollMax && runId === indexRun) {
-        status.textContent = body.message || "Still indexing. Large repositories can take up to 30 minutes.";
         await sleep(indexPollMs);
+        polls += 1;
         body = await postIndex(repoUrl, token);
         applyIndexResponse(body, repoUrl);
-        polls += 1;
+        applyIndexActivity(indexActivityStep(polls, body.action));
       }
       if (body.action === "serve") {
-        status.textContent = loadState().indexStatus || `Indexed ${body.normalized_url || repoUrl}.`;
+        applyIndexActivity("ready");
+        setStatusLine("Ready");
+        finishIndexingWorkspace();
+        updateWorkspaceMode();
+        setActiveTab("chat");
+        loadFileTree();
+        await fetchChatHistory(repositoryId).catch(() => renderWelcome());
       } else if (polls >= indexPollMax) {
-        status.textContent =
-          body.message || "Indexing is taking longer than expected. Refresh the page to resume.";
+        setPill("indexing", "Still working…");
+        setStatusLine("Slow — refresh");
       } else {
-        status.textContent = body.message || "This commit is not ready yet. Try Index again in a minute.";
+        setPill("", "Pending");
+        setStatusLine("Not ready");
       }
       await fetchRepositories();
       const match = indexedRepositories.find((item) => item.repository_id === repositoryId);
@@ -505,34 +2120,48 @@
 
     async function indexRepository(event) {
       if (event) event.preventDefault();
-      const repoUrl = urlInput.value.trim();
+      const repoUrl = normalizeRepoUrl(urlInput.value.trim());
       if (!repoUrl) return;
+      urlInput.value = repoUrl;
+      showModalError("");
       indexRun += 1;
+      beginIndexingWorkspace(repoUrl);
+      closeModal();
       setBusy(true);
-      status.textContent = "Indexing. A public repository can take a few minutes.";
       try {
         const token = tokenInput.value.trim();
         await pollIndexUntilReady(repoUrl, token, 0);
       } catch (error) {
-        status.textContent = error.message || "The request failed.";
+        finishIndexingWorkspace();
+        indexingUrl = "";
+        setPill("error", friendlyError(error.message));
+        setStatusLine(friendlyError(error.message));
+        syncAppShell();
+        renderEmptyWorkspace();
+        openModal();
+        showModalError(error.message);
+        urlInput.value = repoUrl;
       } finally {
         setBusy(false);
       }
     }
 
-    async function askQuestion() {
+    async function askQuestion(event) {
+      if (event) event.preventDefault();
       const question = questionInput.value.trim();
-      if (!question) {
-        status.textContent = "Write a question first.";
-        return;
-      }
+      if (!question) return;
       if (!repositoryId) {
-        status.textContent = "Select or index a repository before asking.";
+        setPill("error", "No repo");
+        openModal();
         return;
       }
+      setActiveTab("chat");
+      questionInput.value = "";
+      questionInput.style.height = "auto";
+      saveState({ question: "" });
+      appendPendingQuestion(question);
       setBusy(true);
-      status.textContent = "Asking.";
-      saveState({ question });
+      setPill("busy", "Thinking…");
       try {
         const response = await apiFetch("/api/v1/ask", {
           method: "POST",
@@ -546,15 +2175,20 @@
         if (!response.ok) throw new Error(await errorText(response));
         const body = await response.json();
         if (body.action === "wait") {
-          status.textContent = body.message || "This commit is not ready yet. Index again or wait a moment.";
+          chatTurns = chatTurns.filter((t) => !t.pending);
+          chatTurns.push({ question, answer: "", error: "Index not ready", citations: [] });
+          renderChat();
+          setPill("indexing", "Indexing…");
         } else {
-          status.textContent = "";
-          questionInput.value = "";
-          saveState({ question: "" });
+          setPill("ready", "Ready");
+          setStatusLine("");
           await fetchChatHistory(repositoryId);
         }
       } catch (error) {
-        status.textContent = error.message || "The request failed.";
+        chatTurns = chatTurns.filter((t) => !t.pending);
+        chatTurns.push({ question, answer: "", error: friendlyError(error.message), citations: [] });
+        renderChat();
+        setPill("error", friendlyError(error.message));
       } finally {
         setBusy(false);
       }
@@ -567,24 +2201,79 @@
         repositoryId = "";
         saveState({ repositoryId: "", indexPhase: "", indexMessage: "", indexStatus: "" });
         renderRepoList();
-        status.textContent = "Index this repository or pick one from the list.";
-        renderChat([]);
+        clearSelection();
       }
     });
 
     questionInput.addEventListener("input", () => {
       saveState({ question: questionInput.value });
+      questionInput.style.height = "auto";
+      questionInput.style.height = Math.min(questionInput.scrollHeight, 120) + "px";
     });
 
-    document.getElementById("composer").addEventListener("submit", indexRepository);
-    askButton.addEventListener("click", askQuestion);
+    repoFilter.addEventListener("input", () => {
+      repoFilterQuery = repoFilter.value;
+      renderRepoList();
+    });
+    fileFilter.addEventListener("input", () => {
+      fileFilterQuery = fileFilter.value;
+      renderFileTree();
+    });
+    document.getElementById("tab-chat").addEventListener("click", () => setActiveTab("chat"));
+    document.getElementById("tab-files").addEventListener("click", () => {
+      if (!repositoryId) return;
+      setActiveTab("files");
+    });
+
+    function closeSidebar() {
+      document.getElementById("panel-left").classList.remove("open");
+      document.getElementById("sidebar-backdrop").classList.remove("open");
+    }
+    function openSidebar() {
+      document.getElementById("panel-left").classList.add("open");
+      document.getElementById("sidebar-backdrop").classList.add("open");
+    }
+    document.getElementById("menu-toggle").addEventListener("click", openSidebar);
+    document.getElementById("sidebar-backdrop").addEventListener("click", closeSidebar);
+
+    document.getElementById("new-repo").addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeSidebar();
+      if (!indexingUrl) clearSelection();
+      openModal();
+    });
+    document.getElementById("sidebar-repo-area").addEventListener("click", (e) => {
+      if (e.target.closest(".repo-item, .repo-delete, .repo-row, #repo-list")) return;
+      if (indexingUrl) return;
+      closeSidebar();
+      clearSelection();
+    });
+    document.getElementById("modal-cancel").addEventListener("click", closeModal);
+    document.getElementById("new-repo-overlay").addEventListener("click", (e) => {
+      if (e.target.id === "new-repo-overlay") closeModal();
+    });
+
+    document.getElementById("preview-expand").addEventListener("click", openPreviewExpanded);
+    document.getElementById("preview-collapse").addEventListener("click", closePreviewExpanded);
+    document.getElementById("preview-expand-overlay").addEventListener("click", (e) => {
+      if (e.target.id === "preview-expand-overlay") closePreviewExpanded();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      if (document.getElementById("preview-expand-overlay").classList.contains("open")) {
+        closePreviewExpanded();
+      }
+    });
+
+    document.getElementById("index-form").addEventListener("submit", indexRepository);
+    document.getElementById("ask-form").addEventListener("submit", askQuestion);
     refreshListButton.addEventListener("click", async () => {
       setBusy(true);
       try {
         await fetchRepositories();
-        status.textContent = "Repository list updated.";
+        setStatusLine("Updated");
       } catch (error) {
-        status.textContent = error.message || "Could not refresh the list.";
+        setPill("error", friendlyError(error.message));
       } finally {
         setBusy(false);
       }
@@ -594,36 +2283,35 @@
       try {
         await ensureClientSession();
       } catch (error) {
-        status.textContent = error.message || "Could not start a session.";
+        setPill("error", "Offline");
         return;
       }
+      repositoryId = "";
       const state = loadState();
-      if (state.question) questionInput.value = state.question;
-      if (state.url) urlInput.value = state.url;
-      repositoryId = state.repositoryId || "";
       try {
         await fetchRepositories();
       } catch {
-        /* offline or first visit */
-      }
-      if (repositoryId) {
-        const current = indexedRepositories.find((item) => item.repository_id === repositoryId);
-        if (current) {
-          await selectRepository(current, { skipResume: state.indexPhase !== "indexing" });
-          return;
-        }
+        /* first visit */
       }
       if (state.indexPhase === "indexing" && state.url) {
+        urlInput.value = state.url;
         indexRun += 1;
         setBusy(true);
+        beginIndexingWorkspace(state.url);
         try {
           await pollIndexUntilReady(state.url, "", 0);
         } catch (error) {
-          status.textContent = error.message || "Could not resume indexing.";
+          finishIndexingWorkspace();
+          indexingUrl = "";
+          setPill("error", friendlyError(error.message));
+          syncAppShell();
+          renderEmptyWorkspace();
         } finally {
           setBusy(false);
         }
+        return;
       }
+      clearSelection();
     }
 
     boot();
