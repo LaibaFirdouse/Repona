@@ -62,8 +62,15 @@
     }
     .repo-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
     .repo-list li { margin: 0; }
+    .repo-row {
+      display: flex;
+      gap: 0.25rem;
+      align-items: stretch;
+    }
+    .repo-row.active .repo-item { border-color: var(--accent); background: var(--paper); }
     .repo-item {
-      width: 100%;
+      flex: 1;
+      min-width: 0;
       text-align: left;
       border: 1px solid transparent;
       border-radius: 0.5rem;
@@ -74,7 +81,17 @@
       cursor: pointer;
     }
     .repo-item:hover { background: var(--paper); }
-    .repo-item.active { border-color: var(--accent); background: var(--paper); }
+    .repo-delete {
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 0.5rem;
+      background: transparent;
+      color: var(--muted);
+      font: 600 0.75rem/1 ui-sans-serif, sans-serif;
+      padding: 0.45rem 0.5rem;
+      cursor: pointer;
+    }
+    .repo-delete:hover { color: #e8a0a0; border-color: #6a4040; }
     .repo-item .name {
       display: block;
       overflow: hidden;
@@ -245,9 +262,11 @@
       repoEmpty.hidden = true;
       for (const repo of indexedRepositories) {
         const li = document.createElement("li");
+        const row = document.createElement("div");
+        row.className = "repo-row" + (repo.repository_id === repositoryId ? " active" : "");
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "repo-item" + (repo.repository_id === repositoryId ? " active" : "");
+        btn.className = "repo-item";
         const name = document.createElement("span");
         name.className = "name";
         name.textContent = repoLabel(repo.normalized_url);
@@ -261,8 +280,56 @@
               : "Needs index";
         btn.append(name, meta);
         btn.addEventListener("click", () => selectRepository(repo));
-        li.appendChild(btn);
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "repo-delete";
+        del.title = "Remove from catalog";
+        del.textContent = "×";
+        del.addEventListener("click", (event) => deleteRepository(repo, event));
+        row.append(btn, del);
+        li.appendChild(row);
         repoList.appendChild(li);
+      }
+    }
+
+    async function deleteRepository(repo, event) {
+      event.stopPropagation();
+      const label = repoLabel(repo.normalized_url);
+      if (
+        !confirm(
+          `Remove ${label} from the catalog?\n\nThis deletes its index, chat history, and files from the server. This cannot be undone.`,
+        )
+      ) {
+        return;
+      }
+      setBusy(true);
+      status.textContent = `Removing ${label}…`;
+      try {
+        const response = await fetch(
+          `/api/v1/repositories/${encodeURIComponent(repo.repository_id)}?user_id=${encodeURIComponent(testerId)}`,
+          { method: "DELETE" },
+        );
+        if (!response.ok) throw new Error(await errorText(response));
+        if (repositoryId === repo.repository_id) {
+          repositoryId = "";
+          urlInput.value = "";
+          saveState({
+            repositoryId: "",
+            url: "",
+            indexPhase: "",
+            indexMessage: "",
+            indexStatus: "",
+            question: "",
+          });
+          questionInput.value = "";
+          renderChat([]);
+        }
+        await fetchRepositories();
+        status.textContent = `Removed ${label}.`;
+      } catch (error) {
+        status.textContent = error.message || "Could not remove this repository.";
+      } finally {
+        setBusy(false);
       }
     }
 

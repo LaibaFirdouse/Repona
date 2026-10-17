@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.schemas.qa import Citation
 from app.schemas.repository import RepositoryListResponse, RepositorySummary, QaHistoryItem, QaHistoryResponse
 from app.services.repository_catalog import list_qa_messages, list_user_repositories
+from app.services.repository_delete import RepositoryDeleteError, delete_repository
 
 router = APIRouter(tags=["repository"])
 
@@ -50,3 +51,15 @@ def repository_messages(
             )
         )
     return QaHistoryResponse(repository_id=repository_id, messages=messages)
+
+
+@router.delete("/repositories/{repository_id}", status_code=204)
+def remove_repository(
+    repository_id: str,
+    user_id: str = Query(..., min_length=1, max_length=36),
+    db: Session = Depends(get_db),
+) -> None:
+    try:
+        delete_repository(db, user_id, repository_id)
+    except RepositoryDeleteError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.detail) from error

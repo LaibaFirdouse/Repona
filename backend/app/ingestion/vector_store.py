@@ -133,6 +133,20 @@ def _payload(chunk: ChunkRecord, file, symbol, repository_id: str, fingerprint: 
     }
 
 
+def delete_points_for_repository(base_url: str, collection: str, repository_id: str) -> None:
+    _request(
+        base_url,
+        f"/collections/{collection}/points/delete?wait=true",
+        method="POST",
+        payload={
+            "filter": {
+                "must": [{"key": "repository_id", "match": {"value": repository_id}}],
+            }
+        },
+        required=True,
+    )
+
+
 def search_points(base_url: str, collection: str, vector: list[float], query_filter: dict, limit: int, offset: int) -> list[dict]:
     body = _request(
         base_url,
