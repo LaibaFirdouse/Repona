@@ -99,7 +99,7 @@ class Settings:
     rate_limit_enabled: bool = _get_bool_env("RATE_LIMIT_ENABLED", True)
     rate_limit_trust_proxy: bool = _get_bool_env("RATE_LIMIT_TRUST_PROXY", False)
     rate_limit_ask_per_minute: int = _get_int_env("RATE_LIMIT_ASK_PER_MINUTE", 12)
-    rate_limit_index_per_hour: int = _get_int_env("RATE_LIMIT_INDEX_PER_HOUR", 4)
+    rate_limit_index_per_hour: int = _get_int_env("RATE_LIMIT_INDEX_PER_HOUR", 360)
     client_session_ttl_hours: int = _get_int_env("CLIENT_SESSION_TTL_HOURS", 48)
     client_cookie_secure: bool = _get_bool_env("CLIENT_COOKIE_SECURE", False)
 

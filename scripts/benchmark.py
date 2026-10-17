@@ -268,7 +268,11 @@ def main() -> int:
             "How does AnswerService retrieve evidence for a question?",
         ),
     )
-    parser.add_argument("--user-id", default="tester")
+    parser.add_argument(
+        "--user-id",
+        default="tester",
+        help="API user_id (must be a client UUID from GET /api/v1/client when calling the HTTP API)",
+    )
     parser.add_argument("--api-url", default="", help="If set, run HTTP end-to-end against this base URL.")
     parser.add_argument("--repository-id", default="", help="With --api-url, ask this repository without indexing.")
     parser.add_argument("--index", action="store_true", help="With --api-url, run a full index before ask.")

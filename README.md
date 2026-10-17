@@ -186,7 +186,7 @@ Visit:
 
 **http://127.0.0.1:8000**
 
-Paste a GitHub repository URL, choose **Index**, then write a question and choose **Ask**. The page uses the shared tester id `tester` and remembers the last indexed repository in the browser.
+Paste a GitHub repository URL, choose **Index**, then write a question and choose **Ask**. The page assigns an anonymous **client session** (cookie + browser storage), lists every repo you indexed, keeps chat history per repo, and drops data after **48 hours** without activity.
 
 ## Configuration
 
@@ -242,7 +242,7 @@ The CLI help nevertheless states that print mode can access shell and write tool
 
 ### Rate limiting
 
-Per-IP limits are **on by default** for `POST /api/v1/ask` and `POST /api/v1/repository`. Defaults: **12 asks per minute** and **4 index requests per hour** per address. Over-limit calls receive **HTTP 429** with a `Retry-After` header. Set `RATE_LIMIT_ENABLED=false` in `.env` to disable. See `.env.example` for `RATE_LIMIT_*` variables.
+Per-IP limits are **on by default** for `POST /api/v1/ask` and `POST /api/v1/repository`. Defaults: **12 asks per minute** and **360 index POSTs per hour** per address (each index poll counts as one POST). Over-limit calls receive **HTTP 429** with a `Retry-After` header. Set `RATE_LIMIT_ENABLED=false` in `.env` to disable. See `.env.example` for `RATE_LIMIT_*` variables.
 
 The accepted run used:
 
@@ -266,7 +266,7 @@ The first successful index establishes the tracked branch. A later request to ch
 
 ## Using the API
 
-Use the same `user_id` when indexing a repository and asking questions about it. Any string up to 36 characters is accepted. The bundled demo page uses the fixed id `tester` and remembers the last indexed repository URL in the browser. API clients should choose their own stable id per person or session.
+Call **`GET /api/v1/client`** first (or use the demo page, which does this automatically) to obtain a **`client_id`**. Send that UUID as `user_id` on index, ask, list, history, and delete. Legacy short ids such as `tester` are rejected. Data for each client expires after **`CLIENT_SESSION_TTL_HOURS`** (default 48) without activity.
 
 There is no user login. The bridge token does not change that: anyone who can reach port 8000 can index a repository and ask a question.
 
@@ -420,11 +420,11 @@ After a reboot, start the data services and API with Compose and start the host 
 
 - The application does not provide user authentication. On a public deployment, anyone who can reach the URL can index and ask until rate limits apply; model cost is charged to the operator’s provider key.
 - The bridge token only authenticates calls to the Cursor bridge; public hosting in `docs/HOSTING.md` uses `CURSOR_API_KEY` and the CLI instead.
-- The demo page uses a shared `tester` user id; it is not suitable for multi-tenant use without changing that contract or adding access control.
+- Each browser gets an anonymous client id; clearing cookies starts a new empty session. This is isolation for a demo, not strong authentication.
 - The web interface does not allow model selection per question.
 - The API and host bridge must both be available for Cursor-backed answers.
 - Indexing blocks until the requested generation is ready; large repositories can take substantially longer than small ones.
-- The page does not automatically poll while indexing is in progress.
+- Index polling counts toward the per-IP index rate limit (`RATE_LIMIT_INDEX_PER_HOUR`).
 - Answer quality depends on retrieval coverage and the evidence included in the packet.
 - The Cursor CLI sandbox has not been proven to block every possible command or filesystem operation.
 - The host and container store indexed source data in separate locations.

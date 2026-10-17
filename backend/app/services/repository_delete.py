@@ -100,13 +100,10 @@ def purge_repository(db: Session, repository_id: str, *, ignore_refresh_lease: b
     db.query(Symbol).filter(Symbol.repository_id == repository_id).update({Symbol.parent_symbol_id: None})
     db.query(Symbol).filter(Symbol.repository_id == repository_id).delete()
     db.query(File).filter(File.repository_id == repository_id).delete()
-    for row in (
-        db.query(Directory)
-        .filter(Directory.repository_id == repository_id)
-        .order_by(Directory.depth.desc())
-        .all()
-    ):
-        db.delete(row)
+    db.query(Directory).filter(Directory.repository_id == repository_id).update(
+        {Directory.parent_directory_id: None}
+    )
+    db.query(Directory).filter(Directory.repository_id == repository_id).delete()
     db.query(SourceRevision).filter(SourceRevision.repository_id == repository_id).delete()
     db.query(RepositoryCredential).filter(RepositoryCredential.repository_id == repository_id).delete()
     db.query(RepositoryMember).filter(RepositoryMember.repository_id == repository_id).delete()

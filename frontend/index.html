@@ -203,7 +203,7 @@
     const chat = document.getElementById("chat");
     const repoList = document.getElementById("repo-list");
     const repoEmpty = document.getElementById("repo-empty");
-    const storageKey = "repona.tester";
+    const storageKey = "repona.ui";
     const indexPollMs = 5000;
     const indexPollMax = 360;
 
@@ -326,7 +326,7 @@
       setBusy(true);
       status.textContent = `Removing ${label}…`;
       try {
-        const response = await fetch(
+        const response = await apiFetch(
           `/api/v1/repositories/${encodeURIComponent(repo.repository_id)}?user_id=${encodeURIComponent(clientId)}`,
           { method: "DELETE" },
         );

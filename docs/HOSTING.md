@@ -40,7 +40,7 @@ All model usage is billed to **your** Cursor account. Visitors get an anonymous 
 | `RATE_LIMIT_ENABLED` | Turn limits on | `true` |
 | `RATE_LIMIT_TRUST_PROXY` | Use `X-Forwarded-For` / `X-Real-IP` | `false` with direct :8000; `true` only behind a reverse proxy |
 | `RATE_LIMIT_ASK_PER_MINUTE` | `POST /api/v1/ask` per IP | `12` |
-| `RATE_LIMIT_INDEX_PER_HOUR` | `POST /api/v1/repository` per IP | `4` |
+| `RATE_LIMIT_INDEX_PER_HOUR` | `POST /api/v1/repository` per IP (includes index polling) | `360` |
 
 Over-limit requests return **HTTP 429** with `Retry-After`. Counters are in-memory on each API instance.
 
