@@ -118,13 +118,55 @@
     const answer = document.getElementById("answer");
     const citations = document.getElementById("citations");
     const storageKey = "repona.tester";
-    const saved = JSON.parse(localStorage.getItem(storageKey) || "{}");
-    let repositoryId = saved.repositoryId || "";
-    if (saved.url) urlInput.value = saved.url;
+    const indexPollMs = 5000;
+    const indexPollMax = 360;
 
-    function remember(id, url) {
-      repositoryId = id;
-      localStorage.setItem(storageKey, JSON.stringify({ repositoryId: id, url }));
+    function loadState() {
+      try {
+        return JSON.parse(localStorage.getItem(storageKey) || "{}");
+      } catch {
+        return {};
+      }
+    }
+
+    function saveState(patch) {
+      const next = { ...loadState(), ...patch };
+      localStorage.setItem(storageKey, JSON.stringify(next));
+    }
+
+    const saved = loadState();
+    if (!saved.indexPhase && saved.repositoryId && saved.url) {
+      saveState({
+        indexPhase: "ready",
+        indexStatus: `Indexed ${saved.url}. You can ask a question.`,
+      });
+    }
+    const state = loadState();
+    let repositoryId = state.repositoryId || "";
+    if (state.url) urlInput.value = state.url;
+    if (state.question) questionInput.value = state.question;
+    if (state.indexPhase === "ready" && state.url) {
+      status.textContent = state.indexStatus || `Indexed ${state.url}. You can ask a question.`;
+    } else if (state.indexPhase === "indexing" && state.url) {
+      status.textContent = state.indexMessage || "Indexing was in progress. Resuming…";
+    }
+
+    function applyIndexResponse(body, repoUrl) {
+      const normalized = body.normalized_url || repoUrl;
+      if (body.repository_id) {
+        repositoryId = body.repository_id;
+      }
+      const ready = body.action === "serve";
+      saveState({
+        repositoryId: repositoryId || body.repository_id || "",
+        url: normalized,
+        indexPhase: ready ? "ready" : "indexing",
+        indexMessage: body.message || "",
+        indexStatus: ready
+          ? `Indexed ${normalized}${body.tracked_branch ? ` on ${body.tracked_branch}` : ""}.`
+          : "",
+      });
+      if (normalized) urlInput.value = normalized;
     }
 
     function setBusy(busy) {
@@ -171,7 +213,7 @@
     }
 
     function urlMatchesIndexed(repoUrl) {
-      const savedUrl = (JSON.parse(localStorage.getItem(storageKey) || "{}").url || "").trim();
+      const savedUrl = (loadState().url || "").trim();
       return Boolean(repositoryId && savedUrl && repoUrl === savedUrl);
     }
 
@@ -179,37 +221,80 @@
       const repoUrl = urlInput.value.trim();
       if (repoUrl && !urlMatchesIndexed(repoUrl)) {
         repositoryId = "";
+        saveState({
+          repositoryId: "",
+          indexPhase: "",
+          indexMessage: "",
+          indexStatus: "",
+        });
         status.textContent = "Index this repository before asking.";
       }
     });
 
+    questionInput.addEventListener("input", () => {
+      saveState({ question: questionInput.value });
+    });
+
+    let indexRun = 0;
+
+    async function pollIndexUntilReady(repoUrl, token, startPolls) {
+      const runId = indexRun;
+      let body = await postIndex(repoUrl, token);
+      applyIndexResponse(body, repoUrl);
+      let polls = startPolls;
+      while (body.action === "wait" && polls < indexPollMax && runId === indexRun) {
+        status.textContent = body.message || "Still indexing. Large repositories can take up to 30 minutes.";
+        await sleep(indexPollMs);
+        body = await postIndex(repoUrl, token);
+        applyIndexResponse(body, repoUrl);
+        polls += 1;
+      }
+      if (body.action === "serve") {
+        const state = loadState();
+        status.textContent = state.indexStatus || `Indexed ${body.normalized_url || repoUrl}.`;
+      } else if (polls >= indexPollMax) {
+        status.textContent = body.message || "Indexing is taking longer than expected. Keep this page open or refresh to resume.";
+      } else {
+        status.textContent = body.message || "This commit is not ready yet. Try Index again in a minute.";
+      }
+      return body;
+    }
+
     async function indexRepository(event) {
-      event.preventDefault();
+      if (event) event.preventDefault();
       const repoUrl = urlInput.value.trim();
       if (!repoUrl) return;
+      indexRun += 1;
       setBusy(true);
       status.textContent = "Indexing. A public repository can take a few minutes.";
       answer.textContent = "";
       showCitations([]);
       try {
         const token = tokenInput.value.trim();
-        let body = await postIndex(repoUrl, token);
-        let polls = 0;
-        while (body.action === "wait" && polls < 360) {
-          status.textContent = body.message || "Still indexing. Large repositories can take up to 30 minutes.";
-          await sleep(5000);
-          body = await postIndex(repoUrl, token);
-          polls += 1;
-        }
-        remember(body.repository_id, body.normalized_url);
-        urlInput.value = body.normalized_url || repoUrl;
-        if (body.action === "serve") {
-          status.textContent = `Indexed ${body.normalized_url} on ${body.tracked_branch}.`;
-        } else {
-          status.textContent = body.message || "This commit is not ready yet. Try Index again in a minute.";
-        }
+        await pollIndexUntilReady(repoUrl, token, 0);
       } catch (error) {
         status.textContent = error.message || "The request failed.";
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function resumeIndexingIfNeeded() {
+      const state = loadState();
+      const repoUrl = (state.url || urlInput.value || "").trim();
+      if (!repoUrl) return;
+      if (state.indexPhase !== "indexing") {
+        if (state.indexPhase === "ready" && state.repositoryId) {
+          repositoryId = state.repositoryId;
+        }
+        return;
+      }
+      indexRun += 1;
+      setBusy(true);
+      try {
+        await pollIndexUntilReady(repoUrl, tokenInput.value.trim(), 0);
+      } catch (error) {
+        status.textContent = error.message || "Could not resume indexing. Press Index to retry.";
       } finally {
         setBusy(false);
       }
@@ -258,6 +343,7 @@
 
     document.getElementById("composer").addEventListener("submit", indexRepository);
     askButton.addEventListener("click", askQuestion);
+    resumeIndexingIfNeeded();
   </script>
 </body>
 </html>
