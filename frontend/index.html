@@ -13,6 +13,8 @@
       --paper: #141210;
       --card: #1e1b18;
       --accent: #e7a18a;
+      --ready: #8fbc8f;
+      --indexing: #d4a574;
     }
     * { box-sizing: border-box; }
     body {
@@ -22,25 +24,68 @@
       color: var(--ink);
       background: var(--paper);
     }
-    .app {
-      max-width: 40rem;
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(12rem, 16rem) 1fr;
+      gap: 1rem;
+      max-width: 56rem;
       margin: 0 auto;
       padding: 1.5rem 1rem 2rem;
     }
+    @media (max-width: 720px) {
+      .layout { grid-template-columns: 1fr; }
+    }
     header {
+      grid-column: 1 / -1;
       display: flex;
       justify-content: space-between;
       gap: 1rem;
       align-items: baseline;
-      margin-bottom: 1.25rem;
     }
     h1 { margin: 0; font-size: 1.4rem; font-weight: 600; }
-    .tester {
-      margin: 0;
-      color: var(--muted);
-      font-size: 0.85rem;
-    }
+    .tester { margin: 0; color: var(--muted); font-size: 0.85rem; }
     .tester code { color: var(--ink); }
+    .sidebar {
+      padding: 0.75rem;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 0.8rem;
+      min-height: 8rem;
+    }
+    .sidebar h2 {
+      margin: 0 0 0.6rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .repo-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+    .repo-list li { margin: 0; }
+    .repo-item {
+      width: 100%;
+      text-align: left;
+      border: 1px solid transparent;
+      border-radius: 0.5rem;
+      background: transparent;
+      color: var(--ink);
+      font: 0.82rem/1.35 ui-sans-serif, sans-serif;
+      padding: 0.5rem 0.55rem;
+      cursor: pointer;
+    }
+    .repo-item:hover { background: var(--paper); }
+    .repo-item.active { border-color: var(--accent); background: var(--paper); }
+    .repo-item .name {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .repo-item .meta { color: var(--muted); font-size: 0.72rem; margin-top: 0.15rem; }
+    .repo-item .meta.ready { color: var(--ready); }
+    .repo-item .meta.indexing { color: var(--indexing); }
+    .repo-empty { color: var(--muted); font-size: 0.85rem; margin: 0; }
+    .main { min-width: 0; }
     form {
       display: grid;
       gap: 0.75rem;
@@ -61,7 +106,7 @@
     }
     textarea { min-height: 4.5rem; resize: vertical; }
     input:focus, textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
-    .actions { display: flex; gap: 0.6rem; justify-content: flex-end; }
+    .actions { display: flex; gap: 0.6rem; justify-content: flex-end; flex-wrap: wrap; }
     button {
       border: 0;
       border-radius: 0.55rem;
@@ -71,41 +116,61 @@
       padding: 0.75rem 0.95rem;
       cursor: pointer;
     }
+    button.secondary {
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
     button:disabled { opacity: 0.55; cursor: progress; }
     .status { margin: 1rem 0 0; color: var(--muted); min-height: 1.2rem; }
-    .answer {
+    .chat {
       margin-top: 1rem;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-      line-height: 1.5;
+      display: grid;
+      gap: 1rem;
     }
-    .citations { margin: 0.75rem 0 0; padding-left: 1.1rem; color: var(--muted); }
+    .turn {
+      padding: 0.85rem 1rem;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 0.8rem;
+    }
+    .turn .q { font-weight: 600; margin-bottom: 0.5rem; }
+    .turn .a { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+    .citations { margin: 0.5rem 0 0; padding-left: 1.1rem; color: var(--muted); font-size: 0.85rem; }
+    .chat-empty { color: var(--muted); font-size: 0.9rem; }
   </style>
 </head>
 <body>
-  <div class="app">
+  <div class="layout">
     <header>
       <h1>Repona</h1>
       <p class="tester">Tester id <code id="tester">tester</code></p>
     </header>
-    <form id="composer">
-      <label>GitHub URL
-        <input id="url" type="url" placeholder="https://github.com/owner/repository" required>
-      </label>
-      <label>GitHub token, only for a private repository
-        <input id="token" type="password" autocomplete="off">
-      </label>
-      <label>Question
-        <textarea id="question" placeholder="Ask about behavior, symbols, or files in the indexed commit…"></textarea>
-      </label>
-      <div class="actions">
-        <button id="index" type="submit">Index</button>
-        <button id="ask" type="button">Ask</button>
-      </div>
-    </form>
-    <p class="status" id="status"></p>
-    <div class="answer" id="answer"></div>
-    <ul class="citations" id="citations"></ul>
+    <aside class="sidebar">
+      <h2>Indexed repositories</h2>
+      <ul class="repo-list" id="repo-list"></ul>
+      <p class="repo-empty" id="repo-empty" hidden>No repositories indexed yet.</p>
+    </aside>
+    <div class="main">
+      <form id="composer">
+        <label>GitHub URL
+          <input id="url" type="url" placeholder="https://github.com/owner/repository" required>
+        </label>
+        <label>GitHub token, only for a private repository
+          <input id="token" type="password" autocomplete="off">
+        </label>
+        <label>Question
+          <textarea id="question" placeholder="Ask about behavior, symbols, or files in the indexed commit…"></textarea>
+        </label>
+        <div class="actions">
+          <button id="index" type="submit">Index</button>
+          <button id="ask" type="button">Ask</button>
+          <button id="refresh-list" type="button" class="secondary">Refresh list</button>
+        </div>
+      </form>
+      <p class="status" id="status"></p>
+      <div class="chat" id="chat"></div>
+    </div>
   </div>
   <script>
     const testerId = "tester";
@@ -114,12 +179,18 @@
     const questionInput = document.getElementById("question");
     const indexButton = document.getElementById("index");
     const askButton = document.getElementById("ask");
+    const refreshListButton = document.getElementById("refresh-list");
     const status = document.getElementById("status");
-    const answer = document.getElementById("answer");
-    const citations = document.getElementById("citations");
+    const chat = document.getElementById("chat");
+    const repoList = document.getElementById("repo-list");
+    const repoEmpty = document.getElementById("repo-empty");
     const storageKey = "repona.tester";
     const indexPollMs = 5000;
     const indexPollMax = 360;
+
+    let repositoryId = "";
+    let indexedRepositories = [];
+    let indexRun = 0;
 
     function loadState() {
       try {
@@ -134,55 +205,20 @@
       localStorage.setItem(storageKey, JSON.stringify(next));
     }
 
-    const saved = loadState();
-    if (!saved.indexPhase && saved.repositoryId && saved.url) {
-      saveState({
-        indexPhase: "ready",
-        indexStatus: `Indexed ${saved.url}. You can ask a question.`,
-      });
-    }
-    const state = loadState();
-    let repositoryId = state.repositoryId || "";
-    if (state.url) urlInput.value = state.url;
-    if (state.question) questionInput.value = state.question;
-    if (state.indexPhase === "ready" && state.url) {
-      status.textContent = state.indexStatus || `Indexed ${state.url}. You can ask a question.`;
-    } else if (state.indexPhase === "indexing" && state.url) {
-      status.textContent = state.indexMessage || "Indexing was in progress. Resuming…";
-    }
-
-    function applyIndexResponse(body, repoUrl) {
-      const normalized = body.normalized_url || repoUrl;
-      if (body.repository_id) {
-        repositoryId = body.repository_id;
+    function repoLabel(url) {
+      try {
+        const parts = new URL(url).pathname.split("/").filter(Boolean);
+        if (parts.length >= 2) return `${parts[0]}/${parts[1]}`;
+      } catch {
+        /* ignore */
       }
-      const ready = body.action === "serve";
-      saveState({
-        repositoryId: repositoryId || body.repository_id || "",
-        url: normalized,
-        indexPhase: ready ? "ready" : "indexing",
-        indexMessage: body.message || "",
-        indexStatus: ready
-          ? `Indexed ${normalized}${body.tracked_branch ? ` on ${body.tracked_branch}` : ""}.`
-          : "",
-      });
-      if (normalized) urlInput.value = normalized;
+      return url;
     }
 
     function setBusy(busy) {
       indexButton.disabled = busy;
       askButton.disabled = busy;
-    }
-
-    function showCitations(items) {
-      citations.replaceChildren();
-      for (const citation of items || []) {
-        const line = document.createElement("li");
-        const start = citation.start_line;
-        const end = citation.end_line;
-        line.textContent = start && end ? `${citation.path}, lines ${start}–${end}` : citation.path;
-        citations.appendChild(line);
-      }
+      refreshListButton.disabled = busy;
     }
 
     function sleep(ms) {
@@ -200,6 +236,131 @@
       return "The request failed.";
     }
 
+    function renderRepoList() {
+      repoList.replaceChildren();
+      if (!indexedRepositories.length) {
+        repoEmpty.hidden = false;
+        return;
+      }
+      repoEmpty.hidden = true;
+      for (const repo of indexedRepositories) {
+        const li = document.createElement("li");
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "repo-item" + (repo.repository_id === repositoryId ? " active" : "");
+        const name = document.createElement("span");
+        name.className = "name";
+        name.textContent = repoLabel(repo.normalized_url);
+        const meta = document.createElement("span");
+        meta.className = "meta " + repo.index_state;
+        meta.textContent =
+          repo.index_state === "ready"
+            ? "Ready"
+            : repo.index_state === "indexing"
+              ? "Indexing…"
+              : "Needs index";
+        btn.append(name, meta);
+        btn.addEventListener("click", () => selectRepository(repo));
+        li.appendChild(btn);
+        repoList.appendChild(li);
+      }
+    }
+
+    function renderChat(messages) {
+      chat.replaceChildren();
+      if (!messages.length) {
+        const empty = document.createElement("p");
+        empty.className = "chat-empty";
+        empty.textContent = "Questions and answers for the selected repository appear here.";
+        chat.appendChild(empty);
+        return;
+      }
+      for (const turn of messages) {
+        const block = document.createElement("article");
+        block.className = "turn";
+        const q = document.createElement("div");
+        q.className = "q";
+        q.textContent = turn.question;
+        const a = document.createElement("div");
+        a.className = "a";
+        a.textContent = turn.answer || "(No answer text)";
+        block.append(q, a);
+        if (turn.citations && turn.citations.length) {
+          const ul = document.createElement("ul");
+          ul.className = "citations";
+          for (const citation of turn.citations) {
+            const line = document.createElement("li");
+            const start = citation.start_line;
+            const end = citation.end_line;
+            line.textContent =
+              start && end ? `${citation.path}, lines ${start}–${end}` : citation.path;
+            ul.appendChild(line);
+          }
+          block.appendChild(ul);
+        }
+        chat.appendChild(block);
+      }
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    async function fetchRepositories() {
+      const response = await fetch(`/api/v1/repositories?user_id=${encodeURIComponent(testerId)}`);
+      if (!response.ok) throw new Error(await errorText(response));
+      const body = await response.json();
+      indexedRepositories = body.repositories || [];
+      renderRepoList();
+    }
+
+    async function fetchChatHistory(id) {
+      const response = await fetch(
+        `/api/v1/repositories/${encodeURIComponent(id)}/messages?user_id=${encodeURIComponent(testerId)}`,
+      );
+      if (!response.ok) throw new Error(await errorText(response));
+      const body = await response.json();
+      renderChat(body.messages || []);
+    }
+
+    async function selectRepository(repo, options) {
+      const opts = options || {};
+      repositoryId = repo.repository_id;
+      urlInput.value = repo.normalized_url;
+      saveState({
+        repositoryId: repo.repository_id,
+        url: repo.normalized_url,
+        indexPhase: repo.index_state === "ready" ? "ready" : repo.index_state === "indexing" ? "indexing" : "wait",
+      });
+      renderRepoList();
+      if (!opts.skipHistory) {
+        try {
+          await fetchChatHistory(repositoryId);
+        } catch (error) {
+          status.textContent = error.message || "Could not load chat history.";
+        }
+      }
+      if (repo.index_state === "ready") {
+        status.textContent = `Selected ${repoLabel(repo.normalized_url)} (ready). Ask a question — no re-index needed.`;
+        questionInput.focus();
+        return;
+      }
+      if (repo.index_state === "indexing") {
+        status.textContent = "Indexing in progress for this repository…";
+        if (!opts.skipResume) {
+          indexRun += 1;
+          setBusy(true);
+          try {
+            await pollIndexUntilReady(repo.normalized_url, tokenInput.value.trim(), 0);
+            await fetchRepositories();
+          } catch (error) {
+            status.textContent = error.message || "Could not resume indexing.";
+          } finally {
+            setBusy(false);
+          }
+        }
+        return;
+      }
+      status.textContent = "This repository needs indexing. Press Index when the URL is correct.";
+    }
+
     async function postIndex(repoUrl, token) {
       const payload = { repo_url: repoUrl, user_id: testerId };
       if (token) payload.access_token = token;
@@ -212,30 +373,21 @@
       return response.json();
     }
 
-    function urlMatchesIndexed(repoUrl) {
-      const savedUrl = (loadState().url || "").trim();
-      return Boolean(repositoryId && savedUrl && repoUrl === savedUrl);
+    function applyIndexResponse(body, repoUrl) {
+      const normalized = body.normalized_url || repoUrl;
+      if (body.repository_id) repositoryId = body.repository_id;
+      const ready = body.action === "serve";
+      saveState({
+        repositoryId: repositoryId || body.repository_id || "",
+        url: normalized,
+        indexPhase: ready ? "ready" : "indexing",
+        indexMessage: body.message || "",
+        indexStatus: ready
+          ? `Indexed ${normalized}${body.tracked_branch ? ` on ${body.tracked_branch}` : ""}.`
+          : "",
+      });
+      if (normalized) urlInput.value = normalized;
     }
-
-    urlInput.addEventListener("input", () => {
-      const repoUrl = urlInput.value.trim();
-      if (repoUrl && !urlMatchesIndexed(repoUrl)) {
-        repositoryId = "";
-        saveState({
-          repositoryId: "",
-          indexPhase: "",
-          indexMessage: "",
-          indexStatus: "",
-        });
-        status.textContent = "Index this repository before asking.";
-      }
-    });
-
-    questionInput.addEventListener("input", () => {
-      saveState({ question: questionInput.value });
-    });
-
-    let indexRun = 0;
 
     async function pollIndexUntilReady(repoUrl, token, startPolls) {
       const runId = indexRun;
@@ -250,13 +402,16 @@
         polls += 1;
       }
       if (body.action === "serve") {
-        const state = loadState();
-        status.textContent = state.indexStatus || `Indexed ${body.normalized_url || repoUrl}.`;
+        status.textContent = loadState().indexStatus || `Indexed ${body.normalized_url || repoUrl}.`;
       } else if (polls >= indexPollMax) {
-        status.textContent = body.message || "Indexing is taking longer than expected. Keep this page open or refresh to resume.";
+        status.textContent =
+          body.message || "Indexing is taking longer than expected. Refresh the page to resume.";
       } else {
         status.textContent = body.message || "This commit is not ready yet. Try Index again in a minute.";
       }
+      await fetchRepositories();
+      const match = indexedRepositories.find((item) => item.repository_id === repositoryId);
+      if (match) renderRepoList();
       return body;
     }
 
@@ -267,34 +422,11 @@
       indexRun += 1;
       setBusy(true);
       status.textContent = "Indexing. A public repository can take a few minutes.";
-      answer.textContent = "";
-      showCitations([]);
       try {
         const token = tokenInput.value.trim();
         await pollIndexUntilReady(repoUrl, token, 0);
       } catch (error) {
         status.textContent = error.message || "The request failed.";
-      } finally {
-        setBusy(false);
-      }
-    }
-
-    async function resumeIndexingIfNeeded() {
-      const state = loadState();
-      const repoUrl = (state.url || urlInput.value || "").trim();
-      if (!repoUrl) return;
-      if (state.indexPhase !== "indexing") {
-        if (state.indexPhase === "ready" && state.repositoryId) {
-          repositoryId = state.repositoryId;
-        }
-        return;
-      }
-      indexRun += 1;
-      setBusy(true);
-      try {
-        await pollIndexUntilReady(repoUrl, tokenInput.value.trim(), 0);
-      } catch (error) {
-        status.textContent = error.message || "Could not resume indexing. Press Index to retry.";
       } finally {
         setBusy(false);
       }
@@ -307,13 +439,12 @@
         return;
       }
       if (!repositoryId) {
-        status.textContent = "Index a repository before asking.";
+        status.textContent = "Select or index a repository before asking.";
         return;
       }
       setBusy(true);
       status.textContent = "Asking.";
-      answer.textContent = "";
-      showCitations([]);
+      saveState({ question });
       try {
         const response = await fetch("/api/v1/ask", {
           method: "POST",
@@ -326,13 +457,13 @@
         });
         if (!response.ok) throw new Error(await errorText(response));
         const body = await response.json();
-        showCitations(body.citations);
         if (body.action === "wait") {
-          answer.textContent = "";
           status.textContent = body.message || "This commit is not ready yet. Index again or wait a moment.";
         } else {
-          answer.textContent = (body.answer || "").trim() || "No answer was returned.";
           status.textContent = "";
+          questionInput.value = "";
+          saveState({ question: "" });
+          await fetchChatHistory(repositoryId);
         }
       } catch (error) {
         status.textContent = error.message || "The request failed.";
@@ -341,9 +472,67 @@
       }
     }
 
+    urlInput.addEventListener("input", () => {
+      const repoUrl = urlInput.value.trim();
+      const savedUrl = (loadState().url || "").trim();
+      if (repoUrl && savedUrl && repoUrl !== savedUrl) {
+        repositoryId = "";
+        saveState({ repositoryId: "", indexPhase: "", indexMessage: "", indexStatus: "" });
+        renderRepoList();
+        status.textContent = "Index this repository or pick one from the list.";
+        renderChat([]);
+      }
+    });
+
+    questionInput.addEventListener("input", () => {
+      saveState({ question: questionInput.value });
+    });
+
     document.getElementById("composer").addEventListener("submit", indexRepository);
     askButton.addEventListener("click", askQuestion);
-    resumeIndexingIfNeeded();
+    refreshListButton.addEventListener("click", async () => {
+      setBusy(true);
+      try {
+        await fetchRepositories();
+        status.textContent = "Repository list updated.";
+      } catch (error) {
+        status.textContent = error.message || "Could not refresh the list.";
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    async function boot() {
+      const state = loadState();
+      if (state.question) questionInput.value = state.question;
+      if (state.url) urlInput.value = state.url;
+      repositoryId = state.repositoryId || "";
+      try {
+        await fetchRepositories();
+      } catch {
+        /* offline or first visit */
+      }
+      if (repositoryId) {
+        const current = indexedRepositories.find((item) => item.repository_id === repositoryId);
+        if (current) {
+          await selectRepository(current, { skipResume: state.indexPhase !== "indexing" });
+          return;
+        }
+      }
+      if (state.indexPhase === "indexing" && state.url) {
+        indexRun += 1;
+        setBusy(true);
+        try {
+          await pollIndexUntilReady(state.url, "", 0);
+        } catch (error) {
+          status.textContent = error.message || "Could not resume indexing.";
+        } finally {
+          setBusy(false);
+        }
+      }
+    }
+
+    boot();
   </script>
 </body>
 </html>

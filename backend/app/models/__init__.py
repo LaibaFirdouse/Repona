@@ -11,6 +11,7 @@ from app.models.catalog import (
     SourceRevision,
     Symbol,
 )
+from app.models.qa_history import RepositoryQaMessage
 from app.models.repository import Repository, RepositoryCredential, RepositoryMember, User
 
 __all__ = [
@@ -23,6 +24,7 @@ __all__ = [
     "GenerationFile",
     "GenerationPin",
     "IndexGeneration",
+    "RepositoryQaMessage",
     "Repository",
     "RepositoryCredential",
     "RepositoryMember",

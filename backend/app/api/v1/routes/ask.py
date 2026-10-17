@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.qa import ASK_PROVIDERS, RepositoryQuestionRequest, RepositoryQuestionResponse
+from app.services.repository_catalog import record_qa_message
 from app.services.refresh_service import RefreshError, RefreshService
 from app.retrieval.answer import AnswerService, Cancelled, RetrievalError
 from app.services.llm.base import LLMProviderError
@@ -44,6 +45,17 @@ def ask_repository_question(
         raise HTTPException(status_code=error.status_code, detail=error.detail) from error
     except Cancelled as error:
         raise HTTPException(status_code=408, detail="the question was cancelled") from error
+    if outcome.action == "serve" and answered is not None:
+        record_qa_message(
+            db,
+            user_id=request.user_id,
+            repository_id=outcome.repository_id,
+            question=request.question,
+            answer=answered.answer,
+            citations=list(answered.citations),
+            generation_id=outcome.generation_id,
+            commit_sha=outcome.commit_sha,
+        )
     return RepositoryQuestionResponse(
         repository_id=outcome.repository_id,
         question=request.question,
