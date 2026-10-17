@@ -4,7 +4,21 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.services.llm.base import LLMProviderError
+from app.services.llm.cursor_bridge import ask_command
 from app.services.llm.cursor_provider import CursorProvider, _cursor_cli_ready
+
+
+class AskCommandTests(unittest.TestCase):
+    def test_default_includes_sandbox(self) -> None:
+        with patch.dict(os.environ, {"CURSOR_SANDBOX": "enabled"}, clear=False):
+            command = ask_command("agent", "composer-2.5-fast", "/tmp/ws", "hi")
+        index = command.index("--sandbox")
+        self.assertEqual(command[index + 1], "enabled")
+
+    def test_disabled_omits_sandbox(self) -> None:
+        with patch.dict(os.environ, {"CURSOR_SANDBOX": "disabled"}, clear=False):
+            command = ask_command("agent", "composer-2.5-fast", "/tmp/ws", "hi")
+        self.assertNotIn("--sandbox", command)
 
 
 class CursorCliReadyTests(unittest.TestCase):

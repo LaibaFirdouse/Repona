@@ -23,6 +23,7 @@ There is **no** `CURSOR_BRIDGE_URL` and **no** separate bridge systemd unit in t
 | `CURSOR_API_KEY` | User API key from [Cursor Dashboard → API Keys](https://cursor.com/dashboard) (`crsr_…`); **never** commit it |
 | `CURSOR_MODEL` | e.g. `composer-2.5-fast` |
 | `CURSOR_AGENT_BIN` | `agent` on `PATH`, or full path to the binary |
+| `CURSOR_SANDBOX` | **`disabled`** in `docker-compose.hosted.yml` — Linux containers cannot start the Cursor sandbox (AppArmor); allowlist + `--trust` is used instead |
 | `CURSOR_BRIDGE_URL` | **Unset or empty** |
 | `CURSOR_BRIDGE_TOKEN` | **Unset** |
 

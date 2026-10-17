@@ -19,6 +19,7 @@ services:
       CURSOR_API_KEY: ${CURSOR_API_KEY:?set CURSOR_API_KEY in .env}
       CURSOR_BRIDGE_URL: ""
       CURSOR_AGENT_BIN: agent
+      CURSOR_SANDBOX: disabled
       DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
       QDRANT_URL: ${QDRANT_URL:?set QDRANT_URL in .env}
       QDRANT_API_KEY: ${QDRANT_API_KEY:?set QDRANT_API_KEY in .env}

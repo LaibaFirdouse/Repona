@@ -2,4 +2,7 @@
 set -e
 mkdir -p /app/data
 chown -R repona:repona /app/data
-exec runuser -u repona -- "$@"
+if [ "$(id -u)" = 0 ]; then
+  exec setpriv --reuid=repona --regid=repona --init-groups "$@"
+fi
+exec "$@"

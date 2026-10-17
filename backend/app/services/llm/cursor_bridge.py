@@ -65,23 +65,29 @@ def completion_prompt(system_message: str, user_message: str, max_output_tokens:
     )
 
 
+def cursor_sandbox_enabled() -> bool:
+    """Host bridge uses sandbox when available. Docker/EC2 often cannot start it."""
+    mode = os.getenv("CURSOR_SANDBOX", "enabled").strip().lower()
+    return mode in {"enabled", "enable", "true", "1", "yes"}
+
+
 def ask_command(executable: str, model: str, workspace: str, prompt: str) -> list[str]:
-    return [
-        executable,
-        "--print",
-        "--mode",
-        "ask",
-        "--sandbox",
-        "enabled",
-        "--trust",
-        "--workspace",
-        workspace,
-        "--model",
-        model,
-        "--output-format",
-        "json",
-        prompt,
-    ]
+    command = [executable, "--print", "--mode", "ask"]
+    if cursor_sandbox_enabled():
+        command.extend(["--sandbox", "enabled"])
+    command.extend(
+        [
+            "--trust",
+            "--workspace",
+            workspace,
+            "--model",
+            model,
+            "--output-format",
+            "json",
+            prompt,
+        ]
+    )
+    return command
 
 
 def cursor_cli_environment() -> dict[str, str]:
