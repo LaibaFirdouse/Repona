@@ -15,6 +15,8 @@ def create_database_tables() -> None:
 
     with engine.begin() as connection:
         connection.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity_at TIMESTAMP"))
+        connection.execute(text("UPDATE users SET last_activity_at = created_at WHERE last_activity_at IS NULL"))
     Base.metadata.create_all(bind=engine)
 
 

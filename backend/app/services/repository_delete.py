@@ -53,6 +53,21 @@ def delete_repository(db: Session, user_id: str, repository_id: str) -> None:
     now = datetime.utcnow()
     if refresh_lease_held(repository.refresh_lease_expires_at, repository.refresh_heartbeat_at, now):
         raise RepositoryDeleteError(409, "wait until indexing finishes before deleting this repository")
+    purge_repository(db, repository_id, ignore_refresh_lease=False)
+
+
+def purge_repository(db: Session, repository_id: str, *, ignore_refresh_lease: bool = False) -> None:
+    repository = db.get(Repository, repository_id)
+    if repository is None:
+        return
+
+    now = datetime.utcnow()
+    if not ignore_refresh_lease and refresh_lease_held(
+        repository.refresh_lease_expires_at,
+        repository.refresh_heartbeat_at,
+        now,
+    ):
+        return
 
     generations = db.query(IndexGeneration).filter(IndexGeneration.repository_id == repository_id).all()
     collection_names = {row.qdrant_collection for row in generations if row.qdrant_collection}

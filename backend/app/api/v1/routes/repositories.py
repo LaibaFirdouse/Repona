@@ -5,6 +5,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.api.deps import client_user_id
 from app.db.session import get_db
 from app.schemas.qa import Citation
 from app.schemas.repository import RepositoryListResponse, RepositorySummary, QaHistoryItem, QaHistoryResponse
@@ -19,7 +20,7 @@ def list_repositories(
     user_id: str = Query(..., min_length=1, max_length=36),
     db: Session = Depends(get_db),
 ) -> RepositoryListResponse:
-    rows = list_user_repositories(db, user_id)
+    rows = list_user_repositories(db, client_user_id(db, user_id))
     return RepositoryListResponse(repositories=[RepositorySummary(**row) for row in rows])
 
 
@@ -29,10 +30,11 @@ def repository_messages(
     user_id: str = Query(..., min_length=1, max_length=36),
     db: Session = Depends(get_db),
 ) -> QaHistoryResponse:
-    known = list_user_repositories(db, user_id)
+    scoped = client_user_id(db, user_id)
+    known = list_user_repositories(db, scoped)
     if not any(item["repository_id"] == repository_id for item in known):
         raise HTTPException(status_code=404, detail="repository was not found")
-    rows = list_qa_messages(db, user_id, repository_id)
+    rows = list_qa_messages(db, scoped, repository_id)
     messages: list[QaHistoryItem] = []
     for row in rows:
         try:
@@ -60,6 +62,6 @@ def remove_repository(
     db: Session = Depends(get_db),
 ) -> None:
     try:
-        delete_repository(db, user_id, repository_id)
+        delete_repository(db, client_user_id(db, user_id), repository_id)
     except RepositoryDeleteError as error:
         raise HTTPException(status_code=error.status_code, detail=error.detail) from error

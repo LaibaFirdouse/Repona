@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.deps import client_user_id
 from app.db.session import get_db
 from app.schemas.repository import RepositoryCreateRequest, RepositoryCreateResponse
 from app.services.refresh_service import RefreshError, RefreshService
@@ -19,7 +20,7 @@ def create_repository(
             db,
             str(request.repo_url),
             request.tracked_branch,
-            request.user_id,
+            client_user_id(db, request.user_id),
             request.access_token,
         )
     except RefreshError as error:

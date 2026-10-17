@@ -31,7 +31,7 @@ In `APP_ENV=production`, the API requires **`CURSOR_API_KEY`** whenever the brid
 
 The hosted image installs the [Cursor CLI](https://cursor.com/docs/cli/reference/authentication) at build time. The key is passed through the process environment to `agent`; visitors never see it.
 
-All model usage is billed to **your** Cursor account. The fixed `tester` user id is only for repository membership in Postgres, not authentication.
+All model usage is billed to **your** Cursor account. Visitors get an anonymous **client id** (cookie + browser storage), not login. Repos and chat are scoped to that id and removed after **`CLIENT_SESSION_TTL_HOURS`** (default **48**) without activity. IP rate limits still apply.
 
 ## Rate limiting
 
@@ -124,7 +124,7 @@ Co-locate Neon, Qdrant, and Neo4j in the same region as EC2 when you can. Run `n
 
 | Topic | Guidance |
 |---|---|
-| Visitor repos | Any **public** GitHub URL. Each visitor indexes their own choice (same shared `tester` id on the demo page). Large monorepos need more RAM (**t4g.medium+**) and longer index waits (the page polls up to **30 minutes**). |
+| Visitor repos | Any **public** GitHub URL. Each browser session has its own client id, list, and chat. Large monorepos need more RAM (**t4g.medium+**) and longer index waits (the page polls up to **30 minutes**). |
 | Dev benchmarks | `npm run benchmark` defaults to this monorepo URL for latency work — not enforced in the UI. |
 | Shared Postgres | If you indexed on a laptop then moved to EC2, run **`npm run repair:catalog`** on the VM (or `scripts/repair_catalog.py --all --reset-expired-refresh`) so `git_dir` and snapshot paths point at `/app/data`. |
 | Interrupted index | Wait up to **10 minutes** for the refresh lease to expire, or run repair with **`--reset-expired-refresh`**. The demo page **polls Index** while `action` is `wait`. |

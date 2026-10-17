@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.deps import client_user_id
 from app.db.session import get_db
 from app.schemas.qa import ASK_PROVIDERS, RepositoryQuestionRequest, RepositoryQuestionResponse
 from app.services.repository_catalog import record_qa_message
@@ -27,7 +28,8 @@ def ask_repository_question(
     db: Session = Depends(get_db),
 ) -> RepositoryQuestionResponse:
     try:
-        outcome = refresh_service.ask(db, request.repository_id, request.user_id)
+        user_id = client_user_id(db, request.user_id)
+        outcome = refresh_service.ask(db, request.repository_id, user_id)
         answered = None
         if outcome.action == "serve":
             answered = answer_service.answer(
@@ -48,7 +50,7 @@ def ask_repository_question(
     if outcome.action == "serve" and answered is not None:
         record_qa_message(
             db,
-            user_id=request.user_id,
+            user_id=user_id,
             repository_id=outcome.repository_id,
             question=request.question,
             answer=answered.answer,

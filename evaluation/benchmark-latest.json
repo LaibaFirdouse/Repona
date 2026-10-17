@@ -1,0 +1,142 @@
+{
+  "generated_at": "2026-10-17T06:44:52.592054+00:00",
+  "environment": "local",
+  "targets": {
+    "postgres": "configured",
+    "qdrant": "https://6086a338-5d0c-4d3b-b55b-e2cd89f58c16.australia-southeast1-0.gcp.cloud.qdrant.io",
+    "neo4j": "neo4j+s://82fc82fe.databases.neo4j.io",
+    "llm_provider": "cursor"
+  },
+  "components": {
+    "postgres": {
+      "label": "postgres_ping_and_repo_count",
+      "ok": true,
+      "samples_ms": [
+        293.3,
+        231.3,
+        217.6
+      ],
+      "mean_ms": 247.4,
+      "min_ms": 217.6,
+      "max_ms": 293.3
+    },
+    "neo4j": {
+      "label": "neo4j_verify_and_query",
+      "ok": true,
+      "samples_ms": [
+        1217.9,
+        656.5,
+        672.0
+      ],
+      "mean_ms": 848.8,
+      "min_ms": 656.5,
+      "max_ms": 1217.9
+    },
+    "qdrant": {
+      "label": "qdrant_list_collections",
+      "ok": true,
+      "samples_ms": [
+        735.3,
+        623.3,
+        593.6
+      ],
+      "mean_ms": 650.8,
+      "min_ms": 593.6,
+      "max_ms": 735.3
+    },
+    "embedding": {
+      "single_cold": {
+        "label": "embedding_single_cold",
+        "ok": true,
+        "samples_ms": [
+          28910.8
+        ],
+        "mean_ms": 28910.8,
+        "min_ms": 28910.8,
+        "max_ms": 28910.8
+      },
+      "single_warm": {
+        "label": "embedding_single_warm",
+        "ok": true,
+        "samples_ms": [
+          36.3,
+          30.7,
+          28.5,
+          29.7,
+          28.1
+        ],
+        "mean_ms": 30.7,
+        "min_ms": 28.1,
+        "max_ms": 36.3
+      },
+      "batch_8": {
+        "label": "embedding_batch_8",
+        "ok": true,
+        "samples_ms": [
+          56.2,
+          53.0,
+          50.3
+        ],
+        "mean_ms": 53.2,
+        "min_ms": 50.3,
+        "max_ms": 56.2
+      }
+    },
+    "git_probe": {
+      "label": "github_probe_head",
+      "ok": true,
+      "samples_ms": [
+        1137.0,
+        759.7,
+        784.4
+      ],
+      "mean_ms": 893.7,
+      "min_ms": 759.7,
+      "max_ms": 1137.0
+    }
+  },
+  "retrieval": {
+    "ok": true,
+    "repository_id": "883913fc-f20f-5a89-b6c8-19a7f56e7e1d",
+    "generation_id": "16846a57-16a3-56e6-8cc5-8e57584fa4e7",
+    "commit_sha": "672971d66a2ef9f85151e53283113f33d642dabd",
+    "retrieval_ms": 14380.2,
+    "model_ms": 269.0,
+    "total_with_stub_model_ms": 14666.1,
+    "stages_ms": {
+      "name": 105.0,
+      "text": 80.0,
+      "vector": 3080.0,
+      "graph": 2311.0,
+      "load": 2044.0
+    },
+    "lane_anchors": {
+      "name": 1,
+      "text": 0,
+      "vector": 8
+    },
+    "packet_spans": 11
+  },
+  "http": {
+    "base_url": "http://3.26.237.76:8000",
+    "health": {
+      "status_code": 200,
+      "ms": 777.0,
+      "body": {
+        "status": "ok",
+        "app_name": "Repository Intelligence Agent API",
+        "environment": "production",
+        "version": "0.1.0"
+      }
+    },
+    "index_lookup": {
+      "status_code": 500,
+      "ms": 5840.0,
+      "action": null
+    },
+    "ask": {
+      "ok": false,
+      "error": "no repository_id"
+    }
+  }
+}
