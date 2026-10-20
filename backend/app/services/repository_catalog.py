@@ -50,9 +50,9 @@ def list_user_repositories(db: Session, user_id: str) -> list[dict]:
     return items
 
 
-def _commit_for_generation(db: Session, generation: IndexGeneration) -> str | None:
-    from app.models.catalog import SourceRevision
-
+def _commit_for_generation(db: Session, generation: IndexGeneration | None) -> str | None:
+    if generation is None:
+        return None
     revision = db.get(SourceRevision, generation.source_revision_id)
     return None if revision is None else revision.commit_sha
 

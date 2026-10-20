@@ -19,6 +19,7 @@
     "benchmark:compare": "PYTHONPATH=backend .venv/bin/python scripts/compare_retrieval_paths.py",
     "e2e:smoke": "PYTHONPATH=backend .venv/bin/python scripts/e2e_smoke.py --base-url http://127.0.0.1:8000",
     "measure:nextjs": "PYTHONPATH=backend .venv/bin/python scripts/measure_index_ask.py --repo-url https://github.com/vercel/next.js --question 'How does Next.js implement the App Router and route segment handling?' --json evaluation/nextjs-index-ask-latest.json --markdown evaluation/nextjs-index-ask-report.md",
+    "deploy": "bash scripts/deploy_production.sh",
     "repair:catalog": "PYTHONPATH=backend .venv/bin/python scripts/repair_catalog.py --all --reset-expired-refresh",
     "start": "PYTHONPATH=backend .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000"
   },
