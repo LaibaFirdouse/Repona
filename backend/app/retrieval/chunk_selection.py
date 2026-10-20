@@ -93,6 +93,25 @@ def pick_file_chunk(chunks: list[Chunk]) -> Chunk | None:
     return representative_chunk(chunks)
 
 
+def upgrade_chunk_choice(db: Session, generation_id: str, chunk: Chunk) -> Chunk:
+    """Prefer a symbol body from the same file when the hit is an import/overview slice."""
+    if chunk.kind not in {"import_block", "file_overview"}:
+        return chunk
+    bodies = (
+        db.query(Chunk)
+        .join(GenerationChunk, GenerationChunk.chunk_id == Chunk.id)
+        .filter(
+            GenerationChunk.index_generation_id == generation_id,
+            Chunk.file_id == chunk.file_id,
+            Chunk.kind == "symbol_body",
+        )
+        .all()
+    )
+    if not bodies:
+        return chunk
+    return max(bodies, key=lambda item: (item.end_byte - item.start_byte, item.ordinal))
+
+
 def enrich_spans_with_bodies(db: Session, generation_id: str, spans: list[ChunkChoice]) -> list[ChunkChoice]:
     """Replace import-only span choices with the best symbol_body from the same file."""
     upgraded: list[ChunkChoice] = []
@@ -104,20 +123,7 @@ def enrich_spans_with_bodies(db: Session, generation_id: str, spans: list[ChunkC
         if chunk is None:
             upgraded.append(span)
             continue
-        bodies = (
-            db.query(Chunk)
-            .join(GenerationChunk, GenerationChunk.chunk_id == Chunk.id)
-            .filter(
-                GenerationChunk.index_generation_id == generation_id,
-                Chunk.file_id == chunk.file_id,
-                Chunk.kind == "symbol_body",
-            )
-            .all()
-        )
-        if not bodies:
-            upgraded.append(span)
-            continue
-        best = max(bodies, key=lambda item: (item.end_byte - item.start_byte, item.ordinal))
+        best = upgrade_chunk_choice(db, generation_id, chunk)
         upgraded.append(ChunkChoice(best.id, span.anchor_id, best.kind, best.ordinal))
     return upgraded
 

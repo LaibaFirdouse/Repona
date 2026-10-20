@@ -109,6 +109,8 @@ class Settings:
     answer_conversation_max_turns: int = _get_int_env("ANSWER_CONVERSATION_MAX_TURNS", 8)
     answer_conversation_answer_chars: int = _get_int_env("ANSWER_CONVERSATION_ANSWER_CHARS", 2500)
     answer_impl_chunks_per_file: int = _get_int_env("ANSWER_IMPL_CHUNKS_PER_FILE", 4)
+    answer_workflow_span_bonus: int = _get_int_env("ANSWER_WORKFLOW_SPAN_BONUS", 6)
+    answer_impl_reload_on_thin: bool = _get_bool_env("ANSWER_IMPL_RELOAD_ON_THIN", True)
     debug: bool = _get_bool_env("DEBUG", True)
     rate_limit_enabled: bool = _get_bool_env("RATE_LIMIT_ENABLED", True)
     rate_limit_trust_proxy: bool = _get_bool_env("RATE_LIMIT_TRUST_PROXY", False)
