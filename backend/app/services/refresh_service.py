@@ -40,6 +40,22 @@ class RefreshError(Exception):
         self.detail = detail
 
 
+def _refresh_error_from_graph(exc: BaseException) -> RefreshError | None:
+    try:
+        from neo4j.exceptions import Neo4jError
+    except ImportError:
+        return None
+    if not isinstance(exc, Neo4jError):
+        return None
+    message = str(exc).lower()
+    if "logical size limit" in message:
+        return RefreshError(
+            507,
+            "The graph database is full. Delete unused repositories from the UI or upgrade your Neo4j tier, then try indexing again.",
+        )
+    return RefreshError(503, "The graph database rejected the index write. Try again later.")
+
+
 @dataclass(frozen=True)
 class RefreshOutcome:
     action: str
@@ -246,7 +262,15 @@ class RefreshService:
             except ChecklistError as error:
                 raise RefreshError(500, str(error)) from error
 
-        self._with_graph(run)
+        try:
+            self._with_graph(run)
+        except RefreshError:
+            raise
+        except Exception as error:
+            mapped = _refresh_error_from_graph(error)
+            if mapped is not None:
+                raise mapped from error
+            raise
 
     def _with_graph(self, run) -> None:
         if self.graph_session_factory is not None:

@@ -25,42 +25,52 @@ def _index_state(repository: Repository, generation: IndexGeneration | None) -> 
     return "wait"
 
 
+def _active_generation(db: Session, repository: Repository) -> IndexGeneration | None:
+    """Load the active generation and clear a stale active_generation_id pointer."""
+    generation_id = repository.active_generation_id
+    if not generation_id:
+        return None
+    generation = db.get(IndexGeneration, generation_id)
+    if generation is not None:
+        return generation
+    repository.active_generation_id = None
+    db.add(repository)
+    return None
+
+
+def _commit_sha_for_generation(db: Session, generation: IndexGeneration | None) -> str | None:
+    if generation is None:
+        return None
+    revision_id = generation.source_revision_id
+    if not revision_id:
+        return None
+    revision = db.get(SourceRevision, revision_id)
+    return None if revision is None else revision.commit_sha
+
+
 def list_user_repositories(db: Session, user_id: str) -> list[dict]:
-    rows = (
-        db.query(Repository, IndexGeneration)
+    repositories = (
+        db.query(Repository)
         .join(RepositoryMember, RepositoryMember.repository_id == Repository.id)
-        .outerjoin(IndexGeneration, IndexGeneration.id == Repository.active_generation_id)
         .filter(RepositoryMember.user_id == user_id, RepositoryMember.status == "active")
         .order_by(desc(Repository.updated_at))
         .all()
     )
     items: list[dict] = []
-    for repository, generation in rows:
-        resolved = generation
-        if resolved is None and repository.active_generation_id:
-            resolved = db.get(IndexGeneration, repository.active_generation_id)
+    for repository in repositories:
+        generation = _active_generation(db, repository)
         items.append(
             {
                 "repository_id": repository.id,
                 "normalized_url": repository.normalized_url,
                 "tracked_branch": repository.tracked_branch,
-                "commit_sha": _commit_for_generation(db, resolved),
+                "commit_sha": _commit_sha_for_generation(db, generation),
                 "generation_id": repository.active_generation_id,
-                "index_state": _index_state(repository, resolved),
+                "index_state": _index_state(repository, generation),
                 "updated_at": repository.updated_at.isoformat() if repository.updated_at else None,
             }
         )
     return items
-
-
-def _commit_for_generation(db: Session, generation: IndexGeneration | None) -> str | None:
-    if generation is None:
-        return None
-    revision_id = getattr(generation, "source_revision_id", None)
-    if not revision_id:
-        return None
-    revision = db.get(SourceRevision, revision_id)
-    return None if revision is None else revision.commit_sha
 
 
 def list_qa_messages(db: Session, user_id: str, repository_id: str, limit: int = 200) -> list[RepositoryQaMessage]:

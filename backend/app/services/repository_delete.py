@@ -127,24 +127,9 @@ def _delete_qdrant_points(collections: set[str], repository_id: str) -> None:
 
 
 def _delete_graph_repository(repository_id: str) -> None:
-    if not settings.neo4j_password:
-        return
-    from neo4j import GraphDatabase
+    from app.ingestion.graph_cleanup import delete_repository_graph
 
-    driver = GraphDatabase.driver(settings.neo4j_uri, auth=(settings.neo4j_user, settings.neo4j_password))
-    try:
-        with driver.session() as session:
-            session.run(
-                """
-                MATCH (n)
-                WHERE n.id = $repository_id
-                   OR n.repository_id = $repository_id
-                DETACH DELETE n
-                """,
-                repository_id=repository_id,
-            )
-    finally:
-        driver.close()
+    delete_repository_graph(repository_id)
 
 
 def _delete_path(path: Path) -> None:
