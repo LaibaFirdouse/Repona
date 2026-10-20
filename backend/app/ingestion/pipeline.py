@@ -25,7 +25,7 @@ from app.ingestion.claims import (
 from app.ingestion.coordination import lease_deadline
 from app.ingestion.graph_store import current_epoch_edge_ids, delete_edges_outside_expected, publish_graph_epoch, write_graph
 from app.ingestion.inclusion import is_included
-from app.ingestion.materialize import promote_tree, read_commit_blobs, write_detached_tree
+from app.ingestion.materialize import adopt_or_promote_tree, read_commit_blobs, write_detached_tree
 from app.ingestion.persist import (
     GenerationWriteError,
     activate_generation,
@@ -247,7 +247,7 @@ def _finish_generation(
             validate_worktree_bytes(git_dir, commit_sha, creating, created_blobs)
             record_step("ingest.validate_creating_worktree", t)
             t = perf_counter()
-            promote_tree(creating, publish)
+            adopt_or_promote_tree(git_dir, commit_sha, creating, publish, created_blobs)
             record_step("ingest.promote_snapshot_tree", t)
             t = perf_counter()
             publish_snapshot_claim(revision, owner)

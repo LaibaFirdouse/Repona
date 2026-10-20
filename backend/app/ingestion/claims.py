@@ -64,6 +64,9 @@ def abort_snapshot_claim(revision: SourceRevision, owner: str) -> None:
     creating = Path(revision.creating_path) if revision.creating_path else None
     if creating is not None and creating.exists():
         shutil.rmtree(creating)
+    publish = Path(revision.publish_path) if revision.publish_path else None
+    if publish is not None and publish.exists() and revision.snapshot_path != str(publish):
+        shutil.rmtree(publish)
     revision.snapshot_state = "absent"
     revision.creating_path = None
     revision.publish_path = None

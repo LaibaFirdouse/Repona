@@ -58,10 +58,7 @@ def _ensure_gitfile(git_dir: Path, creating: Path) -> None:
     (admin / "gitdir").write_text(str(gitfile.resolve()) + "\n")
 
 
-def promote_tree(creating: Path, publish: Path) -> None:
-    if publish.exists():
-        raise SnapshotError(f"snapshot already exists: {publish}")
-    creating.rename(publish)
+def _refresh_publish_gitdir(publish: Path) -> None:
     gitfile = publish / ".git"
     if not gitfile.is_file():
         return
@@ -72,6 +69,36 @@ def promote_tree(creating: Path, publish: Path) -> None:
     pointer = admin / "gitdir"
     if pointer.parent.is_dir():
         pointer.write_text(str(gitfile.resolve()) + "\n")
+
+
+def promote_tree(creating: Path, publish: Path) -> None:
+    if publish.exists():
+        raise SnapshotError(f"snapshot already exists: {publish}")
+    creating.rename(publish)
+    _refresh_publish_gitdir(publish)
+
+
+def adopt_or_promote_tree(
+    git_dir: Path,
+    commit_sha: str,
+    creating: Path,
+    publish: Path,
+    blobs: list[SourceBlob],
+) -> None:
+    """Promote a creating work tree, or reuse an on-disk publish path from a prior crash."""
+    from app.ingestion.validation import ChecklistError, validate_worktree_bytes
+
+    if publish.exists():
+        try:
+            validate_worktree_bytes(git_dir, commit_sha, publish, blobs)
+        except ChecklistError:
+            shutil.rmtree(publish)
+        else:
+            if creating.exists():
+                shutil.rmtree(creating)
+            _refresh_publish_gitdir(publish)
+            return
+    promote_tree(creating, publish)
 
 
 def publish_worktree(git_dir: Path, commit_sha: str, destination: Path) -> None:

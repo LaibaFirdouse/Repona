@@ -15,7 +15,7 @@ from app.core.config import PROJECT_ROOT, settings
 from app.ingestion.claims import insert_reader_pin
 from app.ingestion.coordination import lease_deadline, refresh_lease_held
 from app.ingestion.host_paths import repair_repository_data_paths, reset_expired_refresh
-from app.ingestion.materialize import read_commit_blobs
+from app.ingestion.materialize import SnapshotError, read_commit_blobs
 from app.ingestion.persist import GenerationWriteError
 from app.ingestion.pipeline import complete_owned_refresh, ingest_commit
 from app.ingestion.refresh import question_plan, versions_match
@@ -260,6 +260,8 @@ class RefreshService:
             except GenerationWriteError as error:
                 raise RefreshError(409, str(error)) from error
             except ChecklistError as error:
+                raise RefreshError(500, str(error)) from error
+            except SnapshotError as error:
                 raise RefreshError(500, str(error)) from error
 
         try:
