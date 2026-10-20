@@ -44,6 +44,28 @@ All model usage is billed to **your** Cursor account. Visitors get an anonymous 
 
 Over-limit requests return **HTTP 429** with `Retry-After`. Counters are in-memory on each API instance.
 
+## Server logs
+
+The API keeps **in-memory** logs for about **24 hours** (no database or file persistence). Each instance only sees its own process.
+
+| Where | How |
+|---|---|
+| Container / terminal stdout | `docker compose logs -f api` (local) or `docker compose -f docker-compose.hosted.yml logs -f repona-api` (EC2) |
+| HTTP JSON | `GET /api/v1/logs?limit=200&level=INFO` — same host as the API, e.g. `http://127.0.0.1:8000/api/v1/logs` |
+| OpenAPI | `/docs` → **logs** → `GET /api/v1/logs` |
+
+Optional env:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SERVER_LOGS_ENABLED` | `true` | Turn logging and `/api/v1/logs` off when `false` |
+| `SERVER_LOG_RETENTION_HOURS` | `24` | Drop buffered entries older than this |
+| `SERVER_LOG_BUFFER_MAX` | `5000` | Cap in-memory entries per instance |
+| `SERVER_LOG_LEVEL` | `INFO` | Minimum level for stdout and the buffer |
+| `SERVER_LOGS_TOKEN` | empty | When set, require `Authorization: Bearer …` or header `X-Server-Logs-Token` on `/api/v1/logs` |
+
+Request lines use logger `app.request` (`method`, `path`, `status`, `duration_ms`, client IP). Health checks are not logged.
+
 ## Data stores (free-tier friendly)
 
 | Store | Suggested host | Env |
