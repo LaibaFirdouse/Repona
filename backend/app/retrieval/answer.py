@@ -397,8 +397,11 @@ class AnswerService:
         yield {"type": "phase", "phase": "fetching"}
         planner = lambda _normalized: self._plan_question(question, history=history)
         retrieval = route_question(search_question, planner=planner)
-        if trace is not None and history:
-            trace["conversation_turns"] = len(history)
+        if trace is not None:
+            if history:
+                trace["conversation_turns"] = len(history)
+            if code_first:
+                trace["code_first"] = True
         vectors_ready = count_vector_ready(db, generation.id)
         preview_text: list = []
         preview_name: list = []
