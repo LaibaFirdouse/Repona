@@ -185,7 +185,55 @@
     .sidebar-empty[hidden] {
       display: none !important;
     }
-    .panel-right.workspace-empty { display: none; }
+    .panel-right.workspace-empty .panel-right-active {
+      display: none;
+    }
+    .panel-right:not(.workspace-empty) .panel-right-idle {
+      display: none;
+    }
+    .panel-right-idle {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 12rem;
+    }
+    .panel-right-idle .right-idle-inner {
+      text-align: center;
+      padding: 0.5rem 0.25rem;
+    }
+    .panel-right-idle .right-idle-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 0.85rem;
+      border-radius: 12px;
+      background: var(--accent-soft);
+      display: grid;
+      place-items: center;
+      font-size: 1.35rem;
+      opacity: 0.85;
+    }
+    .panel-right-idle h3 {
+      margin: 0 0 0.45rem;
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .panel-right-idle p {
+      margin: 0 0 1rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .panel-right-idle .btn-secondary {
+      width: 100%;
+    }
+    .panel-right-active {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      min-width: 0;
+    }
     .workspace-empty-view {
       flex: 1;
       min-height: 0;
@@ -1036,7 +1084,7 @@
       <header class="topbar">
         <div class="topbar-repo">
           <button type="button" class="btn-menu" id="menu-toggle" aria-label="Repositories">☰</button>
-          <h2 id="top-repo-name">Select a repository</h2>
+          <h2 id="top-repo-name">No repository selected</h2>
           <span class="badge public" id="top-badge" hidden>Public</span>
           <span class="status-pill" id="status-pill">Idle</span>
         </div>
@@ -1073,6 +1121,15 @@
     </main>
 
     <aside class="panel-right workspace-empty" id="panel-right">
+      <div class="card panel-right-idle" id="panel-right-idle">
+        <div class="right-idle-inner">
+          <div class="right-idle-icon" aria-hidden="true">⎇</div>
+          <h3>No repository selected</h3>
+          <p>Choose a repo from the list or index a new one to see status and file preview here.</p>
+          <button type="button" class="btn-secondary" id="idle-index-repo">Index repository</button>
+        </div>
+      </div>
+      <div class="panel-right-active" id="panel-right-active">
       <div class="card" id="repo-info-card">
         <div class="repo-card-head">
           <div class="repo-icon" aria-hidden="true">⎇</div>
@@ -1106,6 +1163,7 @@
             <p class="preview-empty" id="preview-empty">No file selected</p>
           </div>
         </div>
+      </div>
       </div>
     </aside>
   </div>
@@ -1549,12 +1607,18 @@
       renderRepoList();
       syncAppShell();
       if (!hasWorkspaceOpen()) {
-        document.getElementById("top-repo-name").textContent = "Repona";
-        document.getElementById("top-badge").hidden = true;
-        statusPill.textContent = "";
-        statusPill.className = "status-pill";
+        setIdleTopbar();
         renderEmptyWorkspace();
       }
+    }
+
+    function setIdleTopbar() {
+      const topName = document.getElementById("top-repo-name");
+      topName.textContent = "No repository selected";
+      topName.title = "";
+      document.getElementById("top-badge").hidden = true;
+      statusPill.textContent = "";
+      statusPill.className = "status-pill";
     }
 
     function renderEmptyWorkspace() {
@@ -1608,10 +1672,7 @@
       syncAppShell();
       if (indexingUrl) return;
       if (!hasRepoSelected()) {
-        document.getElementById("top-repo-name").textContent = "Repona";
-        document.getElementById("top-badge").hidden = true;
-        statusPill.textContent = "";
-        statusPill.className = "status-pill";
+        setIdleTopbar();
         renderEmptyWorkspace();
         return;
       }
@@ -2485,6 +2546,10 @@
       e.stopPropagation();
       closeSidebar();
       if (!indexingUrl) clearSelection();
+      openModal();
+    });
+    document.getElementById("idle-index-repo").addEventListener("click", () => {
+      closeSidebar();
       openModal();
     });
     document.getElementById("sidebar-repo-area").addEventListener("click", (e) => {
