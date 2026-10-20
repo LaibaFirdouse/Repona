@@ -175,12 +175,15 @@
       flex: 1;
       min-height: 3rem;
     }
-    .sidebar-section.sidebar-deselect-target .sidebar-empty {
+    .sidebar-section.sidebar-deselect-target .sidebar-empty:not([hidden]) {
       flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
       min-height: 4rem;
+    }
+    .sidebar-empty[hidden] {
+      display: none !important;
     }
     .panel-right.workspace-empty { display: none; }
     .workspace-empty-view {
@@ -594,17 +597,20 @@
       margin-bottom: 0.5rem;
     }
     .source-grid {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
       gap: 0.45rem;
+      max-width: 100%;
     }
     .source-chip {
-      display: inline-flex;
+      display: flex;
       flex-direction: column;
       gap: 0.1rem;
       padding: 0.5rem 0.65rem;
-      min-width: 120px;
-      max-width: 200px;
+      min-width: 0;
+      max-width: 100%;
+      width: 100%;
+      box-sizing: border-box;
       border-radius: var(--radius-sm);
       border: 1px solid var(--border);
       background: var(--surface);
@@ -612,16 +618,27 @@
       font: inherit;
       text-align: left;
       color: inherit;
+      overflow: hidden;
     }
     .source-chip.primary { border-color: rgba(124, 58, 237, 0.45); background: var(--accent-soft); }
     .source-chip .path {
       font-weight: 600;
       color: var(--ink);
+      min-width: 0;
+      max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .source-chip .lines { color: var(--muted); font-family: var(--mono); font-size: 0.68rem; }
+    .source-chip .lines {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .composer-bar {
       padding: 1rem 1.5rem 1.25rem;
       border-top: 1px solid var(--border);
@@ -1146,6 +1163,8 @@
     let activeTab = "chat";
     let indexingUrl = "";
     let previewCache = null;
+    /** @type {"idle" | "loading" | "ready" | "error"} */
+    let reposListState = "idle";
 
     const SUGGESTIONS = [
       "How does the main entry point work?",
@@ -1696,13 +1715,23 @@
 
     function renderRepoList() {
       repoList.replaceChildren();
+      if (reposListState === "loading") {
+        repoEmpty.hidden = false;
+        repoEmpty.textContent = "Loading repositories…";
+        return;
+      }
+      if (reposListState === "error") {
+        repoEmpty.hidden = false;
+        repoEmpty.textContent = "Couldn't load repositories — try Refresh";
+        return;
+      }
       const list = filteredRepos();
       if (!indexedRepositories.length) {
         repoEmpty.hidden = false;
         repoEmpty.textContent = "No repos yet";
         return;
       }
-      repoEmpty.hidden = list.length > 0;
+      repoEmpty.hidden = true;
       if (!list.length) {
         repoEmpty.hidden = false;
         repoEmpty.textContent = "No matches";
@@ -1895,8 +1924,34 @@
 
     async function openCitation(citation) {
       if (!repositoryId || !citation.path) return;
-      setActiveTab("files");
-      await showFileContent(citation.path, citation.start_line, citation.end_line);
+      setActiveTab("chat");
+      await ensureFileTreeReady();
+      await showFileContent(citation.path, citation.start_line, citation.end_line, { highlightTree: true });
+    }
+
+    async function ensureFileTreeReady() {
+      if (!repositoryId) return false;
+      const repo = currentRepo();
+      if (!repo || repo.index_state !== "ready") return false;
+      if (!filePaths.length) await loadFileTree();
+      return filePaths.length > 0;
+    }
+
+    function highlightFileInTree(path) {
+      if (!path || !filePaths.includes(path)) return;
+      const q = fileFilterQuery.trim().toLowerCase();
+      if (q && !path.toLowerCase().includes(q)) {
+        fileFilterQuery = "";
+        fileFilter.value = "";
+        renderFileTree();
+      }
+      let activeRow = null;
+      fileTree.querySelectorAll(".tree-file").forEach((el) => {
+        const match = el.dataset.path === path;
+        el.classList.toggle("active", match);
+        if (match) activeRow = el;
+      });
+      if (activeRow) activeRow.scrollIntoView({ block: "nearest" });
     }
 
     async function loadFileTree() {
@@ -1985,10 +2040,13 @@
       return ul;
     }
 
-    async function showFileContent(path, startLine, endLine) {
+    async function showFileContent(path, startLine, endLine, options) {
       if (!repositoryId) return;
+      const opts = options || {};
       document.getElementById("code-viewer-card").hidden = false;
-      document.getElementById("code-viewer-path").textContent = path;
+      const pathEl = document.getElementById("code-viewer-path");
+      pathEl.textContent = path;
+      pathEl.title = path;
       const bodyEl = document.getElementById("code-viewer-body");
       bodyEl.textContent = "Loading…";
       setPreviewExpandEnabled(false);
@@ -2015,9 +2073,9 @@
         };
         const scrollTarget = renderCodeLines(bodyEl, previewCache.lines, focusStart, focusEnd);
         setPreviewExpandEnabled(true);
-        fileTree.querySelectorAll(".tree-file").forEach((el) => {
-          el.classList.toggle("active", el.dataset.path === path);
-        });
+        if (opts.highlightTree !== false) {
+          highlightFileInTree(path);
+        }
         if (scrollTarget) scrollTarget.scrollIntoView({ block: "center" });
         if (document.getElementById("preview-expand-overlay").classList.contains("open")) {
           openPreviewExpanded();
@@ -2122,12 +2180,21 @@
     }
 
     async function fetchRepositories() {
-      const response = await apiFetch(`/api/v1/repositories?user_id=${encodeURIComponent(clientId)}`);
-      if (!response.ok) throw new Error(await errorText(response));
-      const body = await response.json();
-      indexedRepositories = body.repositories || [];
+      reposListState = "loading";
       renderRepoList();
-      if (!hasRepoSelected()) renderEmptyWorkspace();
+      try {
+        const response = await apiFetch(`/api/v1/repositories?user_id=${encodeURIComponent(clientId)}`);
+        if (!response.ok) throw new Error(await errorText(response));
+        const body = await response.json();
+        indexedRepositories = body.repositories || [];
+        reposListState = "ready";
+      } catch (error) {
+        reposListState = "error";
+        throw error;
+      } finally {
+        renderRepoList();
+        if (!hasRepoSelected()) renderEmptyWorkspace();
+      }
     }
 
     async function fetchChatHistory(id) {
@@ -2449,14 +2516,30 @@
         setPill("error", "Offline");
         return;
       }
-      repositoryId = "";
       const state = loadState();
+      repositoryId = state.repositoryId || "";
       try {
         await fetchRepositories();
       } catch {
-        /* first visit */
+        /* list error state shown in sidebar */
+      }
+      if (
+        repositoryId &&
+        indexedRepositories.some((r) => r.repository_id === repositoryId)
+      ) {
+        const repo = indexedRepositories.find((r) => r.repository_id === repositoryId);
+        await selectRepository(repo, {
+          skipHistory: false,
+          skipResume: state.indexPhase !== "indexing",
+        });
+      } else {
+        repositoryId = "";
       }
       if (state.indexPhase === "indexing" && state.url) {
+        const repo = currentRepo();
+        if (repositoryId && repo && repo.index_state === "indexing") {
+          return;
+        }
         urlInput.value = state.url;
         indexRun += 1;
         setBusy(true);
@@ -2481,7 +2564,7 @@
         }
         return;
       }
-      clearSelection();
+      if (!hasWorkspaceOpen()) clearSelection();
     }
 
     boot();
