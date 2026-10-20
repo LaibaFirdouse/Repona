@@ -38,6 +38,24 @@ Artifacts: `evaluation/benchmark-controlled-{lazy_cold,progressive_cold,full_col
 | Router quality | Deterministic vs semantic vs intelligent modes (`npm run benchmark:router-correctness`) |
 | Reproducibility | Controlled modes clear Qdrant; record `git_head`, dirty flag, separate cold/warm |
 
+## Validation run (2026-10-20 v2, after Symbol path + scoring fixes)
+
+**Artifacts:** `evaluation/benchmark-lazy-validation-latest.json`, `evaluation/benchmark-router-correctness-latest.json`
+
+**Cold vector reset:** clears Qdrant repo points and sets all `generation_chunks.vector_status=pending` before cases (999 chunks on last run).
+
+| Case | First pass | Notes |
+|------|------------|--------|
+| exact_symbol | yes | symbol+lexical; cold lazy embed on repeat |
+| conceptual | yes | **full** path recall (`answer.py` + `packet.py`); lazy embed 1 point |
+| cross_file_trace | yes | pipeline + graph_store |
+| deferred_symbol_body | yes | materialised `_write_edges` body |
+| outside_catalogue_file | yes | `scripts/benchmark.py` |
+| semantic_deferred_lazy | **no** | vector lane runs but no on-demand embed evidence yet (strict case) |
+| embedding_unavailable | yes | no internal embed error; **provider-outage** sub-run passes with vector lane + fallback |
+
+**Unit tests:** `backend/tests/test_lazy_vectors.py` (Symbol→File path, ensure_chunk_vectors, cache mismatch re-embed).
+
 ## Validation run (2026-10-20, local, index at `bb18f6f7…` + dirty tree)
 
 **Lazy retrieval (`benchmark-lazy-validation-latest.json`):** all 6 cases **passed** (exit 0).
