@@ -42,9 +42,8 @@ def configure_logging() -> None:
             logging.getLogger(name).setLevel(level)
 
     logging.getLogger("app.startup").info(
-        "server_logging enabled=%s retention_hours=%s buffer_max=%s level=%s",
+        "server_logging enabled=%s buffer_max=%s level=%s",
         settings.server_logs_enabled,
-        settings.server_log_retention_hours,
         settings.server_log_buffer_max,
         settings.server_log_level,
     )

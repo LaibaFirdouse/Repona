@@ -1,6 +1,5 @@
 import logging
 import unittest
-from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -12,36 +11,31 @@ from app.core.log_buffer import LogBuffer, LogBufferHandler, get_log_buffer
 from app.middleware.request_logging import RequestLoggingMiddleware
 
 
+def _record(message: str, *, level: int = logging.INFO) -> logging.LogRecord:
+    return logging.LogRecord(
+        name="test",
+        level=level,
+        pathname=__file__,
+        lineno=1,
+        msg=message,
+        args=(),
+        exc_info=None,
+    )
+
+
 class LogBufferTests(unittest.TestCase):
-    def test_entries_older_than_retention_are_dropped(self) -> None:
-        buffer = LogBuffer(max_entries=100, retention_hours=24)
-        old = datetime.now(timezone.utc) - timedelta(hours=25)
-        record = logging.LogRecord(
-            name="test",
-            level=logging.INFO,
-            pathname=__file__,
-            lineno=1,
-            msg="stale",
-            args=(),
-            exc_info=None,
-        )
-        record.created = old.timestamp()
-        buffer.append(record)
-        self.assertEqual(buffer.count(), 0)
+    def test_only_latest_entries_are_kept(self) -> None:
+        buffer = LogBuffer(max_entries=3)
+        for index in range(5):
+            buffer.append(_record(f"line-{index}"))
+        self.assertEqual(buffer.count(), 3)
+        rows = buffer.fetch(limit=10, min_level="DEBUG")
+        self.assertEqual([row["message"] for row in rows], ["line-2", "line-3", "line-4"])
 
     def test_fetch_respects_min_level(self) -> None:
-        buffer = LogBuffer(max_entries=100, retention_hours=24)
+        buffer = LogBuffer(max_entries=100)
         for level, message in ((logging.DEBUG, "dbg"), (logging.INFO, "inf"), (logging.ERROR, "err")):
-            record = logging.LogRecord(
-                name="test",
-                level=level,
-                pathname=__file__,
-                lineno=1,
-                msg=message,
-                args=(),
-                exc_info=None,
-            )
-            buffer.append(record)
+            buffer.append(_record(message, level=level))
         rows = buffer.fetch(limit=10, min_level="INFO")
         messages = [row["message"] for row in rows]
         self.assertEqual(messages, ["inf", "err"])
@@ -69,6 +63,7 @@ class LogsRouteTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             payload = response.json()
             self.assertGreaterEqual(payload["buffered_total"], 1)
+            self.assertEqual(payload["buffer_max"], buffer.max_entries)
             self.assertTrue(any(entry["message"] == "hello-from-test" for entry in payload["entries"]))
         finally:
             logger.removeHandler(handler)

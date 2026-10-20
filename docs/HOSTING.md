@@ -46,7 +46,7 @@ Over-limit requests return **HTTP 429** with `Retry-After`. Counters are in-memo
 
 ## Server logs
 
-The API keeps **in-memory** logs for about **24 hours** (no database or file persistence). Each instance only sees its own process.
+The API keeps the **latest 250** log lines in memory (ring buffer, no database or file persistence). Each instance only sees its own process.
 
 | Where | How |
 |---|---|
@@ -59,8 +59,7 @@ Optional env:
 | Variable | Default | Purpose |
 |---|---|---|
 | `SERVER_LOGS_ENABLED` | `true` | Turn logging and `/api/v1/logs` off when `false` |
-| `SERVER_LOG_RETENTION_HOURS` | `24` | Drop buffered entries older than this |
-| `SERVER_LOG_BUFFER_MAX` | `5000` | Cap in-memory entries per instance |
+| `SERVER_LOG_BUFFER_MAX` | `250` | Keep only the newest N entries in memory |
 | `SERVER_LOG_LEVEL` | `INFO` | Minimum level for stdout and the buffer |
 | `SERVER_LOGS_TOKEN` | empty | When set, require `Authorization: Bearer …` or header `X-Server-Logs-Token` on `/api/v1/logs` |
 

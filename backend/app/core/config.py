@@ -111,8 +111,7 @@ class Settings:
     client_cookie_secure: bool = _get_bool_env("CLIENT_COOKIE_SECURE", False)
     server_logs_enabled: bool = _get_bool_env("SERVER_LOGS_ENABLED", True)
     server_log_level: str = os.getenv("SERVER_LOG_LEVEL", "INFO").strip().upper()
-    server_log_retention_hours: int = _get_int_env("SERVER_LOG_RETENTION_HOURS", 24)
-    server_log_buffer_max: int = _get_int_env("SERVER_LOG_BUFFER_MAX", 5000)
+    server_log_buffer_max: int = _get_int_env("SERVER_LOG_BUFFER_MAX", 250)
     server_logs_token: str = os.getenv("SERVER_LOGS_TOKEN", "")
 
 

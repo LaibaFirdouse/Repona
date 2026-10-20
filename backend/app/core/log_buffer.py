@@ -1,4 +1,4 @@
-"""In-memory server log buffer with TTL pruning (no disk persistence)."""
+"""In-memory server log ring (fixed entry cap, no disk persistence)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import logging
 import threading
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 _LEVEL_NUM: dict[str, int] = {
@@ -39,15 +39,14 @@ class StoredLogEntry:
 
 
 class LogBuffer:
-    def __init__(self, *, max_entries: int, retention_hours: int) -> None:
-        self._max_entries = max(100, max_entries)
-        self._retention = timedelta(hours=max(1, retention_hours))
+    def __init__(self, *, max_entries: int) -> None:
+        self._max_entries = max(1, max_entries)
         self._lock = threading.Lock()
-        self._entries: deque[tuple[datetime, StoredLogEntry]] = deque()
+        self._entries: deque[StoredLogEntry] = deque(maxlen=self._max_entries)
 
     @property
-    def retention_hours(self) -> int:
-        return int(self._retention.total_seconds() // 3600)
+    def max_entries(self) -> int:
+        return self._max_entries
 
     def append(self, record: logging.LogRecord) -> None:
         ts = datetime.fromtimestamp(record.created, tz=timezone.utc)
@@ -58,16 +57,7 @@ class LogBuffer:
             message=record.getMessage(),
         )
         with self._lock:
-            self._entries.append((ts, entry))
-            self._prune_locked(ts)
-
-    def _prune_locked(self, now: datetime | None = None) -> None:
-        now = now or datetime.now(timezone.utc)
-        cutoff = now - self._retention
-        while self._entries and self._entries[0][0] < cutoff:
-            self._entries.popleft()
-        while len(self._entries) > self._max_entries:
-            self._entries.popleft()
+            self._entries.append(entry)
 
     def fetch(
         self,
@@ -77,10 +67,9 @@ class LogBuffer:
         logger_prefix: str | None = None,
     ) -> list[dict[str, Any]]:
         floor = level_number(min_level)
-        limit = max(1, min(limit, 1000))
+        limit = max(1, min(limit, self._max_entries))
         with self._lock:
-            self._prune_locked()
-            rows = [entry for _, entry in self._entries]
+            rows = list(self._entries)
 
         filtered: list[StoredLogEntry] = []
         for entry in rows:
@@ -95,7 +84,6 @@ class LogBuffer:
 
     def count(self) -> int:
         with self._lock:
-            self._prune_locked()
             return len(self._entries)
 
 
@@ -119,8 +107,5 @@ def get_log_buffer() -> LogBuffer:
     if _buffer is None:
         from app.core.config import settings
 
-        _buffer = LogBuffer(
-            max_entries=settings.server_log_buffer_max,
-            retention_hours=settings.server_log_retention_hours,
-        )
+        _buffer = LogBuffer(max_entries=settings.server_log_buffer_max)
     return _buffer

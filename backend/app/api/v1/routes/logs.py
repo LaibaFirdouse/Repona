@@ -21,7 +21,7 @@ def _authorize_logs(authorization: str | None, logs_token: str | None) -> None:
 
 @router.get("/logs", response_model=ServerLogsResponse)
 def list_server_logs(
-    limit: int = Query(default=200, ge=1, le=1000),
+    limit: int = Query(default=200, ge=1, le=settings.server_log_buffer_max),
     level: str = Query(default="INFO", description="Minimum log level"),
     logger_prefix: str | None = Query(default=None, description="Filter by logger name prefix"),
     authorization: str | None = Header(default=None),
@@ -34,7 +34,7 @@ def list_server_logs(
     buffer = get_log_buffer()
     rows = buffer.fetch(limit=limit, min_level=level, logger_prefix=logger_prefix)
     return ServerLogsResponse(
-        retention_hours=buffer.retention_hours,
+        buffer_max=buffer.max_entries,
         count=len(rows),
         buffered_total=buffer.count(),
         entries=[ServerLogEntry(**row) for row in rows],
