@@ -4,10 +4,11 @@ from app.retrieval.workflow_boost import loaded_needs_more_bodies, workflow_lexi
 
 
 class WorkflowBoostTests(unittest.TestCase):
-    def test_extracts_snake_and_phrases(self) -> None:
-        queries = workflow_lexical_queries("How is IMPORT_RULES handled with chrome.storage?")
+    def test_extracts_tokens_from_question_not_a_fixed_list(self) -> None:
+        queries = workflow_lexical_queries("How is IMPORT_RULES handled in exportRules()?")
         self.assertIn("IMPORT_RULES", queries)
-        self.assertTrue(any("storage" in q.lower() or "chrome" in q.lower() for q in queries))
+        self.assertIn("exportRules", queries)
+        self.assertNotIn("getServerSession", queries)
 
     def test_loaded_needs_more_bodies(self) -> None:
         thin = [

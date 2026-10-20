@@ -1,55 +1,35 @@
-"""Lexical and path boosts for multi-workflow / implementation questions."""
+"""Lexical boosts for workflow / implementation questions (terms come from the question only)."""
 
 from __future__ import annotations
-
-import re
 
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from app.models.catalog import Chunk, GenerationChunk, IndexGeneration
-from app.retrieval.chunk_selection import representative_chunk, upgrade_chunk_choice
+from app.retrieval.chunk_selection import upgrade_chunk_choice
 from app.retrieval.fusion import ChunkChoice
-
-_SNAKE = re.compile(r"\b[A-Z][A-Z0-9_]{2,}\b")
-_CAMEL = re.compile(r"\b[a-z][a-z0-9]*(?:[A-Z][a-z0-9]+)+\b")
-
-_KEYWORD_HINTS = (
-    "import rules",
-    "export rules",
-    "modify rules",
-    "declarativeNetRequest",
-    "chrome.storage",
-    "service worker",
-    "NETWORK_LOG",
-    "IMPORT_RULES",
-    "getServerSession",
-    "generateTasks",
-    "connectDB",
-    "NextAuth",
-    "route handler",
-    "mongoose",
-    "Groq",
-)
+from app.retrieval.query_terms import build_lexical_queries, extract_search_terms
 
 
 def workflow_lexical_queries(question: str) -> list[str]:
-    """Terms likely to appear in handler code for workflow-style questions."""
+    """Search terms derived from the user's question—no repo-specific keyword list."""
     seen: set[str] = set()
     ordered: list[str] = []
-    for pattern in (_SNAKE, _CAMEL):
-        for match in pattern.finditer(question):
-            token = match.group()
-            key = token.lower()
-            if key in seen:
-                continue
-            seen.add(key)
-            ordered.append(token)
-    lower = question.lower()
-    for hint in _KEYWORD_HINTS:
-        if hint.lower() in lower and hint.lower() not in seen:
-            seen.add(hint.lower())
-            ordered.append(hint)
+
+    def add(raw: str) -> None:
+        text = raw.strip()
+        if len(text) < 2:
+            return
+        key = text.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        ordered.append(text)
+
+    for term in extract_search_terms(question):
+        add(term)
+    for phrase in build_lexical_queries(question):
+        add(phrase)
     return ordered[:10]
 
 
