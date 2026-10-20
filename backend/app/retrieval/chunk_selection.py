@@ -33,31 +33,26 @@ _META_CONFIG_NAMES = frozenset(
 _IMPLEMENTATION_QUESTION = re.compile(
     r"\b("
     r"workflow|workflows|end[- ]to[- ]end|request flow|how (?:is|does|are|do) .+ (?:work|stored|persist|implemented)|"
-    r"implemented in code|in code|data (?:is )?stored|persist(?:ed|ence)?|mongoose|schema|api route|route handler|"
-    r"functions? implemented|list and explain|what (?:are|is) the different|lib/|app/api|"
-    r"import rules|export rules|modify rules|declarativeNetRequest|chrome\.storage|service worker|"
+    r"implemented in code|in code|data (?:is )?stored|persist(?:ed|ence)?|schema|api route|route handler|"
+    r"functions? implemented|list and explain|what (?:are|is) the different|"
     r"implementation|source code|from code|not (?:the )?readme"
     r")\b",
     re.I,
 )
 
 _IMPL_PATH_TERMS = (
-    "app/api/",
+    "app/",
     "lib/",
-    "lib/models",
-    "internal/api",
     "internal/",
     "cmd/",
     "backend/",
-    "pages/api",
-    "src/",
-    "src/background",
-    "background.ts",
-    "App.tsx",
-    "popup",
     "server/",
+    "src/",
+    "pages/",
     "components/",
-    "route.ts",
+    "handlers/",
+    "routes/",
+    "api/",
 )
 
 

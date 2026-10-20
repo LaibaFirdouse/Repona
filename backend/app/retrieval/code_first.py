@@ -26,14 +26,15 @@ _CODE_FIRST = re.compile(
 _CODE_PATH_TERMS = (
     "include/",
     "src/",
-    "allocator",
-    "_allocator",
+    "lib/",
+    "internal/",
     ".hpp",
     ".cpp",
     ".cc",
     ".c",
-    "freelist",
-    "bitmap",
+    ".rs",
+    ".go",
+    ".py",
 )
 
 
@@ -118,5 +119,5 @@ CODE_FIRST_SUFFIX = (
     "Use README or package.json only when they add product or setup facts the code excerpts do not cover—never instead of code for how-it-works questions. "
     "Do not say \"the excerpts\", \"this packet\", or \"README alone\". "
     "Write in flowing paragraphs: do not put a file path, import list, or export name in every sentence. "
-    "When multiple workflows exist (import/export/monitor/rules), explain each from the code excerpts provided—do not stop at imports."
+    "When the question covers several flows or features, explain each from the code excerpts provided—do not stop at imports."
 )

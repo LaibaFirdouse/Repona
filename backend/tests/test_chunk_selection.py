@@ -35,7 +35,7 @@ class ChunkSelectionTests(unittest.TestCase):
         self.assertTrue(wants_substantive_implementation("tell me the end to end workflow", []))
         self.assertTrue(
             wants_substantive_implementation(
-                "how are import rules and export rules implemented in code",
+                "how is user data stored and persisted in code",
                 [],
             )
         )
