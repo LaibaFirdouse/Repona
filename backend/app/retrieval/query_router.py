@@ -40,6 +40,24 @@ class RetrievalRequest:
     trace: dict = field(default_factory=dict)
 
 
+def vector_lane_will_run(
+    request: RetrievalRequest,
+    *,
+    lexical_hit_count: int,
+    name_hit_count: int,
+    vectors_ready: int,
+) -> bool:
+    """True when the vector lane is already requested or would be expanded for this query."""
+    if "vector" in request.lanes:
+        return True
+    weak = lexical_hit_count + name_hit_count < settings.lexical_min_hits
+    if not weak and request.intent not in {"conceptual_search", "architecture_question", "debugging"}:
+        return False
+    if vectors_ready == 0 and not settings.lazy_embed_on_query:
+        return False
+    return True
+
+
 def expand_vector_lane(
     request: RetrievalRequest,
     *,
@@ -51,10 +69,12 @@ def expand_vector_lane(
     lanes = list(request.lanes)
     if "vector" in lanes:
         return request
-    weak = lexical_hit_count + name_hit_count < settings.lexical_min_hits
-    if not weak and request.intent not in {"conceptual_search", "architecture_question", "debugging"}:
-        return request
-    if vectors_ready == 0 and not settings.lazy_embed_on_query:
+    if not vector_lane_will_run(
+        request,
+        lexical_hit_count=lexical_hit_count,
+        name_hit_count=name_hit_count,
+        vectors_ready=vectors_ready,
+    ):
         return request
     lanes.append("vector")
     return RetrievalRequest(

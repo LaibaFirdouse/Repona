@@ -82,7 +82,7 @@ from app.retrieval.packet import (
     span_citations,
 )
 from app.ingestion.chunk_materialize import materialize_symbol_chunks, missing_symbol_chunk_ids
-from app.ingestion.lazy_vectors import count_vector_ready, ensure_chunk_vectors
+from app.ingestion.lazy_vectors import count_vector_ready, warm_lazy_vectors_before_search
 from app.retrieval.query_plan import QueryPlanV1
 from app.retrieval.query_router import (
     PLANNER_SYSTEM,
@@ -90,6 +90,7 @@ from app.retrieval.query_router import (
     expand_vector_lane,
     parse_planner_json,
     route_question,
+    vector_lane_will_run,
 )
 from app.retrieval.query_terms import (
     extract_search_terms,
@@ -100,6 +101,15 @@ from app.retrieval.query_terms import (
 from app.services.llm.llm_factory import LLMFactory
 from app.services.refresh_service import RefreshOutcome, _absolute, _embed
 from app.storage.identity import content_hash, without_nul
+
+_EMBED_PROVIDER_UNAVAILABLE = "embedding provider unavailable"
+
+
+def _note_lazy_embed_error(stats: dict, exc: BaseException) -> None:
+    stats["embed_error"] = f"{type(exc).__name__}: {exc}"
+    if isinstance(exc, RuntimeError) and _EMBED_PROVIDER_UNAVAILABLE in str(exc):
+        stats["embed_provider_unavailable"] = True
+
 
 def _trace_step(trace: dict | None, step: str, started: float) -> float:
     """Append one timed step when trace['record_steps'] is true (benchmark tooling)."""
@@ -341,26 +351,40 @@ class AnswerService:
             preview_text = _text_hits(db, generation, retrieval.lexical_queries)
         if "symbol" in retrieval.lanes:
             preview_name = _name_hits(db, generation, retrieval.question, retrieval.path_filters)
-        if settings.lazy_embed_on_query and preview_text and revision is not None and revision.snapshot_path:
-            preview_ids = [hit.chunk_id for hit in preview_text if hit.chunk_id][: settings.lazy_embed_max_chunks]
-            if preview_ids:
-                lazy_stats: dict = {}
-                try:
-                    ensure_chunk_vectors(
-                        db,
-                        generation=generation,
-                        repository_id=repository.id,
-                        chunk_ids=preview_ids,
-                        snapshot_root=Path(revision.snapshot_path),
-                        qdrant_url=self.qdrant_url,
-                        embed=self.embed,
-                        stats=lazy_stats,
-                    )
-                except Exception as exc:
-                    lazy_stats["embed_error"] = f"{type(exc).__name__}: {exc}"
-                vectors_ready = count_vector_ready(db, generation.id)
-                if trace is not None:
+        if (
+            settings.lazy_embed_on_query
+            and revision is not None
+            and revision.snapshot_path
+            and vector_lane_will_run(
+                retrieval,
+                lexical_hit_count=len(preview_text),
+                name_hit_count=len(preview_name),
+                vectors_ready=vectors_ready,
+            )
+        ):
+            lazy_stats: dict = {}
+            try:
+                warm_lazy_vectors_before_search(
+                    db,
+                    generation=generation,
+                    repository_id=repository.id,
+                    path_filters=retrieval.path_filters,
+                    identifiers=retrieval.identifiers,
+                    name_hits=preview_name,
+                    text_hits=preview_text,
+                    snapshot_root=Path(revision.snapshot_path),
+                    qdrant_url=self.qdrant_url,
+                    embed=self.embed,
+                    stats=lazy_stats,
+                )
+            except Exception as exc:
+                _note_lazy_embed_error(lazy_stats, exc)
+            db.commit()
+            vectors_ready = count_vector_ready(db, generation.id)
+            if trace is not None:
+                if lazy_stats:
                     trace["lazy_query_embed"] = lazy_stats
+                trace["vectors_ready"] = vectors_ready
         retrieval = expand_vector_lane(
             retrieval,
             lexical_hit_count=len(preview_text),
@@ -371,10 +395,18 @@ class AnswerService:
             trace["retrieval_router"] = retrieval.trace
             trace["retrieval_router_ms"] = retrieval.router_ms
         self._ensure_open(db, outcome.pin_id)
-        name_hits, text_hits, vector_hits, name_seconds, text_seconds, vector_seconds = self._search_lanes(
-            generation,
-            retrieval,
-        )
+        if trace is not None:
+            trace.setdefault("lazy_query_embed", {})
+            self._lazy_embed_stats_sink = trace["lazy_query_embed"]
+        else:
+            self._lazy_embed_stats_sink = None
+        try:
+            name_hits, text_hits, vector_hits, name_seconds, text_seconds, vector_seconds = self._search_lanes(
+                generation,
+                retrieval,
+            )
+        finally:
+            self._lazy_embed_stats_sink = None
         step = _trace_step(trace, "02_search_lanes_parallel", step)
         if trace is not None and self._last_lane_trace is not None:
             trace["lane_trace"] = self._last_lane_trace
@@ -409,7 +441,7 @@ class AnswerService:
                         vector_stats=lazy_stats,
                     )
                 except Exception as exc:
-                    lazy_stats["embed_error"] = f"{type(exc).__name__}: {exc}"
+                    _note_lazy_embed_error(lazy_stats, exc)
                 if trace is not None and lazy_stats:
                     trace.setdefault("lazy_query_embed", {}).update(lazy_stats)
         choices = _choices_for(db, generation.id, fused, name_hits + text_hits + vector_hits)
@@ -591,6 +623,7 @@ class AnswerService:
             trace["packet_spans"] = [
                 {
                     "chunk_id": span["chunk_id"] if isinstance(span, dict) else span.chunk_id,
+                    "relative_path": span.get("relative_path", "") if isinstance(span, dict) else "",
                     "qualified_name": span.get("qualified_name", "") if isinstance(span, dict) else "",
                     "chunk_kind": span.get("chunk_kind", "") if isinstance(span, dict) else getattr(span, "kind", ""),
                     "text": span.get("text", "") if isinstance(span, dict) else "",
@@ -681,7 +714,13 @@ class AnswerService:
             size, distance = self._cached_collection_config(generation.qdrant_collection)
         except VectorStoreError as error:
             raise RetrievalError(503, str(error)) from error
-        vector = self.embed(question)
+        try:
+            vector = self.embed(question)
+        except Exception as exc:
+            sink = getattr(self, "_lazy_embed_stats_sink", None)
+            if isinstance(sink, dict):
+                _note_lazy_embed_error(sink, exc)
+            return []
         query_filter = vector_query_filter(
             generation,
             file_ids,

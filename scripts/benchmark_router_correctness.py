@@ -13,7 +13,7 @@ import sys
 _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
-from benchmark_ask_probe import paths_recall, run_ask_probe  # noqa: E402
+from benchmark_ask_probe import paths_full_recall, paths_recall, run_ask_probe  # noqa: E402
 from benchmark_suite import DEFAULT_CLIENT_ID  # noqa: E402
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -84,16 +84,21 @@ def main() -> int:
                 setup_code=MODE_SETUP[mode],
                 env_overrides=MODE_ENV.get(mode) or None,
             )
-            recall = paths_recall(probe.get("retrieved_paths") or [], case.get("expect_paths_any") or [])
+            paths = probe.get("retrieved_paths") or []
+            any_paths = case.get("expect_paths_any") or []
+            all_paths = case.get("expect_paths_all") or []
+            recall = paths_recall(paths, any_paths) if any_paths else {"hit": True, "recall_at_k": 1.0}
+            full = paths_full_recall(paths, all_paths)
             lanes = probe.get("lanes_requested") or []
             expect_lanes = case.get("expect_lanes_any") or []
             lane_ok = True if not expect_lanes else any(item in lanes for item in expect_lanes)
-            passed = probe.get("ok") and recall["hit"] and lane_ok
+            path_ok = (not any_paths or recall["hit"]) and full["full_recall"]
+            passed = probe.get("ok") and path_ok and lane_ok
             if not passed:
                 exit_code = 1
             if probe.get("subprocess_returncode", 0) not in (0, None):
                 exit_code = 2
-            recalls.append(recall["recall_at_k"])
+            recalls.append(full["recall_at_k"] if all_paths else recall["recall_at_k"])
             mode_rows.append(
                 {
                     "case_id": case["id"],
@@ -103,7 +108,7 @@ def main() -> int:
                     "lanes_requested": lanes,
                     "lane_hit_counts": probe.get("lane_hit_counts"),
                     "vector_lane_expanded": probe.get("vector_lane_expanded"),
-                    "matched_paths": recall["matched"],
+                    "matched_paths": full.get("matched") or recall.get("matched") or [],
                     "error": probe.get("error") or probe.get("harness_error"),
                 }
             )
@@ -120,7 +125,10 @@ def main() -> int:
             indent=2,
         )
     )
-    return exit_code if exit_code else (0 if all(row["passed"] for mode in report["modes"].values() for row in mode["cases"]) else 1)
+    any_failed = any(not row["passed"] for mode in report["modes"].values() for row in mode["cases"])
+    if exit_code:
+        return exit_code
+    return 1 if any_failed else 0
 
 
 if __name__ == "__main__":

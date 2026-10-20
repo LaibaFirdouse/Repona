@@ -81,6 +81,11 @@ retrieved_paths = [
     span.get("relative_path") or ""
     for span in (trace.get("spans_before_budget") or [])
 ]
+for span in trace.get("packet_spans") or []:
+    path = span.get("relative_path") or ""
+    if path and path not in retrieved_paths:
+        retrieved_paths.append(path)
+lane_exec = (trace.get("lane_trace") or {{}}).get("lanes_executed") or {{}}
 
 result = {{
     "ok": error is None,
@@ -91,7 +96,10 @@ result = {{
     "vectors_added": vectors_after - vectors_before,
     "vectors_ready": trace.get("vectors_ready"),
     "lanes_requested": lane_trace.get("lanes_requested") or router.get("lanes"),
+    "lanes_executed": lane_exec,
     "lane_hit_counts": lane_trace.get("lane_hit_counts"),
+    "evidence_fallback": trace.get("evidence_fallback"),
+    "packet_spans": trace.get("packet_spans") or [],
     "vector_lane_expanded": router.get("vector_lane_expanded"),
     "lazy_query_embed": lazy,
     "retrieved_paths": retrieved_paths[:24],
@@ -123,6 +131,16 @@ db.close()
     return row
 
 
+def evidence_paths(probe: dict) -> list[str]:
+    paths = list(probe.get("retrieved_paths") or [])
+    for span in probe.get("packet_spans") or []:
+        if isinstance(span, dict):
+            path = span.get("relative_path") or ""
+            if path and path not in paths:
+                paths.append(path)
+    return paths
+
+
 def paths_recall(retrieved_paths: list[str], expect_paths: list[str]) -> dict:
     if not expect_paths:
         return {"hit": True, "recall_at_k": 1.0, "matched": []}
@@ -131,4 +149,87 @@ def paths_recall(retrieved_paths: list[str], expect_paths: list[str]) -> dict:
         "hit": bool(matched),
         "recall_at_k": len(matched) / len(expect_paths),
         "matched": matched,
+    }
+
+
+def paths_full_recall(retrieved_paths: list[str], expect_paths: list[str]) -> dict:
+    if not expect_paths:
+        return {"full_recall": True, "recall_at_k": 1.0, "matched": []}
+    matched = [token for token in expect_paths if any(token in path for path in retrieved_paths)]
+    full = len(matched) == len(expect_paths)
+    return {
+        "full_recall": full,
+        "recall_at_k": len(matched) / len(expect_paths),
+        "matched": matched,
+    }
+
+
+def _lazy_embed_evidence(probe: dict) -> bool:
+    lazy = probe.get("lazy_query_embed") or {}
+    return (
+        (probe.get("vectors_added") or 0) > 0
+        or (lazy.get("lazy_points_upserted") or 0) > 0
+        or ((lazy.get("embed_model_ms") or 0) > 0 and (lazy.get("embed_cache_misses") or 0) > 0)
+    )
+
+
+def score_lazy_case(case: dict, probe: dict, *, is_repeat: bool = False) -> dict:
+    paths = evidence_paths(probe)
+    any_paths = case.get("expect_paths_any") or []
+    all_paths = case.get("expect_paths_all") or []
+    path_any = paths_recall(paths, any_paths) if any_paths else {"hit": True, "recall_at_k": 1.0, "matched": []}
+    path_all = paths_full_recall(paths, all_paths)
+    path_ok = (not any_paths or path_any["hit"]) and path_all["full_recall"]
+
+    lanes = probe.get("lanes_requested") or []
+    expect_lanes = case.get("expect_lanes_any") or []
+    lane_ok = not expect_lanes or any(lane in lanes for lane in expect_lanes)
+
+    executed = probe.get("lanes_executed") or {}
+    expect_executed = case.get("expect_lanes_executed") or []
+    lane_exec_ok = not expect_executed or all(executed.get(lane) for lane in expect_executed)
+
+    lazy = probe.get("lazy_query_embed") or {}
+    embed_error = lazy.get("embed_error")
+    provider_outage = bool(lazy.get("embed_provider_unavailable"))
+    internal_embed_error = bool(embed_error) and not provider_outage
+
+    if probe.get("embed_fail_mode"):
+        vector_ran = bool((executed or {}).get("vector"))
+        embed_ok = probe.get("ok") and vector_ran and provider_outage and not internal_embed_error and path_ok
+    elif case.get("require_no_embed_error", True):
+        embed_ok = not embed_error
+    else:
+        embed_ok = True
+
+    lazy_embed_ok = True
+    if case.get("require_lazy_embed") and not is_repeat:
+        lazy_embed_ok = _lazy_embed_evidence(probe)
+    if case.get("require_lazy_embed") and is_repeat:
+        lazy_embed_ok = (probe.get("vectors_added") or 0) == 0
+
+    materialisation_ok = True
+    if case.get("expect_materialisation"):
+        materialisation_ok = (probe.get("fused_anchor_count") or 0) > 0 or bool(probe.get("evidence_fallback"))
+
+    passed = (
+        probe.get("ok")
+        and path_ok
+        and lane_ok
+        and lane_exec_ok
+        and embed_ok
+        and lazy_embed_ok
+        and materialisation_ok
+    )
+    return {
+        "path_any": path_any,
+        "path_all": path_all,
+        "lane_expectation_met": lane_ok,
+        "lane_execution_met": lane_exec_ok,
+        "materialisation_ok": materialisation_ok,
+        "embed_internal_error": internal_embed_error,
+        "embed_provider_outage": provider_outage,
+        "embed_fallback_ok": embed_ok,
+        "lazy_embed_evidence": lazy_embed_ok if case.get("require_lazy_embed") else _lazy_embed_evidence(probe),
+        "passed": passed,
     }
