@@ -710,6 +710,8 @@
       border-radius: var(--radius-lg);
       padding: 1.1rem 1.15rem;
       box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+      min-width: 0;
+      overflow: hidden;
     }
     .card-title {
       margin: 0 0 0.85rem;
@@ -724,11 +726,22 @@
       gap: 0.65rem;
       align-items: flex-start;
       margin-bottom: 0.75rem;
+      min-width: 0;
+    }
+    .repo-card-head .repo-icon {
+      flex-shrink: 0;
+    }
+    .repo-card-head > div {
+      min-width: 0;
+      flex: 1;
     }
     .repo-card-head h3 {
       margin: 0;
       font-size: 0.95rem;
       font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .repo-card-head p {
       margin: 0.25rem 0 0;
@@ -1623,8 +1636,12 @@
           : urlInput.value.trim()
             ? repoLabel(urlInput.value.trim())
             : "—";
-      document.getElementById("top-repo-name").textContent = label;
-      document.getElementById("meta-repo-name").textContent = label;
+      const topName = document.getElementById("top-repo-name");
+      topName.textContent = label;
+      topName.title = label !== "—" ? label : "";
+      const metaName = document.getElementById("meta-repo-name");
+      metaName.textContent = label;
+      metaName.title = label !== "—" ? label : "";
       const indexState = stateOverride || (repo ? repo.index_state : indexingUrl ? "indexing" : "idle");
       document.getElementById("meta-repo-desc").textContent =
         indexState === "ready"
