@@ -6,10 +6,20 @@ AskProviderName = Literal["cursor", "claude", "codex", "ollama", "opencode", "za
 ASK_PROVIDERS = frozenset(("cursor", "claude", "codex", "ollama", "opencode", "zai", "copilot"))
 
 
+class ConversationTurn(BaseModel):
+    question: str = Field(..., min_length=1, max_length=2000)
+    answer: str = Field(default="", max_length=8000)
+
+
 class RepositoryQuestionRequest(BaseModel):
     repository_id: str = Field(..., min_length=1)
     user_id: str = Field(..., min_length=1, max_length=36)
     question: str = Field(..., min_length=3, max_length=2000)
+    history: list[ConversationTurn] = Field(
+        default_factory=list,
+        max_length=32,
+        description="Prior turns in this chat (oldest first). Used for follow-up questions.",
+    )
     provider: AskProviderName | None = None
     model: str | None = Field(
         default=None,

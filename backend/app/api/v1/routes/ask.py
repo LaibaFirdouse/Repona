@@ -10,6 +10,7 @@ from app.schemas.qa import ASK_PROVIDERS, RepositoryQuestionRequest, RepositoryQ
 from app.services.repository_catalog import record_qa_message
 from app.services.refresh_service import RefreshError, RefreshService
 from app.retrieval.answer import Answer, AnswerService, Cancelled, RetrievalError
+from app.retrieval.conversation_context import QaTurn, normalize_turns
 from app.services.llm.base import LLMProviderError
 from app.services.llm.llm_factory import LLMFactory, provider_name
 
@@ -45,6 +46,12 @@ refresh_service = RefreshService()
 answer_service = AnswerService()
 
 
+def _conversation_from_request(request: RepositoryQuestionRequest) -> list[QaTurn]:
+    return normalize_turns(
+        QaTurn(question=turn.question, answer=turn.answer) for turn in request.history
+    )
+
+
 def _run_ask(
     db: Session,
     request: RepositoryQuestionRequest,
@@ -59,6 +66,7 @@ def _run_ask(
             outcome,
             model=request.model,
             provider=request.provider,
+            conversation=_conversation_from_request(request),
         )
     if outcome.action == "serve" and answered is not None:
         record_qa_message(
@@ -106,12 +114,14 @@ def ask_repository_question_stream(
                 yield json.dumps({"type": "complete", "response": payload.model_dump()}) + "\n"
                 return
             answered: Answer | None = None
+            conversation = _conversation_from_request(request)
             for event in answer_service._answer_events(
                 db,
                 request.question,
                 outcome,
                 model=request.model,
                 provider=request.provider,
+                conversation=conversation,
             ):
                 if event["type"] == "phase":
                     yield json.dumps({"type": "phase", "phase": event["phase"]}) + "\n"

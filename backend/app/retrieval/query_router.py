@@ -131,5 +131,7 @@ def parse_planner_json(raw: str) -> QueryPlanV1 | None:
 
 PLANNER_SYSTEM = (
     "You plan repository code retrieval. Return JSON only matching QueryPlanV1. "
+    "When conversation history is present, treat the current message as a follow-up: "
+    "expand semantic_query and lexical_queries so they stand alone without the prior turns. "
     "Do not answer the user. Do not emit SQL or Cypher."
 )
