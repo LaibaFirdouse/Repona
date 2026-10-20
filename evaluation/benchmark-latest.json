@@ -1,142 +1,909 @@
 {
-  "generated_at": "2026-10-17T06:44:52.592054+00:00",
-  "environment": "local",
-  "targets": {
-    "postgres": "configured",
-    "qdrant": "https://6086a338-5d0c-4d3b-b55b-e2cd89f58c16.australia-southeast1-0.gcp.cloud.qdrant.io",
-    "neo4j": "neo4j+s://82fc82fe.databases.neo4j.io",
-    "llm_provider": "cursor"
-  },
+  "generated_at": "2026-10-20T06:48:39.802308+00:00",
+  "client_id": "a1b2c3d4-e5f6-4789-a012-3456789abcde",
   "components": {
     "postgres": {
       "label": "postgres_ping_and_repo_count",
       "ok": true,
       "samples_ms": [
-        293.3,
-        231.3,
-        217.6
+        223.5,
+        212.3,
+        216.1
       ],
-      "mean_ms": 247.4,
-      "min_ms": 217.6,
-      "max_ms": 293.3
+      "mean_ms": 217.3,
+      "min_ms": 212.3,
+      "max_ms": 223.5
     },
     "neo4j": {
       "label": "neo4j_verify_and_query",
       "ok": true,
       "samples_ms": [
-        1217.9,
-        656.5,
-        672.0
+        1430.5,
+        521.7,
+        548.4
       ],
-      "mean_ms": 848.8,
-      "min_ms": 656.5,
-      "max_ms": 1217.9
+      "mean_ms": 833.6,
+      "min_ms": 521.7,
+      "max_ms": 1430.5
     },
     "qdrant": {
       "label": "qdrant_list_collections",
       "ok": true,
       "samples_ms": [
-        735.3,
-        623.3,
-        593.6
+        676.5,
+        586.3,
+        590.7
       ],
-      "mean_ms": 650.8,
-      "min_ms": 593.6,
-      "max_ms": 735.3
+      "mean_ms": 617.8,
+      "min_ms": 586.3,
+      "max_ms": 676.5
     },
     "embedding": {
       "single_cold": {
         "label": "embedding_single_cold",
         "ok": true,
         "samples_ms": [
-          28910.8
+          19501.0
         ],
-        "mean_ms": 28910.8,
-        "min_ms": 28910.8,
-        "max_ms": 28910.8
+        "mean_ms": 19501.0,
+        "min_ms": 19501.0,
+        "max_ms": 19501.0
       },
       "single_warm": {
         "label": "embedding_single_warm",
         "ok": true,
         "samples_ms": [
-          36.3,
-          30.7,
-          28.5,
-          29.7,
-          28.1
+          27.2,
+          23.9,
+          23.8,
+          22.8,
+          23.3
         ],
-        "mean_ms": 30.7,
-        "min_ms": 28.1,
-        "max_ms": 36.3
+        "mean_ms": 24.2,
+        "min_ms": 22.8,
+        "max_ms": 27.2
       },
       "batch_8": {
         "label": "embedding_batch_8",
         "ok": true,
         "samples_ms": [
-          56.2,
-          53.0,
-          50.3
+          44.2,
+          41.3,
+          42.0
         ],
-        "mean_ms": 53.2,
-        "min_ms": 50.3,
-        "max_ms": 56.2
+        "mean_ms": 42.5,
+        "min_ms": 41.3,
+        "max_ms": 44.2
       }
-    },
-    "git_probe": {
-      "label": "github_probe_head",
-      "ok": true,
-      "samples_ms": [
-        1137.0,
-        759.7,
-        784.4
-      ],
-      "mean_ms": 893.7,
-      "min_ms": 759.7,
-      "max_ms": 1137.0
     }
   },
-  "retrieval": {
-    "ok": true,
-    "repository_id": "883913fc-f20f-5a89-b6c8-19a7f56e7e1d",
-    "generation_id": "16846a57-16a3-56e6-8cc5-8e57584fa4e7",
-    "commit_sha": "672971d66a2ef9f85151e53283113f33d642dabd",
-    "retrieval_ms": 14380.2,
-    "model_ms": 269.0,
-    "total_with_stub_model_ms": 14666.1,
-    "stages_ms": {
-      "name": 105.0,
-      "text": 80.0,
-      "vector": 3080.0,
-      "graph": 2311.0,
-      "load": 2044.0
-    },
-    "lane_anchors": {
-      "name": 1,
-      "text": 0,
-      "vector": 8
-    },
-    "packet_spans": 11
-  },
-  "http": {
-    "base_url": "http://3.26.237.76:8000",
-    "health": {
-      "status_code": 200,
-      "ms": 777.0,
-      "body": {
-        "status": "ok",
-        "app_name": "Repository Intelligence Agent API",
-        "environment": "production",
-        "version": "0.1.0"
+  "repositories": [
+    {
+      "tier": "small",
+      "repo_url": "https://github.com/pallets/itsdangerous",
+      "question": "How does Signer.sign produce a signed value?",
+      "git_probe": {
+        "label": "github_probe_head",
+        "ok": true,
+        "samples_ms": [
+          832.5,
+          804.7,
+          890.0
+        ],
+        "mean_ms": 842.4,
+        "min_ms": 804.7,
+        "max_ms": 890.0
+      },
+      "index": {
+        "skipped": true,
+        "already_ready": true
+      },
+      "retrieval": {
+        "ok": true,
+        "repository_id": "883913fc-f20f-5a89-b6c8-19a7f56e7e1d",
+        "generation_id": "16846a57-16a3-56e6-8cc5-8e57584fa4e7",
+        "commit_sha": "672971d66a2ef9f85151e53283113f33d642dabd",
+        "retrieval_ms": 12541.9,
+        "model_ms": 286.6,
+        "total_with_stub_model_ms": 12829.6,
+        "stages_ms": {
+          "name": 127.0,
+          "text": 99.0,
+          "vector": 1568.0,
+          "graph": 2130.0,
+          "load": 2362.0
+        },
+        "lane_anchors": {
+          "name": 5,
+          "text": 0,
+          "vector": 8
+        },
+        "packet_spans": 12
+      },
+      "compare": {
+        "repository_id": "883913fc-f20f-5a89-b6c8-19a7f56e7e1d",
+        "generation_id": "16846a57-16a3-56e6-8cc5-8e57584fa4e7",
+        "stats": {
+          "files": 31,
+          "chunks": 241,
+          "symbol_chunks": 145
+        },
+        "accuracy": {
+          "same_fused_anchors": true,
+          "same_vector_anchors": true,
+          "same_span_fingerprints": true
+        },
+        "snapshot_validate_ms": {
+          "strict_git_tree": {
+            "light": false,
+            "mean_ms": 5.5,
+            "min_ms": 5.2
+          },
+          "light_head_check": {
+            "light": true,
+            "mean_ms": 5.3,
+            "min_ms": 5.1
+          }
+        },
+        "ask_strict": {
+          "light_snapshot": false,
+          "max_file_filter": 99999,
+          "total_ms": 12442.2,
+          "retrieval_ms": 12175.5,
+          "stages_ms": {
+            "name": 79.0,
+            "text": 47.0,
+            "vector": 1507.0,
+            "graph": 2033.0,
+            "load": 2291.0
+          },
+          "vector_anchors": [
+            "fcecd1e1-749d-5758-8544-8afe7ffdc98c",
+            "80b6a68e-8bd5-5f1b-95cb-ae4dd0e596a1",
+            "513c776d-d264-5078-895a-8a21c757a045",
+            "f3044c3e-7755-5c62-9a48-2e990fbe3b7f",
+            "28771a6d-384c-5129-afc4-aae30715ac4a",
+            "7e55ae46-179c-589d-a58d-79047893e085",
+            "d272c300-509d-513b-bb54-3e32d7c6d362",
+            "ce4a13b9-2cdc-547e-af8b-3511ce131f1b"
+          ],
+          "fused": [
+            "fcecd1e1-749d-5758-8544-8afe7ffdc98c",
+            "80b6a68e-8bd5-5f1b-95cb-ae4dd0e596a1",
+            "e46a5b42-3f00-5829-ba92-1780337bc9d1",
+            "513c776d-d264-5078-895a-8a21c757a045",
+            "98a826b1-64fd-5952-b373-79dd1ae5389c",
+            "3efd082d-0007-5d06-a2eb-7372ef54a371",
+            "f3044c3e-7755-5c62-9a48-2e990fbe3b7f",
+            "28771a6d-384c-5129-afc4-aae30715ac4a",
+            "d97cf895-a8e7-5936-b49c-3c9901d5f1af",
+            "7e55ae46-179c-589d-a58d-79047893e085",
+            "d272c300-509d-513b-bb54-3e32d7c6d362",
+            "ce4a13b9-2cdc-547e-af8b-3511ce131f1b"
+          ],
+          "span_fingerprint": [
+            {
+              "chunk_id": "4da6922c-7ae9-5640-bec5-93ea0aaa3f7c",
+              "path": "src/itsdangerous/signer.py",
+              "name": "Signer.sign"
+            },
+            {
+              "chunk_id": "5384465b-0521-5452-9e9d-ae1b3b02b096",
+              "path": "tests/test_itsdangerous/test_signer.py",
+              "name": "TestSigner.test_key_derivation"
+            },
+            {
+              "chunk_id": "57cc9e14-2808-596a-b81b-0fe935ef182a",
+              "path": "tests/test_itsdangerous/test_url_safe.py",
+              "name": "TestURLSafeSerializer.value"
+            },
+            {
+              "chunk_id": "79dcc49e-398e-5cc9-9615-d1b3d3768463",
+              "path": "src/itsdangerous/signer.py",
+              "name": "Signer"
+            },
+            {
+              "chunk_id": "7b8712b4-b0a4-5aa0-aa92-719bc592b20e",
+              "path": "tests/test_itsdangerous/test_signer.py",
+              "name": "TestSigner.signer_factory"
+            },
+            {
+              "chunk_id": "83a2b744-dd91-5591-97ea-4c98c4033474",
+              "path": "tests/test_itsdangerous/test_signer.py",
+              "name": "TestSigner.test_secret_keys"
+            },
+            {
+              "chunk_id": "8b91c44e-5c97-5309-9b8d-cd00dc6600ec",
+              "path": "tests/test_itsdangerous/test_signer.py",
+              "name": "TestSigner.test_signer"
+            },
+            {
+              "chunk_id": "94621ff2-f05a-5e18-82d0-7580a9fec045",
+              "path": "tests/test_itsdangerous/test_signer.py",
+              "name": "TestSigner.signer"
+            },
+            {
+              "chunk_id": "cbe679eb-e34c-5bfd-8e0b-794c57cf2388",
+              "path": "src/itsdangerous/serializer.py",
+              "name": "Serializer.make_signer"
+            },
+            {
+              "chunk_id": "cefcd945-efd1-5aeb-a2ef-7e850635d210",
+              "path": "tests/test_itsdangerous/test_serializer.py",
+              "name": "TestSerializer.value"
+            },
+            {
+              "chunk_id": "db7a47e5-503d-592b-9855-5ba680c3d2e9",
+              "path": "src/itsdangerous/signer.py",
+              "name": "Signer.validate"
+            },
+            {
+              "chunk_id": "e1820207-6a0a-57f0-95a8-103f49a3834b",
+              "path": "src/itsdangerous/timed.py",
+              "name": "TimestampSigner.sign"
+            }
+          ],
+          "packet_spans": 12
+        },
+        "ask_optimized_defaults": {
+          "light_snapshot": true,
+          "max_file_filter": 256,
+          "total_ms": 12431.8,
+          "retrieval_ms": 12160.7,
+          "stages_ms": {
+            "name": 77.0,
+            "text": 47.0,
+            "vector": 1521.0,
+            "graph": 2018.0,
+            "load": 2327.0
+          },
+          "vector_anchors": [
+            "fcecd1e1-749d-5758-8544-8afe7ffdc98c",
+            "80b6a68e-8bd5-5f1b-95cb-ae4dd0e596a1",
+            "513c776d-d264-5078-895a-8a21c757a045",
+            "f3044c3e-7755-5c62-9a48-2e990fbe3b7f",
+            "28771a6d-384c-5129-afc4-aae30715ac4a",
+            "7e55ae46-179c-589d-a58d-79047893e085",
+            "d272c300-509d-513b-bb54-3e32d7c6d362",
+            "ce4a13b9-2cdc-547e-af8b-3511ce131f1b"
+          ],
+          "fused": [
+            "fcecd1e1-749d-5758-8544-8afe7ffdc98c",
+            "80b6a68e-8bd5-5f1b-95cb-ae4dd0e596a1",
+            "e46a5b42-3f00-5829-ba92-1780337bc9d1",
+            "513c776d-d264-5078-895a-8a21c757a045",
+            "98a826b1-64fd-5952-b373-79dd1ae5389c",
+            "3efd082d-0007-5d06-a2eb-7372ef54a371",
+            "f3044c3e-7755-5c62-9a48-2e990fbe3b7f",
+            "28771a6d-384c-5129-afc4-aae30715ac4a",
+            "d97cf895-a8e7-5936-b49c-3c9901d5f1af",
+            "7e55ae46-179c-589d-a58d-79047893e085",
+            "d272c300-509d-513b-bb54-3e32d7c6d362",
+            "ce4a13b9-2cdc-547e-af8b-3511ce131f1b"
+          ],
+          "span_fingerprint": [
+            {
+              "chunk_id": "4da6922c-7ae9-5640-bec5-93ea0aaa3f7c",
+              "path": "src/itsdangerous/signer.py",
+              "name": "Signer.sign"
+            },
+            {
+              "chunk_id": "5384465b-0521-5452-9e9d-ae1b3b02b096",
+              "path": "tests/test_itsdangerous/test_signer.py",
+              "name": "TestSigner.test_key_derivation"
+            },
+            {
+              "chunk_id": "57cc9e14-2808-596a-b81b-0fe935ef182a",
+              "path": "tests/test_itsdangerous/test_url_safe.py",
+              "name": "TestURLSafeSerializer.value"
+            },
+            {
+              "chunk_id": "79dcc49e-398e-5cc9-9615-d1b3d3768463",
+              "path": "src/itsdangerous/signer.py",
+              "name": "Signer"
+            },
+            {
+              "chunk_id": "7b8712b4-b0a4-5aa0-aa92-719bc592b20e",
+              "path": "tests/test_itsdangerous/test_signer.py",
+              "name": "TestSigner.signer_factory"
+            },
+            {
+              "chunk_id": "83a2b744-dd91-5591-97ea-4c98c4033474",
+              "path": "tests/test_itsdangerous/test_signer.py",
+              "name": "TestSigner.test_secret_keys"
+            },
+            {
+              "chunk_id": "8b91c44e-5c97-5309-9b8d-cd00dc6600ec",
+              "path": "tests/test_itsdangerous/test_signer.py",
+              "name": "TestSigner.test_signer"
+            },
+            {
+              "chunk_id": "94621ff2-f05a-5e18-82d0-7580a9fec045",
+              "path": "tests/test_itsdangerous/test_signer.py",
+              "name": "TestSigner.signer"
+            },
+            {
+              "chunk_id": "cbe679eb-e34c-5bfd-8e0b-794c57cf2388",
+              "path": "src/itsdangerous/serializer.py",
+              "name": "Serializer.make_signer"
+            },
+            {
+              "chunk_id": "cefcd945-efd1-5aeb-a2ef-7e850635d210",
+              "path": "tests/test_itsdangerous/test_serializer.py",
+              "name": "TestSerializer.value"
+            },
+            {
+              "chunk_id": "db7a47e5-503d-592b-9855-5ba680c3d2e9",
+              "path": "src/itsdangerous/signer.py",
+              "name": "Signer.validate"
+            },
+            {
+              "chunk_id": "e1820207-6a0a-57f0-95a8-103f49a3834b",
+              "path": "src/itsdangerous/timed.py",
+              "name": "TimestampSigner.sign"
+            }
+          ],
+          "packet_spans": 12
+        },
+        "cold_warm": {
+          "cold_ms": 12488.0,
+          "warm_ms": 12243.4
+        },
+        "worth_it": {
+          "tree_speedup_x": 1.0,
+          "total_retrieval_saved_ms": 10.4
+        }
       }
     },
-    "index_lookup": {
-      "status_code": 500,
-      "ms": 5840.0,
-      "action": null
+    {
+      "tier": "medium",
+      "repo_url": "https://github.com/pallets/flask",
+      "question": "How does Flask.dispatch_request invoke the matched view function?",
+      "git_probe": {
+        "label": "github_probe_head",
+        "ok": true,
+        "samples_ms": [
+          976.5,
+          873.9,
+          883.7
+        ],
+        "mean_ms": 911.4,
+        "min_ms": 873.9,
+        "max_ms": 976.5
+      },
+      "index": {
+        "skipped": true,
+        "already_ready": true
+      },
+      "retrieval": {
+        "ok": true,
+        "repository_id": "ee4a0014-02d3-56b1-94f8-f383d2d12f51",
+        "generation_id": "b96b1c58-8e53-5150-8267-9fc88a7a9924",
+        "commit_sha": "d086db856be187255b8ec61ef409357393020f32",
+        "retrieval_ms": 12975.5,
+        "model_ms": 263.1,
+        "total_with_stub_model_ms": 13239.8,
+        "stages_ms": {
+          "name": 95.0,
+          "text": 60.0,
+          "vector": 2663.0,
+          "graph": 2184.0,
+          "load": 2138.0
+        },
+        "lane_anchors": {
+          "name": 8,
+          "text": 0,
+          "vector": 8
+        },
+        "packet_spans": 12
+      },
+      "compare": {
+        "repository_id": "ee4a0014-02d3-56b1-94f8-f383d2d12f51",
+        "generation_id": "b96b1c58-8e53-5150-8267-9fc88a7a9924",
+        "stats": {
+          "files": 132,
+          "chunks": 2570,
+          "symbol_chunks": 1642
+        },
+        "accuracy": {
+          "same_fused_anchors": true,
+          "same_vector_anchors": true,
+          "same_span_fingerprints": true
+        },
+        "snapshot_validate_ms": {
+          "strict_git_tree": {
+            "light": false,
+            "mean_ms": 5.9,
+            "min_ms": 5.7
+          },
+          "light_head_check": {
+            "light": true,
+            "mean_ms": 5.4,
+            "min_ms": 5.3
+          }
+        },
+        "ask_strict": {
+          "light_snapshot": false,
+          "max_file_filter": 99999,
+          "total_ms": 13723.6,
+          "retrieval_ms": 13439.4,
+          "stages_ms": {
+            "name": 85.0,
+            "text": 52.0,
+            "vector": 3078.0,
+            "graph": 2077.0,
+            "load": 2224.0
+          },
+          "vector_anchors": [
+            "640a5fc3-5d1e-52f2-be2c-b838a3d99eeb",
+            "89235d14-20bb-5a4e-bda7-781ff8101a7a",
+            "f17d29a9-0921-5d44-b03e-187f6e652d90",
+            "a4e25ad4-8a98-5301-92aa-fff0a19d6f6a",
+            "5c4cedbe-fec3-59d4-a53c-b7fef93f83cf",
+            "0e1a66cd-fde8-5601-9315-36bd8e184a1d",
+            "5567c123-5c29-5fb0-a425-c1ab81d09f98",
+            "5665dea5-6725-59f9-81c0-63b7a4d2272f"
+          ],
+          "fused": [
+            "640a5fc3-5d1e-52f2-be2c-b838a3d99eeb",
+            "0e1a66cd-fde8-5601-9315-36bd8e184a1d",
+            "e31b1a64-1a4c-57fc-819a-3bf75d36b0be",
+            "89235d14-20bb-5a4e-bda7-781ff8101a7a",
+            "f17d29a9-0921-5d44-b03e-187f6e652d90",
+            "a4e25ad4-8a98-5301-92aa-fff0a19d6f6a",
+            "e5622459-8993-59c5-8262-1e7e57ad0a8e",
+            "5c4cedbe-fec3-59d4-a53c-b7fef93f83cf",
+            "c726c045-3cfb-596c-9fc3-1a677e035e75",
+            "bcd35502-e8e0-56dc-9046-f41a568c5e31",
+            "462b1396-48fc-5a85-acfb-a17b5ffc5f98",
+            "5567c123-5c29-5fb0-a425-c1ab81d09f98",
+            "2ee4ea95-7f66-5656-86b1-2ed7b828821e",
+            "5665dea5-6725-59f9-81c0-63b7a4d2272f"
+          ],
+          "span_fingerprint": [
+            {
+              "chunk_id": "0665d4a3-3bc9-58ec-83be-a98ef795f180",
+              "path": "tests/test_views.py",
+              "name": "test_view_provide_automatic_options_attr_disable.Index.dispatch_request"
+            },
+            {
+              "chunk_id": "07032a72-ac0c-5cd9-acc2-ab739d19b660",
+              "path": "src/flask/app.py",
+              "name": "Flask.preprocess_request"
+            },
+            {
+              "chunk_id": "0d68e048-b4bc-5f13-8f7f-e0e46cdef21a",
+              "path": "tests/test_views.py",
+              "name": "test_view_provide_automatic_options_attr_enable.Index"
+            },
+            {
+              "chunk_id": "27d3aadb-3288-5630-9fad-23c9e9db0dc1",
+              "path": "tests/test_views.py",
+              "name": "test_endpoint_override.Index"
+            },
+            {
+              "chunk_id": "3108d0f2-e425-508b-9ddb-b0399e7d7f4e",
+              "path": "tests/test_views.py",
+              "name": "test_basic_view.Index.dispatch_request"
+            },
+            {
+              "chunk_id": "484e075e-606a-51d5-b7d9-5aa7651599e5",
+              "path": "src/flask/views.py",
+              "name": "View.dispatch_request"
+            },
+            {
+              "chunk_id": "5c1fd45c-ad9e-50d9-a60b-fd1b7600225a",
+              "path": "tests/test_views.py",
+              "name": "test_basic_view"
+            },
+            {
+              "chunk_id": "85d93c0c-545a-5fc7-b81a-c2cf50045a14",
+              "path": "tests/test_views.py",
+              "name": "test_view_decorators.Index.dispatch_request"
+            },
+            {
+              "chunk_id": "9bf33f18-8e4e-5449-bad0-0a1624ecca2d",
+              "path": "src/flask/views.py",
+              "name": "MethodView.dispatch_request"
+            },
+            {
+              "chunk_id": "ac4d4d1d-7312-57f2-9d34-4824ae36b9a7",
+              "path": "tests/test_async.py",
+              "name": "AsyncView.dispatch_request"
+            },
+            {
+              "chunk_id": "c67693f6-d38f-5e96-a03c-e13a41a8dd29",
+              "path": "tests/test_views.py",
+              "name": "test_basic_view.Index"
+            },
+            {
+              "chunk_id": "fa7a557f-672c-5d55-84de-0242ea4c64b1",
+              "path": "src/flask/app.py",
+              "name": "Flask.dispatch_request"
+            }
+          ],
+          "packet_spans": 12
+        },
+        "ask_optimized_defaults": {
+          "light_snapshot": true,
+          "max_file_filter": 256,
+          "total_ms": 13204.5,
+          "retrieval_ms": 12930.0,
+          "stages_ms": {
+            "name": 82.0,
+            "text": 44.0,
+            "vector": 2667.0,
+            "graph": 2112.0,
+            "load": 2151.0
+          },
+          "vector_anchors": [
+            "640a5fc3-5d1e-52f2-be2c-b838a3d99eeb",
+            "89235d14-20bb-5a4e-bda7-781ff8101a7a",
+            "f17d29a9-0921-5d44-b03e-187f6e652d90",
+            "a4e25ad4-8a98-5301-92aa-fff0a19d6f6a",
+            "5c4cedbe-fec3-59d4-a53c-b7fef93f83cf",
+            "0e1a66cd-fde8-5601-9315-36bd8e184a1d",
+            "5567c123-5c29-5fb0-a425-c1ab81d09f98",
+            "5665dea5-6725-59f9-81c0-63b7a4d2272f"
+          ],
+          "fused": [
+            "640a5fc3-5d1e-52f2-be2c-b838a3d99eeb",
+            "0e1a66cd-fde8-5601-9315-36bd8e184a1d",
+            "e31b1a64-1a4c-57fc-819a-3bf75d36b0be",
+            "89235d14-20bb-5a4e-bda7-781ff8101a7a",
+            "f17d29a9-0921-5d44-b03e-187f6e652d90",
+            "a4e25ad4-8a98-5301-92aa-fff0a19d6f6a",
+            "e5622459-8993-59c5-8262-1e7e57ad0a8e",
+            "5c4cedbe-fec3-59d4-a53c-b7fef93f83cf",
+            "c726c045-3cfb-596c-9fc3-1a677e035e75",
+            "bcd35502-e8e0-56dc-9046-f41a568c5e31",
+            "462b1396-48fc-5a85-acfb-a17b5ffc5f98",
+            "5567c123-5c29-5fb0-a425-c1ab81d09f98",
+            "2ee4ea95-7f66-5656-86b1-2ed7b828821e",
+            "5665dea5-6725-59f9-81c0-63b7a4d2272f"
+          ],
+          "span_fingerprint": [
+            {
+              "chunk_id": "0665d4a3-3bc9-58ec-83be-a98ef795f180",
+              "path": "tests/test_views.py",
+              "name": "test_view_provide_automatic_options_attr_disable.Index.dispatch_request"
+            },
+            {
+              "chunk_id": "07032a72-ac0c-5cd9-acc2-ab739d19b660",
+              "path": "src/flask/app.py",
+              "name": "Flask.preprocess_request"
+            },
+            {
+              "chunk_id": "0d68e048-b4bc-5f13-8f7f-e0e46cdef21a",
+              "path": "tests/test_views.py",
+              "name": "test_view_provide_automatic_options_attr_enable.Index"
+            },
+            {
+              "chunk_id": "27d3aadb-3288-5630-9fad-23c9e9db0dc1",
+              "path": "tests/test_views.py",
+              "name": "test_endpoint_override.Index"
+            },
+            {
+              "chunk_id": "3108d0f2-e425-508b-9ddb-b0399e7d7f4e",
+              "path": "tests/test_views.py",
+              "name": "test_basic_view.Index.dispatch_request"
+            },
+            {
+              "chunk_id": "484e075e-606a-51d5-b7d9-5aa7651599e5",
+              "path": "src/flask/views.py",
+              "name": "View.dispatch_request"
+            },
+            {
+              "chunk_id": "5c1fd45c-ad9e-50d9-a60b-fd1b7600225a",
+              "path": "tests/test_views.py",
+              "name": "test_basic_view"
+            },
+            {
+              "chunk_id": "85d93c0c-545a-5fc7-b81a-c2cf50045a14",
+              "path": "tests/test_views.py",
+              "name": "test_view_decorators.Index.dispatch_request"
+            },
+            {
+              "chunk_id": "9bf33f18-8e4e-5449-bad0-0a1624ecca2d",
+              "path": "src/flask/views.py",
+              "name": "MethodView.dispatch_request"
+            },
+            {
+              "chunk_id": "ac4d4d1d-7312-57f2-9d34-4824ae36b9a7",
+              "path": "tests/test_async.py",
+              "name": "AsyncView.dispatch_request"
+            },
+            {
+              "chunk_id": "c67693f6-d38f-5e96-a03c-e13a41a8dd29",
+              "path": "tests/test_views.py",
+              "name": "test_basic_view.Index"
+            },
+            {
+              "chunk_id": "fa7a557f-672c-5d55-84de-0242ea4c64b1",
+              "path": "src/flask/app.py",
+              "name": "Flask.dispatch_request"
+            }
+          ],
+          "packet_spans": 12
+        },
+        "cold_warm": {
+          "cold_ms": 12930.6,
+          "warm_ms": 13208.4
+        },
+        "worth_it": {
+          "tree_speedup_x": 1.1,
+          "total_retrieval_saved_ms": 519.1
+        }
+      }
     },
-    "ask": {
-      "ok": false,
-      "error": "no repository_id"
+    {
+      "tier": "large",
+      "repo_url": "https://github.com/LaibaFirdouse/Repona",
+      "question": "How does AnswerService retrieve evidence for a question?",
+      "git_probe": {
+        "label": "github_probe_head",
+        "ok": true,
+        "samples_ms": [
+          790.3,
+          758.9,
+          744.6
+        ],
+        "mean_ms": 764.6,
+        "min_ms": 744.6,
+        "max_ms": 790.3
+      },
+      "index": {
+        "skipped": true,
+        "already_ready": true
+      },
+      "retrieval": {
+        "ok": true,
+        "repository_id": "0c9e0ff2-5698-54c9-8503-5abae2f52ad0",
+        "generation_id": "1cfbcfb3-7b56-5a2f-a863-19e6e61ef2b1",
+        "commit_sha": "bb18f6f7b1eb8f859293a3fe67637dc809f100c4",
+        "retrieval_ms": 13561.7,
+        "model_ms": 265.8,
+        "total_with_stub_model_ms": 13832.5,
+        "stages_ms": {
+          "name": 129.0,
+          "text": 131.0,
+          "vector": 2176.0,
+          "graph": 3024.0,
+          "load": 1996.0
+        },
+        "lane_anchors": {
+          "name": 1,
+          "text": 2,
+          "vector": 8
+        },
+        "packet_spans": 5
+      },
+      "compare": {
+        "repository_id": "0c9e0ff2-5698-54c9-8503-5abae2f52ad0",
+        "generation_id": "1cfbcfb3-7b56-5a2f-a863-19e6e61ef2b1",
+        "stats": {
+          "files": 142,
+          "chunks": 2001,
+          "symbol_chunks": 1018
+        },
+        "accuracy": {
+          "same_fused_anchors": true,
+          "same_vector_anchors": true,
+          "same_span_fingerprints": true
+        },
+        "snapshot_validate_ms": {
+          "strict_git_tree": {
+            "light": false,
+            "mean_ms": 5.5,
+            "min_ms": 5.1
+          },
+          "light_head_check": {
+            "light": true,
+            "mean_ms": 5.1,
+            "min_ms": 4.9
+          }
+        },
+        "ask_strict": {
+          "light_snapshot": false,
+          "max_file_filter": 99999,
+          "total_ms": 14251.6,
+          "retrieval_ms": 13985.0,
+          "stages_ms": {
+            "name": 82.0,
+            "text": 49.0,
+            "vector": 2126.0,
+            "graph": 3516.0,
+            "load": 1976.0
+          },
+          "vector_anchors": [
+            "664dc84a-d453-5597-8a46-4d2bfcc2a8a8",
+            "ad74f932-82aa-5709-8437-1b3aec9cf963",
+            "664dc84a-d453-5597-8a46-4d2bfcc2a8a8",
+            "5fa1543f-f85a-5c35-be72-65eb9aad5cf1",
+            "37d06866-c7ed-5ab8-a611-c1853434162e",
+            "6d4dd02e-c66b-5557-bb03-a4c4a2b126fa",
+            "28b14b28-c0f4-551a-862e-645fb8df0123",
+            "0b97b01d-1483-5f5d-bdd9-1c1cb5fde0cb"
+          ],
+          "fused": [
+            "ad74f932-82aa-5709-8437-1b3aec9cf963",
+            "37d06866-c7ed-5ab8-a611-c1853434162e",
+            "664dc84a-d453-5597-8a46-4d2bfcc2a8a8",
+            "7ec9b352-8818-5257-a0a5-9b706705100d",
+            "5fa1543f-f85a-5c35-be72-65eb9aad5cf1",
+            "6d4dd02e-c66b-5557-bb03-a4c4a2b126fa",
+            "28b14b28-c0f4-551a-862e-645fb8df0123",
+            "0b97b01d-1483-5f5d-bdd9-1c1cb5fde0cb"
+          ],
+          "span_fingerprint": [
+            {
+              "chunk_id": "14356f5e-083f-5de3-867c-3bc2eb520d7d",
+              "path": "backend/tests/test_llm_answer.py",
+              "name": "ModelAnswerTests"
+            },
+            {
+              "chunk_id": "1cc180be-a1d8-5eb7-af10-cda7e6a2b3e1",
+              "path": "backend/app/retrieval/answer.py",
+              "name": ""
+            },
+            {
+              "chunk_id": "36ac1059-19e6-5d01-a3a6-71b7ce918ba6",
+              "path": "backend/tests/test_llm_answer.py",
+              "name": "_RecordingAnswer.answer"
+            },
+            {
+              "chunk_id": "420d1b56-41d2-59f8-9153-4ebd7b9240a9",
+              "path": "backend/app/retrieval/answer.py",
+              "name": "AnswerService"
+            },
+            {
+              "chunk_id": "4b02f82a-d694-572b-8a6b-4ae169c58086",
+              "path": "scripts/compare_retrieval_paths.py",
+              "name": ""
+            },
+            {
+              "chunk_id": "57e68251-6a75-5c70-9f57-f98bd45f4aab",
+              "path": "backend/app/retrieval/answer.py",
+              "name": "AnswerService.answer"
+            },
+            {
+              "chunk_id": "9914a3c8-f7fc-51e1-99f9-9cb04f20fa9d",
+              "path": "scripts/benchmark.py",
+              "name": "bench_qdrant"
+            },
+            {
+              "chunk_id": "a3222f82-61a8-57d0-956b-db22f0439171",
+              "path": "backend/app/api/v1/routes/ask.py",
+              "name": ""
+            },
+            {
+              "chunk_id": "a41850c0-59bb-504d-9231-0746307a7946",
+              "path": "scripts/benchmark.py",
+              "name": "bench_git_probe"
+            },
+            {
+              "chunk_id": "ace61911-cafd-5f27-843d-4fa053a13384",
+              "path": "scripts/benchmark.py",
+              "name": "main"
+            },
+            {
+              "chunk_id": "ae8b974b-36a2-50ea-9803-8684ac4cf52b",
+              "path": "scripts/benchmark.py",
+              "name": "bench_retrieval"
+            },
+            {
+              "chunk_id": "b642de6a-ffa3-5ce7-bd6a-b76b3788fe2f",
+              "path": "backend/app/retrieval/answer.py",
+              "name": "AnswerService.answer"
+            }
+          ],
+          "packet_spans": 5
+        },
+        "ask_optimized_defaults": {
+          "light_snapshot": true,
+          "max_file_filter": 256,
+          "total_ms": 13810.4,
+          "retrieval_ms": 13543.0,
+          "stages_ms": {
+            "name": 79.0,
+            "text": 44.0,
+            "vector": 2231.0,
+            "graph": 3099.0,
+            "load": 1936.0
+          },
+          "vector_anchors": [
+            "664dc84a-d453-5597-8a46-4d2bfcc2a8a8",
+            "ad74f932-82aa-5709-8437-1b3aec9cf963",
+            "664dc84a-d453-5597-8a46-4d2bfcc2a8a8",
+            "5fa1543f-f85a-5c35-be72-65eb9aad5cf1",
+            "37d06866-c7ed-5ab8-a611-c1853434162e",
+            "6d4dd02e-c66b-5557-bb03-a4c4a2b126fa",
+            "28b14b28-c0f4-551a-862e-645fb8df0123",
+            "0b97b01d-1483-5f5d-bdd9-1c1cb5fde0cb"
+          ],
+          "fused": [
+            "ad74f932-82aa-5709-8437-1b3aec9cf963",
+            "37d06866-c7ed-5ab8-a611-c1853434162e",
+            "664dc84a-d453-5597-8a46-4d2bfcc2a8a8",
+            "7ec9b352-8818-5257-a0a5-9b706705100d",
+            "5fa1543f-f85a-5c35-be72-65eb9aad5cf1",
+            "6d4dd02e-c66b-5557-bb03-a4c4a2b126fa",
+            "28b14b28-c0f4-551a-862e-645fb8df0123",
+            "0b97b01d-1483-5f5d-bdd9-1c1cb5fde0cb"
+          ],
+          "span_fingerprint": [
+            {
+              "chunk_id": "14356f5e-083f-5de3-867c-3bc2eb520d7d",
+              "path": "backend/tests/test_llm_answer.py",
+              "name": "ModelAnswerTests"
+            },
+            {
+              "chunk_id": "1cc180be-a1d8-5eb7-af10-cda7e6a2b3e1",
+              "path": "backend/app/retrieval/answer.py",
+              "name": ""
+            },
+            {
+              "chunk_id": "36ac1059-19e6-5d01-a3a6-71b7ce918ba6",
+              "path": "backend/tests/test_llm_answer.py",
+              "name": "_RecordingAnswer.answer"
+            },
+            {
+              "chunk_id": "420d1b56-41d2-59f8-9153-4ebd7b9240a9",
+              "path": "backend/app/retrieval/answer.py",
+              "name": "AnswerService"
+            },
+            {
+              "chunk_id": "4b02f82a-d694-572b-8a6b-4ae169c58086",
+              "path": "scripts/compare_retrieval_paths.py",
+              "name": ""
+            },
+            {
+              "chunk_id": "57e68251-6a75-5c70-9f57-f98bd45f4aab",
+              "path": "backend/app/retrieval/answer.py",
+              "name": "AnswerService.answer"
+            },
+            {
+              "chunk_id": "9914a3c8-f7fc-51e1-99f9-9cb04f20fa9d",
+              "path": "scripts/benchmark.py",
+              "name": "bench_qdrant"
+            },
+            {
+              "chunk_id": "a3222f82-61a8-57d0-956b-db22f0439171",
+              "path": "backend/app/api/v1/routes/ask.py",
+              "name": ""
+            },
+            {
+              "chunk_id": "a41850c0-59bb-504d-9231-0746307a7946",
+              "path": "scripts/benchmark.py",
+              "name": "bench_git_probe"
+            },
+            {
+              "chunk_id": "ace61911-cafd-5f27-843d-4fa053a13384",
+              "path": "scripts/benchmark.py",
+              "name": "main"
+            },
+            {
+              "chunk_id": "ae8b974b-36a2-50ea-9803-8684ac4cf52b",
+              "path": "scripts/benchmark.py",
+              "name": "bench_retrieval"
+            },
+            {
+              "chunk_id": "b642de6a-ffa3-5ce7-bd6a-b76b3788fe2f",
+              "path": "backend/app/retrieval/answer.py",
+              "name": "AnswerService.answer"
+            }
+          ],
+          "packet_spans": 5
+        },
+        "cold_warm": {
+          "cold_ms": 13975.7,
+          "warm_ms": 14296.7
+        },
+        "worth_it": {
+          "tree_speedup_x": 1.1,
+          "total_retrieval_saved_ms": 441.2
+        }
+      }
     }
-  }
+  ]
 }
