@@ -106,6 +106,8 @@ class Settings:
     answer_evidence_rounds: int = _get_int_env("ANSWER_EVIDENCE_ROUNDS", 1)
     answer_more_evidence_max_queries: int = _get_int_env("ANSWER_MORE_EVIDENCE_MAX_QUERIES", 4)
     answer_more_evidence_max_paths: int = _get_int_env("ANSWER_MORE_EVIDENCE_MAX_PATHS", 6)
+    answer_conversation_max_turns: int = _get_int_env("ANSWER_CONVERSATION_MAX_TURNS", 8)
+    answer_conversation_answer_chars: int = _get_int_env("ANSWER_CONVERSATION_ANSWER_CHARS", 2500)
     debug: bool = _get_bool_env("DEBUG", True)
     rate_limit_enabled: bool = _get_bool_env("RATE_LIMIT_ENABLED", True)
     rate_limit_trust_proxy: bool = _get_bool_env("RATE_LIMIT_TRUST_PROXY", False)

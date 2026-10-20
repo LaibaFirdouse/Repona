@@ -2072,6 +2072,16 @@
       chat.scrollTop = chat.scrollHeight;
     }
 
+    function buildAskHistory() {
+      return chatTurns
+        .filter((t) => !t.pending && !t.error && (t.question || "").trim())
+        .slice(-8)
+        .map((t) => ({
+          question: t.question,
+          answer: t.answer || "",
+        }));
+    }
+
     function appendPendingQuestion(question) {
       if (chat.querySelector(".welcome-card")) chat.replaceChildren();
       chatTurns = chatTurns.filter((t) => !t.pending);
@@ -2295,6 +2305,7 @@
             repository_id: repositoryId,
             user_id: clientId,
             question,
+            history: buildAskHistory(),
           }),
         });
         if (!response.ok) throw new Error(await errorText(response));
