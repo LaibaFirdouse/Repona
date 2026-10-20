@@ -13,6 +13,16 @@ _PAREN_EVIDENCE = re.compile(
 _STANDALONE_EVIDENCE = re.compile(r"\bE\d+\b", re.IGNORECASE)
 # UI chrome sometimes pasted into stored answers
 _SOURCES_LINE = re.compile(r"^\s*Sources\s*·\s*\d+\s*$", re.MULTILINE | re.IGNORECASE)
+# Retrieval-audit phrasing the model should not show users
+_META_SNIPPETS = (
+    re.compile(r"\b(?:the )?(?:provided |retrieved |supplied )?(?:source )?excerpts?\b", re.I),
+    re.compile(r"\bthis packet\b", re.I),
+    re.compile(r"\bprior (?:answer|summary|turn)\b", re.I),
+    re.compile(r"\bfrom the README alone\b", re.I),
+    re.compile(r"\bnot (?:present|included) in (?:these |the )?(?:excerpts|spans|fragments)\b[^.!?]*[.!?]?", re.I),
+    re.compile(r"\b(?:do not|does not) appear in (?:these |the )?(?:supplied )?(?:source )?(?:spans|fragments)\b[^.!?]*[.!?]?", re.I),
+    re.compile(r"\bwhich are not (?:included|shown) in\b[^.!?]*[.!?]?", re.I),
+)
 
 
 def sanitize_answer_prose(text: str) -> str:
@@ -22,6 +32,8 @@ def sanitize_answer_prose(text: str) -> str:
     cleaned = _SOURCES_LINE.sub("", text)
     cleaned = _PAREN_EVIDENCE.sub("", cleaned)
     cleaned = _STANDALONE_EVIDENCE.sub("", cleaned)
+    for pattern in _META_SNIPPETS:
+        cleaned = pattern.sub("", cleaned)
     cleaned = re.sub(r"[ \t]+\.", ".", cleaned)
     cleaned = re.sub(r"[ \t]+,", ",", cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)

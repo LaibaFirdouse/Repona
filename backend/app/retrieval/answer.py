@@ -92,6 +92,13 @@ from app.retrieval.answer_turn import (
     collect_answer_turn,
 )
 from app.retrieval.answer_prose import META_ANSWER_SUFFIX, meta_reasoning_question
+from app.retrieval.code_first import (
+    CODE_FIRST_SUFFIX,
+    code_first_chunk_choices,
+    deprioritize_readme_spans,
+    filter_readme_when_code_first,
+    wants_implementation_evidence,
+)
 from app.retrieval.conversation_context import (
     QaTurn,
     format_answer_history,
@@ -145,6 +152,8 @@ SYSTEM_PROMPT = (
     "Use one or more claims; each claim text may be a paragraph when the question warrants it. "
     "Write for the user, not for a reviewer of the retrieval system. "
     "Sound like a colleague explaining the codebase: paths, functions, and behavior—not a retrieval audit. "
+    "When implementation source is in the excerpts, prefer it over README.md unless the question is only high-level purpose. "
+    "Never write that material is \"not in the excerpts\" or \"not shown\"; state what the code you have does, or say briefly that a file was not retrieved. "
     "kind is observed, inference, or suggestion. Every claim must cite at least one evidence_id from the excerpts. "
     "An observed claim states a fact shown in the excerpts. "
     "An inference is a careful conclusion from those facts. "
@@ -375,6 +384,7 @@ class AnswerService:
         history = normalize_turns(conversation)
         search_question = retrieval_question_text(question, history)
         history_prefix = format_answer_history(history)
+        code_first = wants_implementation_evidence(question, history)
         if outcome.pin_id is None or outcome.generation_id is None:
             raise RetrievalError(409, "the question has no pinned generation")
         self._ensure_open(db, outcome.pin_id)
@@ -516,7 +526,12 @@ class AnswerService:
         expanded = _expansion_symbol_spans(db, generation, search_question)
         behavior = _behavior_symbol_spans(db, generation, search_question)
         span_limit = settings.retrieval_span_limit
-        if overview_question(search_question) or overview_question(question) or retrieval.intent in {
+        if code_first:
+            span_limit += settings.answer_overview_span_bonus
+            boost = code_first_chunk_choices(db, generation, limit=span_limit)
+            spans = _merge_chunk_choices(spans, boost, span_limit)
+            spans = deprioritize_readme_spans(spans)
+        elif overview_question(search_question) or overview_question(question) or retrieval.intent in {
             "architecture_question",
             "conceptual_search",
         }:
@@ -532,6 +547,8 @@ class AnswerService:
             _load_span_text(db, generation.id, revision, spans, blobs),
             search_question,
         )
+        if code_first:
+            loaded = filter_readme_when_code_first(loaded)
         step = _trace_step(trace, "08_snapshot_validate_and_load_span_text", step)
         priority_ids = {item.chunk_id for item in named + expanded + behavior}
         loaded = [span for span in loaded if span["chunk_id"] in priority_ids] + [
@@ -603,6 +620,8 @@ class AnswerService:
             suffix = JSON_FORMAT_SUFFIX + (MORE_EVIDENCE_SUFFIX if allow_more else FINAL_ONLY_SUFFIX)
             if meta_reasoning_question(question):
                 suffix += META_ANSWER_SUFFIX
+            if code_first:
+                suffix += CODE_FIRST_SUFFIX
             user_block = _dialog_user_block(question, dialog_notes, history_prefix=history_prefix)
             header = SYSTEM_PROMPT + suffix + "\n" + user_block
             packed, loaded_for_answer = _pack_repository_evidence(
