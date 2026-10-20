@@ -11,11 +11,13 @@ from app.retrieval.model_call import (
     REPAIR_INSTRUCTION,
     REPAIR_NOTE,
     ClaimFailureNote,
+    _count_call,
+    _keep_raw,
     _one_claim,
     _unwrap_fence,
-    claim_diagnostics_enabled,
     estimate_tokens,
     ollama_prompt_fits,
+    parse_claims,
 )
 
 Status = Literal["final", "need_evidence"]
@@ -77,6 +79,13 @@ def _normalize_more_evidence(payload: dict) -> dict:
     }
 
 
+def _turn_from_legacy_claims(raw: str) -> AnswerTurn | None:
+    parsed = parse_claims(raw)
+    if not parsed.accepted or not parsed.claims:
+        return None
+    return AnswerTurn("final", parsed.claims, None)
+
+
 def collect_answer_turn(
     system_message: str,
     user_message: str,
@@ -88,19 +97,31 @@ def collect_answer_turn(
     record: ClaimFailureNote | None = None,
 ) -> AnswerTurn | None:
     renew()
+    _count_call(record)
     raw = complete(system_message, user_message, max_output_tokens)
     turn = parse_answer_turn(raw)
+    if turn is None:
+        turn = _turn_from_legacy_claims(raw)
     if turn is not None:
+        _keep_raw(record, raw)
+        if turn.status == "need_evidence" and not allow_more_evidence:
+            legacy = _turn_from_legacy_claims(raw)
+            if legacy is not None:
+                return legacy
+            return AnswerTurn("final", [], None)
         return turn
-    repair_user = user_message + REPAIR_NOTE + raw + REPAIR_INSTRUCTION.replace(
-        '{"claims"',
-        '{"status":"final","claims"',
-    )
+    repair_user = user_message + REPAIR_NOTE + raw + REPAIR_INSTRUCTION
     if _repair_exceeds_context(system_message, repair_user, max_output_tokens):
         return None
     renew()
+    _count_call(record)
     repaired = complete(system_message, repair_user, max_output_tokens)
-    return parse_answer_turn(repaired)
+    turn = parse_answer_turn(repaired)
+    if turn is None:
+        turn = _turn_from_legacy_claims(repaired)
+    if turn is not None:
+        _keep_raw(record, repaired)
+    return turn
 
 
 def _repair_exceeds_context(system_message: str, repair_user: str, max_output_tokens: int) -> bool:
@@ -116,6 +137,12 @@ MORE_EVIDENCE_SUFFIX = (
 )
 
 FINAL_ONLY_SUFFIX = (
-    '\nRespond with {"status":"final","claims":[{"kind":"observed|inference|suggestion","text":"...",'
-    '"evidence_ids":["E1"]}]}. You must use status final — do not request more evidence.'
+    '\nRespond with JSON only: {"status":"final","claims":[{"kind":"observed","text":"...",'
+    '"evidence_ids":["E1"]}]}. kind must be observed, inference, or suggestion. '
+    "You must use status final — do not request more evidence."
+)
+
+JSON_FORMAT_SUFFIX = (
+    '\nOutput JSON only (no markdown prose). Either {"status":"final","claims":[...]} '
+    'or {"status":"need_evidence","more_evidence":{"note":"...","lexical_queries":[],"path_contains":[]}}.'
 )
