@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.core.config import settings
+from app.retrieval.answer_prose import sanitize_answer_prose
 
 NO_CITED_CLAIM = "The repository evidence did not produce a cited claim."
 INSUFFICIENT_EVIDENCE = "The retrieved evidence is not sufficient to explain this."
@@ -135,7 +136,7 @@ def render_answer(claims: list[dict]) -> str:
     """Turn kept claims into the prose a person reads."""
     paragraphs = []
     for claim in claims:
-        text = str(claim.get("text") or "").strip()
+        text = sanitize_answer_prose(str(claim.get("text") or "").strip())
         if not text:
             continue
         paragraphs.append(text)

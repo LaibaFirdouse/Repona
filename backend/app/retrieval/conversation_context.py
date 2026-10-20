@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from app.core.config import settings
+from app.retrieval.answer_prose import sanitize_answer_prose
 
 
 @dataclass(frozen=True)
@@ -82,6 +83,6 @@ def format_answer_history(history: list[QaTurn]) -> str:
     for turn in history:
         lines.append(f"User: {turn.question}")
         if turn.answer:
-            lines.append(f"Assistant: {turn.answer}")
+            lines.append(f"Assistant: {sanitize_answer_prose(turn.answer)}")
     lines.append("")
     return "\n".join(lines)
