@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+from time import perf_counter
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.ingestion.benchmark_trace import record_step
+from app.core.config import settings
 from app.ingestion.assemble import assemble_generation
+from app.ingestion.embedding_reuse import embed_chunks_with_reuse
+from app.ingestion.lazy_vectors import mark_vectors_ready
 from app.ingestion.checkpoint import ParseCache
 from app.ingestion.claims import (
     abort_snapshot_claim,
@@ -24,6 +29,7 @@ from app.ingestion.materialize import promote_tree, read_commit_blobs, write_det
 from app.ingestion.persist import (
     GenerationWriteError,
     activate_generation,
+    append_generation_chunks,
     ensure_source_revision,
     insert_pending_generation,
     write_draft,
@@ -70,8 +76,10 @@ def ingest_commit(
     qdrant_url: str | None = None,
     graph_session=None,
 ) -> str:
+    started = perf_counter()
     now = datetime.utcnow()
     repository = db.query(Repository).filter(Repository.id == repository_id).with_for_update().one()
+    record_step("ingest.lock_repository_row", started)
     if repository.refresh_state == "running":
         if repository.refresh_lease_expires_at and repository.refresh_lease_expires_at > now:
             raise GenerationWriteError("a refresh is already running for this repository")
@@ -109,7 +117,10 @@ def ingest_commit(
             raise GenerationWriteError("work tree deletion is still in progress")
     if revision.snapshot_state == "creating":
         recover_creating_snapshot(revision, owner, now, git_dir, commit_sha)
+    t = perf_counter()
     snapshot_mode = claim_snapshot(revision, owner, snapshot_root, now)
+    record_step("ingest.claim_snapshot", t, mode=snapshot_mode)
+    t = perf_counter()
     insert_pending_generation(
         db,
         repository_id,
@@ -123,6 +134,8 @@ def ingest_commit(
     )
     repository.refresh_generation_id = generation_key
     db.commit()
+    record_step("ingest.insert_pending_generation_commit", t, generation_id=generation_key[:12])
+    t = perf_counter()
     _finish_generation(
         db,
         repository_id=repository_id,
@@ -141,6 +154,8 @@ def ingest_commit(
         qdrant_url=qdrant_url,
         graph_session=graph_session,
     )
+    record_step("ingest.finish_generation_total", t)
+    record_step("ingest.ingest_commit_total", started)
     return generation_key
 
 
@@ -219,25 +234,40 @@ def _finish_generation(
     qdrant_url: str | None,
     graph_session,
 ) -> None:
+    finish_started = perf_counter()
     try:
         revision = db.get(SourceRevision, revision_key)
         if snapshot_mode == "create":
             creating = Path(revision.creating_path)
             publish = Path(revision.publish_path)
+            t = perf_counter()
             created_blobs = write_detached_tree(git_dir, commit_sha, creating)
+            record_step("ingest.write_detached_worktree", t, blob_count=len(created_blobs))
+            t = perf_counter()
             validate_worktree_bytes(git_dir, commit_sha, creating, created_blobs)
+            record_step("ingest.validate_creating_worktree", t)
+            t = perf_counter()
             promote_tree(creating, publish)
+            record_step("ingest.promote_snapshot_tree", t)
+            t = perf_counter()
             publish_snapshot_claim(revision, owner)
             db.commit()
+            record_step("ingest.publish_snapshot_claim_db", t)
             revision = db.get(SourceRevision, revision_key)
             blobs = created_blobs
         else:
+            t = perf_counter()
             blobs = read_commit_blobs(git_dir, commit_sha)
+            record_step("ingest.read_commit_blobs_reuse", t, blob_count=len(blobs))
+        t = perf_counter()
         validate_worktree_bytes(git_dir, commit_sha, Path(revision.snapshot_path), blobs)
+        record_step("ingest.validate_published_worktree", t)
         _renew_lease(db, repository_id, owner, epoch, datetime.utcnow())
         cache = None
         if snapshot_root is not None:
             cache = ParseCache(Path(snapshot_root).parent / "parse-cache" / repository_id)
+        t = perf_counter()
+        progressive = settings.progressive_indexing
         draft = assemble_generation(
             repository_id,
             commit_sha,
@@ -246,45 +276,187 @@ def _finish_generation(
             generation_key,
             on_progress=lambda: _renew_lease(db, repository_id, owner, epoch, datetime.utcnow()),
             cache=cache,
+            progressive=progressive,
+        )
+        record_step(
+            "ingest.assemble_generation",
+            t,
+            files=len(draft.files),
+            chunks=len(draft.chunks),
+            deferred_chunks=len(draft.deferred_chunks),
+            edges=len(draft.edges),
+            progressive=progressive,
         )
         renew = lambda: _renew_lease(db, repository_id, owner, epoch, datetime.utcnow())
+        t = perf_counter()
         write_draft(db, repository_id, generation_key, fingerprint, draft, on_progress=renew)
+        record_step("ingest.write_draft_postgres", t)
         renew()
         if _lost_ownership(db, repository_id, owner, epoch):
             raise GenerationWriteError("refresh owner no longer holds this generation")
         if graph_session is None:
             raise ChecklistError("neo4j session is required")
+        t = perf_counter()
         write_graph(graph_session, repository_id, revision.id, generation_key, draft, epoch, on_progress=renew)
+        record_step("ingest.write_graph_neo4j", t)
         expected = {item.edge_id for item in draft.edges}
         expected.add(str(edge_id("HAS_GENERATION", generation_key, revision.id, generation_key)))
+        t = perf_counter()
         delete_edges_outside_expected(graph_session, generation_key, list(expected), epoch)
         present = current_epoch_edge_ids(graph_session, generation_key, epoch)
         if not edge_set_matches(present, expected):
             raise ChecklistError("neo4j edge set does not match this generation")
+        record_step("ingest.neo4j_prune_and_verify_edges", t)
+        t = perf_counter()
         _assert_catalog(db, generation_key, fingerprint, draft, blobs)
-        if draft.chunks:
-            if qdrant_url is None:
-                raise ChecklistError("qdrant is required when the generation has chunks")
+        record_step("ingest.assert_postgres_catalog", t)
+        indexed_chunks = list(draft.chunks)
+        collection: str | None = None
+        if qdrant_url is not None and (indexed_chunks or draft.deferred_chunks):
             collection = collection_name(embedding_model, vector_dimensions)
+        if (
+            settings.embed_catalogue_before_activate
+            and indexed_chunks
+            and qdrant_url is not None
+            and collection is not None
+        ):
+            if qdrant_url is None:
+                raise ChecklistError("qdrant is required when catalogue embedding is enabled")
+            catalog_stats: dict = {}
+            t = perf_counter()
             ensure_collection(qdrant_url, collection, vector_dimensions)
+            record_step("ingest.qdrant_ensure_collection", t, collection=collection)
             renew_embed = lambda: _renew_lease(db, repository_id, owner, epoch, datetime.utcnow())
-            for start in range(0, len(draft.chunks), 256):
-                part = draft.chunks[start : start + 256]
-                vectors = _embed_chunks(embed, part, renew_embed)
-                upsert_missing_points(
-                    qdrant_url,
-                    collection,
-                    repository_id,
-                    draft,
-                    fingerprint,
-                    vectors,
-                    chunks=part,
-                )
-            _assert_points(qdrant_url, collection, repository_id, generation_key, fingerprint, vector_dimensions, draft, db)
+            t = perf_counter()
+            batch_index = _embed_and_upsert_batches(
+                qdrant_url,
+                collection,
+                repository_id,
+                generation_key,
+                fingerprint,
+                embed,
+                draft,
+                indexed_chunks,
+                renew_embed,
+                catalog_stats,
+                db,
+                generation_key,
+            )
+            record_step(
+                "ingest.qdrant_catalog_embed_and_upsert",
+                t,
+                batches=batch_index,
+                embed_cache_hits=catalog_stats.get("embed_cache_hits", 0),
+                embed_cache_misses=catalog_stats.get("embed_cache_misses", 0),
+                qdrant_payload_lookup_ms=round(catalog_stats.get("qdrant_payload_lookup_ms", 0), 2),
+                qdrant_vector_fetch_ms=round(catalog_stats.get("qdrant_vector_fetch_ms", 0), 2),
+                embed_model_ms=round(catalog_stats.get("embed_model_ms", 0), 2),
+                qdrant_points_upserted=catalog_stats.get("qdrant_points_upserted", 0),
+            )
+        elif indexed_chunks and not settings.embed_catalogue_before_activate:
+            record_step(
+                "ingest.qdrant_catalog_embed_skipped",
+                perf_counter(),
+                catalog_chunks=len(indexed_chunks),
+            )
+        t = perf_counter()
         publish_graph_epoch(graph_session, generation_key, epoch)
+        record_step("ingest.neo4j_publish_graph_epoch", t)
         _renew_lease(db, repository_id, owner, epoch, datetime.utcnow())
+        t = perf_counter()
         activate_generation(db, repository_id, generation_key, owner, epoch, datetime.utcnow())
+        record_step("ingest.activate_generation_postgres", t)
+        catalogue_queryable = (
+            settings.progressive_indexing and draft.deferred_chunks
+        ) or not settings.embed_catalogue_before_activate
+        if catalogue_queryable:
+            t_queryable = perf_counter()
+            db.commit()
+            record_step(
+                "ingest.time_to_queryable",
+                finish_started,
+                catalog_chunks=len(draft.chunks),
+                deferred_pending=len(draft.deferred_chunks),
+                vectors_required_before_activate=settings.embed_catalogue_before_activate,
+            )
+            record_step("ingest.early_activate_commit", t_queryable, deferred=len(draft.deferred_chunks))
+        if settings.progressive_indexing and draft.deferred_chunks and settings.progressive_complete_deferred_in_ingest:
+            if qdrant_url is None or collection is None:
+                raise ChecklistError("qdrant is required when completing deferred embeddings during ingest")
+            t = perf_counter()
+            ensure_collection(qdrant_url, collection, vector_dimensions)
+            append_generation_chunks(
+                db,
+                repository_id,
+                generation_key,
+                fingerprint,
+                type(draft)(chunks=draft.deferred_chunks),
+            )
+            record_step("ingest.append_deferred_chunks_postgres", t, chunks=len(draft.deferred_chunks))
+            indexed_chunks.extend(draft.deferred_chunks)
+            deferred_stats: dict = {}
+            t = perf_counter()
+            batch_index = _embed_and_upsert_batches(
+                qdrant_url,
+                collection,
+                repository_id,
+                generation_key,
+                fingerprint,
+                embed,
+                draft,
+                draft.deferred_chunks,
+                lambda: None,
+                deferred_stats,
+                db,
+                generation_key,
+            )
+            record_step(
+                "ingest.deferred_qdrant_embed_and_upsert",
+                t,
+                batches=batch_index,
+                embed_cache_hits=deferred_stats.get("embed_cache_hits", 0),
+                embed_cache_misses=deferred_stats.get("embed_cache_misses", 0),
+                qdrant_payload_lookup_ms=round(deferred_stats.get("qdrant_payload_lookup_ms", 0), 2),
+                qdrant_vector_fetch_ms=round(deferred_stats.get("qdrant_vector_fetch_ms", 0), 2),
+                embed_model_ms=round(deferred_stats.get("embed_model_ms", 0), 2),
+                qdrant_points_upserted=deferred_stats.get("qdrant_points_upserted", 0),
+            )
+        elif settings.progressive_indexing and draft.deferred_chunks:
+            record_step(
+                "ingest.deferred_semantic_skipped_for_lazy_retrieval",
+                perf_counter(),
+                deferred=len(draft.deferred_chunks),
+            )
+        if qdrant_url is not None and collection is not None:
+            ready_ids = _ready_vector_chunk_ids(db, generation_key)
+            if ready_ids:
+                t = perf_counter()
+                assert_chunks = [chunk for chunk in indexed_chunks if chunk.id in ready_ids]
+                if assert_chunks:
+                    assert_draft = type(draft)(chunks=assert_chunks)
+                    _assert_points(
+                        qdrant_url,
+                        collection,
+                        repository_id,
+                        generation_key,
+                        fingerprint,
+                        vector_dimensions,
+                        assert_draft,
+                        db,
+                    )
+                    record_step("ingest.qdrant_assert_points", t, vectors_checked=len(assert_chunks))
+            else:
+                record_step("ingest.qdrant_assert_points_skipped", perf_counter(), reason="no_ready_vectors")
+        if not catalogue_queryable:
+            record_step(
+                "ingest.time_to_queryable",
+                finish_started,
+                catalog_chunks=len(draft.chunks),
+                deferred_pending=len(draft.deferred_chunks),
+                vectors_required_before_activate=settings.embed_catalogue_before_activate,
+            )
         db.commit()
+        record_step("ingest.finish_generation_success_total", finish_started)
     except Exception:
         db.rollback()
         revision = db.get(SourceRevision, revision_key)
@@ -295,26 +467,88 @@ def _finish_generation(
         raise
 
 
-def _embed_chunks(embed, chunks, renew) -> dict[str, list[float]]:
-    """Embed chunk text with the same model. A batch is several texts, not a different model."""
-    many = getattr(embed, "many", None)
-    vectors: dict[str, list[float]] = {}
-    if many is None:
-        for index, chunk in enumerate(chunks):
-            if index and index % 100 == 0:
-                renew()
-            vectors[chunk.id] = [float(value) for value in embed(without_nul(chunk.lexical_text))]
-        return vectors
-    for start in range(0, len(chunks), 32):
-        if start:
-            renew()
-        batch = chunks[start : start + 32]
-        encoded = many([without_nul(chunk.lexical_text) for chunk in batch])
-        if len(encoded) != len(batch):
-            raise ChecklistError("the embedding model returned a different number of vectors")
-        for chunk, vector in zip(batch, encoded, strict=True):
-            vectors[chunk.id] = [float(value) for value in vector]
-    return vectors
+def _ready_vector_chunk_ids(db: Session, generation_id: str) -> set[str]:
+    return {
+        row[0]
+        for row in db.query(GenerationChunk.chunk_id)
+        .filter(GenerationChunk.index_generation_id == generation_id, GenerationChunk.vector_status == "ready")
+        .all()
+    }
+
+
+def _embed_and_upsert_batches(
+    qdrant_url: str,
+    collection: str,
+    repository_id: str,
+    generation_key: str,
+    fingerprint: str,
+    embed,
+    draft,
+    chunks: list,
+    renew,
+    embed_stats: dict,
+    db: Session,
+    generation_id: str,
+) -> int:
+    batch_index = 0
+    for start in range(0, len(chunks), 256):
+        part = chunks[start : start + 256]
+        batch_stats: dict = {}
+        t_batch = perf_counter()
+        vectors = embed_chunks_with_reuse(
+            qdrant_url,
+            collection,
+            repository_id,
+            fingerprint,
+            embed,
+            part,
+            renew,
+            stats=batch_stats,
+        )
+        for key, value in batch_stats.items():
+            if isinstance(value, (int, float)):
+                embed_stats[key] = embed_stats.get(key, 0) + value
+        record_step(
+            "ingest.qdrant_vector_resolve_batch",
+            t_batch,
+            batch=batch_index,
+            chunk_count=len(part),
+            embed_cache_hits=batch_stats.get("embed_cache_hits", 0),
+            embed_cache_misses=batch_stats.get("embed_cache_misses", 0),
+            qdrant_payload_lookup_ms=round(batch_stats.get("qdrant_payload_lookup_ms", 0), 2),
+            qdrant_vector_fetch_ms=round(batch_stats.get("qdrant_vector_fetch_ms", 0), 2),
+            embed_model_ms=round(batch_stats.get("embed_model_ms", 0), 2),
+        )
+        t_upsert = perf_counter()
+        upserted = upsert_missing_points(
+            qdrant_url,
+            collection,
+            repository_id,
+            draft,
+            fingerprint,
+            vectors,
+            chunks=part,
+        )
+        embed_stats["qdrant_points_upserted"] = embed_stats.get("qdrant_points_upserted", 0) + upserted
+        if upserted:
+            record_step(
+                "ingest.qdrant_upsert_batch",
+                t_upsert,
+                batch=batch_index,
+                chunk_count=len(part),
+                points_upserted=upserted,
+            )
+        else:
+            record_step(
+                "ingest.qdrant_upsert_batch_skipped",
+                t_upsert,
+                batch=batch_index,
+                chunk_count=len(part),
+                points_upserted=0,
+            )
+        mark_vectors_ready(db, generation_id, [chunk.id for chunk in part if chunk.id in vectors])
+        batch_index += 1
+    return batch_index
 
 
 def _next_attempt(db: Session, revision_key: str, fingerprint: str) -> int:

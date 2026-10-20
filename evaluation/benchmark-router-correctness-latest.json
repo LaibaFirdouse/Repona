@@ -1,0 +1,261 @@
+{
+  "generated_at": "2026-10-20T11:06:32.388445+00:00",
+  "git_head": "bb18f6f7b1eb8f859293a3fe67637dc809f100c4",
+  "working_tree_dirty": true,
+  "repo_url": "https://github.com/LaibaFirdouse/Repona",
+  "modes": {
+    "deterministic_only": {
+      "mean_recall_at_k": 0.5,
+      "cases": [
+        {
+          "case_id": "exact_symbol",
+          "passed": true,
+          "elapsed_ms": 3555.29,
+          "recall_at_k": 1.0,
+          "lanes_requested": [
+            "symbol",
+            "lexical"
+          ],
+          "lane_hit_counts": {
+            "name": 8,
+            "text": 0,
+            "vector": 0
+          },
+          "vector_lane_expanded": null,
+          "matched_paths": [
+            "backend/app/retrieval/answer.py"
+          ],
+          "error": null
+        },
+        {
+          "case_id": "conceptual",
+          "passed": false,
+          "elapsed_ms": 2026.86,
+          "recall_at_k": 0.0,
+          "lanes_requested": [
+            "lexical",
+            "symbol"
+          ],
+          "lane_hit_counts": {
+            "name": 1,
+            "text": 0,
+            "vector": 0
+          },
+          "vector_lane_expanded": null,
+          "matched_paths": [],
+          "error": null
+        },
+        {
+          "case_id": "execution_trace",
+          "passed": true,
+          "elapsed_ms": 11753.89,
+          "recall_at_k": 1.0,
+          "lanes_requested": [
+            "lexical",
+            "symbol",
+            "graph"
+          ],
+          "lane_hit_counts": {
+            "name": 4,
+            "text": 0,
+            "vector": 0
+          },
+          "vector_lane_expanded": null,
+          "matched_paths": [
+            "backend/app/ingestion/pipeline.py",
+            "backend/app/ingestion/graph_store.py"
+          ],
+          "error": null
+        },
+        {
+          "case_id": "path_lookup",
+          "passed": false,
+          "elapsed_ms": 2030.58,
+          "recall_at_k": 0.0,
+          "lanes_requested": [
+            "symbol",
+            "lexical"
+          ],
+          "lane_hit_counts": {
+            "name": 0,
+            "text": 0,
+            "vector": 0
+          },
+          "vector_lane_expanded": null,
+          "matched_paths": [],
+          "error": null
+        }
+      ]
+    },
+    "semantic_enabled": {
+      "mean_recall_at_k": 0.5,
+      "cases": [
+        {
+          "case_id": "exact_symbol",
+          "passed": true,
+          "elapsed_ms": 3527.44,
+          "recall_at_k": 1.0,
+          "lanes_requested": [
+            "symbol",
+            "lexical"
+          ],
+          "lane_hit_counts": {
+            "name": 8,
+            "text": 0,
+            "vector": 0
+          },
+          "vector_lane_expanded": null,
+          "matched_paths": [
+            "backend/app/retrieval/answer.py"
+          ],
+          "error": null
+        },
+        {
+          "case_id": "conceptual",
+          "passed": false,
+          "elapsed_ms": 3395.0,
+          "recall_at_k": 0.0,
+          "lanes_requested": [
+            "vector",
+            "lexical",
+            "symbol"
+          ],
+          "lane_hit_counts": {
+            "name": 1,
+            "text": 0,
+            "vector": 0
+          },
+          "vector_lane_expanded": true,
+          "matched_paths": [],
+          "error": null
+        },
+        {
+          "case_id": "execution_trace",
+          "passed": true,
+          "elapsed_ms": 16236.36,
+          "recall_at_k": 1.0,
+          "lanes_requested": [
+            "lexical",
+            "symbol",
+            "graph"
+          ],
+          "lane_hit_counts": {
+            "name": 4,
+            "text": 0,
+            "vector": 0
+          },
+          "vector_lane_expanded": null,
+          "matched_paths": [
+            "backend/app/ingestion/pipeline.py",
+            "backend/app/ingestion/graph_store.py"
+          ],
+          "error": null
+        },
+        {
+          "case_id": "path_lookup",
+          "passed": false,
+          "elapsed_ms": 2826.55,
+          "recall_at_k": 0.0,
+          "lanes_requested": [
+            "lexical",
+            "vector",
+            "symbol"
+          ],
+          "lane_hit_counts": {
+            "name": 0,
+            "text": 0,
+            "vector": 0
+          },
+          "vector_lane_expanded": true,
+          "matched_paths": [],
+          "error": null
+        }
+      ]
+    },
+    "intelligent_router": {
+      "mean_recall_at_k": 0.5,
+      "cases": [
+        {
+          "case_id": "exact_symbol",
+          "passed": true,
+          "elapsed_ms": 3469.0,
+          "recall_at_k": 1.0,
+          "lanes_requested": [
+            "symbol",
+            "lexical"
+          ],
+          "lane_hit_counts": {
+            "name": 8,
+            "text": 0,
+            "vector": 0
+          },
+          "vector_lane_expanded": null,
+          "matched_paths": [
+            "backend/app/retrieval/answer.py"
+          ],
+          "error": null
+        },
+        {
+          "case_id": "conceptual",
+          "passed": false,
+          "elapsed_ms": 4234.62,
+          "recall_at_k": 0.0,
+          "lanes_requested": [
+            "symbol",
+            "vector",
+            "lexical"
+          ],
+          "lane_hit_counts": {
+            "name": 1,
+            "text": 0,
+            "vector": 0
+          },
+          "vector_lane_expanded": true,
+          "matched_paths": [],
+          "error": null
+        },
+        {
+          "case_id": "execution_trace",
+          "passed": true,
+          "elapsed_ms": 13157.05,
+          "recall_at_k": 1.0,
+          "lanes_requested": [
+            "graph",
+            "symbol",
+            "lexical"
+          ],
+          "lane_hit_counts": {
+            "name": 4,
+            "text": 0,
+            "vector": 0
+          },
+          "vector_lane_expanded": null,
+          "matched_paths": [
+            "backend/app/ingestion/pipeline.py",
+            "backend/app/ingestion/graph_store.py"
+          ],
+          "error": null
+        },
+        {
+          "case_id": "path_lookup",
+          "passed": false,
+          "elapsed_ms": 1981.11,
+          "recall_at_k": 0.0,
+          "lanes_requested": [
+            "vector",
+            "symbol",
+            "lexical"
+          ],
+          "lane_hit_counts": {
+            "name": 0,
+            "text": 0,
+            "vector": 0
+          },
+          "vector_lane_expanded": true,
+          "matched_paths": [],
+          "error": null
+        }
+      ]
+    }
+  }
+}

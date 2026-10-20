@@ -6,12 +6,10 @@ from unittest.mock import patch
 from app.retrieval.model_call import parse_claims
 from app.retrieval.answer import (
     SYSTEM_PROMPT,
-    question_identifiers,
-    question_paths,
-    question_qualified_names,
     select_technology_rows,
     specific_technology_question,
 )
+from app.retrieval.query_terms import question_identifiers, question_paths, question_qualified_names
 from app.retrieval.fusion import (
     ChunkChoice,
     GraphEdge,

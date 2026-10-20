@@ -81,9 +81,43 @@ from app.retrieval.packet import (
     review_claims,
     span_citations,
 )
+from app.ingestion.chunk_materialize import materialize_symbol_chunks, missing_symbol_chunk_ids
+from app.ingestion.lazy_vectors import count_vector_ready, warm_lazy_vectors_before_search
+from app.retrieval.query_plan import QueryPlanV1
+from app.retrieval.query_router import (
+    PLANNER_SYSTEM,
+    RetrievalRequest,
+    expand_vector_lane,
+    parse_planner_json,
+    route_question,
+    vector_lane_will_run,
+)
+from app.retrieval.query_terms import (
+    extract_search_terms,
+    question_identifiers,
+    question_paths,
+    question_qualified_names,
+)
 from app.services.llm.llm_factory import LLMFactory
 from app.services.refresh_service import RefreshOutcome, _absolute, _embed
 from app.storage.identity import content_hash, without_nul
+
+_EMBED_PROVIDER_UNAVAILABLE = "embedding provider unavailable"
+
+
+def _note_lazy_embed_error(stats: dict, exc: BaseException) -> None:
+    stats["embed_error"] = f"{type(exc).__name__}: {exc}"
+    if isinstance(exc, RuntimeError) and _EMBED_PROVIDER_UNAVAILABLE in str(exc):
+        stats["embed_provider_unavailable"] = True
+
+
+def _trace_step(trace: dict | None, step: str, started: float) -> float:
+    """Append one timed step when trace['record_steps'] is true (benchmark tooling)."""
+    now = perf_counter()
+    if trace is not None and trace.get("record_steps"):
+        trace.setdefault("steps", []).append({"step": step, "ms": round((now - started) * 1000, 2)})
+    return now
+
 
 SYSTEM_PROMPT = (
     "Answer only from the evidence packet. "
@@ -181,6 +215,7 @@ class AnswerService:
         self.qdrant_url = settings.qdrant_url if qdrant_url is None else qdrant_url
         self._collection_config_cache: dict[tuple[str, str], tuple[int, str]] = {}
         self._neo4j_driver = None
+        self._last_lane_trace: dict | None = None
 
     def _cached_collection_config(self, collection: str) -> tuple[int, str]:
         key = (self.qdrant_url.rstrip("/"), collection)
@@ -194,50 +229,97 @@ class AnswerService:
     def _search_lanes(
         self,
         generation: IndexGeneration,
-        question: str,
+        request: RetrievalRequest,
     ) -> tuple[list[LaneHit], list[LaneHit], list[LaneHit], float, float, float]:
         from app.db.session import SessionLocal
 
         generation_id = generation.id
+        lanes = set(request.lanes)
+        question = request.question
 
         def run_name() -> tuple[list[LaneHit], float]:
+            if "symbol" not in lanes:
+                return [], 0.0
             db = SessionLocal()
             try:
                 gen = db.get(IndexGeneration, generation_id)
                 started = perf_counter()
-                hits = _name_hits(db, gen, question)
+                hits = _name_hits(db, gen, question, request.path_filters)
                 return hits, perf_counter() - started
             finally:
                 db.close()
 
         def run_text() -> tuple[list[LaneHit], float]:
+            if "lexical" not in lanes:
+                return [], 0.0
             db = SessionLocal()
             try:
                 gen = db.get(IndexGeneration, generation_id)
                 started = perf_counter()
-                hits = _text_hits(db, gen, question)
+                hits = _text_hits(db, gen, request.lexical_queries)
                 return hits, perf_counter() - started
             finally:
                 db.close()
 
         def run_vector() -> tuple[list[LaneHit], float]:
+            if "vector" not in lanes:
+                return [], 0.0
             db = SessionLocal()
             try:
                 gen = db.get(IndexGeneration, generation_id)
                 started = perf_counter()
-                hits = self._vector_hits(db, gen, question)
+                hits = self._vector_hits(db, gen, request.semantic_query or question)
                 return hits, perf_counter() - started
             finally:
                 db.close()
 
+        lanes_requested = set(request.lanes)
         with ThreadPoolExecutor(max_workers=3) as pool:
-            name_future = pool.submit(run_name)
-            text_future = pool.submit(run_text)
-            vector_future = pool.submit(run_vector)
-            name_hits, name_seconds = name_future.result()
-            text_hits, text_seconds = text_future.result()
-            vector_hits, vector_seconds = vector_future.result()
+            name_future = pool.submit(run_name) if "symbol" in lanes_requested else None
+            text_future = pool.submit(run_text) if "lexical" in lanes_requested else None
+            vector_future = pool.submit(run_vector) if "vector" in lanes_requested else None
+            name_hits, name_seconds = name_future.result() if name_future else ([], 0.0)
+            text_hits, text_seconds = text_future.result() if text_future else ([], 0.0)
+            vector_hits, vector_seconds = vector_future.result() if vector_future else ([], 0.0)
+        self._last_lane_trace = {
+            "lanes_requested": list(lanes_requested),
+            "lanes_executed": {
+                "symbol": "symbol" in lanes_requested,
+                "lexical": "lexical" in lanes_requested,
+                "vector": "vector" in lanes_requested,
+            },
+            "lane_wall_seconds": {
+                "name": round(name_seconds, 3),
+                "text": round(text_seconds, 3),
+                "vector": round(vector_seconds, 3),
+            },
+            "lane_hit_counts": {
+                "name": len(name_hits),
+                "text": len(text_hits),
+                "vector": len(vector_hits),
+            },
+        }
         return name_hits, text_hits, vector_hits, name_seconds, text_seconds, vector_seconds
+
+    def _plan_question(self, question: str) -> QueryPlanV1 | None:
+        user = (
+            "Return JSON for QueryPlanV1 fields only. Question:\n"
+            f"{question}\n"
+            'Example shape: {"intent":"conceptual_search","search_terms":[],"identifiers":[],'
+            '"path_filters":[],"lexical_queries":[],"semantic_query":"","retrieval_lanes":'
+            '["symbol","lexical","vector"],"graph_relations":["calls"],"max_graph_hops":1,'
+            '"source_targets":[],"needs_source_bodies":true}'
+        )
+        for attempt in range(2):
+            try:
+                raw = self.complete(PLANNER_SYSTEM, user, 800)
+                plan = parse_planner_json(raw)
+                if plan is not None:
+                    return plan
+            except Exception:
+                if attempt == 1:
+                    return None
+        return None
 
     def answer(
         self,
@@ -249,6 +331,7 @@ class AnswerService:
         provider: str | None = None,
     ) -> Answer:
         started = perf_counter()
+        step = started
         if outcome.pin_id is None or outcome.generation_id is None:
             raise RetrievalError(409, "the question has no pinned generation")
         self._ensure_open(db, outcome.pin_id)
@@ -257,20 +340,110 @@ class AnswerService:
         repository = db.get(Repository, outcome.repository_id)
         if generation is None or revision is None or repository is None or generation.lexical_index_version != LEXICAL_INDEX_VERSION:
             raise RetrievalError(409, "this generation cannot be searched")
-        self._ensure_open(db, outcome.pin_id)
-        name_hits, text_hits, vector_hits, name_seconds, text_seconds, vector_seconds = self._search_lanes(
-            generation,
-            question,
+        step = _trace_step(trace, "01_load_generation_and_pin", step)
+        retrieval = route_question(question, planner=self._plan_question if settings.query_planner_enabled else None)
+        vectors_ready = count_vector_ready(db, generation.id)
+        preview_text: list = []
+        preview_name: list = []
+        if trace is not None:
+            trace["vectors_ready"] = vectors_ready
+        if "lexical" in retrieval.lanes:
+            preview_text = _text_hits(db, generation, retrieval.lexical_queries)
+        if "symbol" in retrieval.lanes:
+            preview_name = _name_hits(db, generation, retrieval.question, retrieval.path_filters)
+        if (
+            settings.lazy_embed_on_query
+            and revision is not None
+            and revision.snapshot_path
+            and vector_lane_will_run(
+                retrieval,
+                lexical_hit_count=len(preview_text),
+                name_hit_count=len(preview_name),
+                vectors_ready=vectors_ready,
+            )
+        ):
+            lazy_stats: dict = {}
+            try:
+                warm_lazy_vectors_before_search(
+                    db,
+                    generation=generation,
+                    repository_id=repository.id,
+                    path_filters=retrieval.path_filters,
+                    identifiers=retrieval.identifiers,
+                    name_hits=preview_name,
+                    text_hits=preview_text,
+                    snapshot_root=Path(revision.snapshot_path),
+                    qdrant_url=self.qdrant_url,
+                    embed=self.embed,
+                    stats=lazy_stats,
+                )
+            except Exception as exc:
+                _note_lazy_embed_error(lazy_stats, exc)
+            db.commit()
+            vectors_ready = count_vector_ready(db, generation.id)
+            if trace is not None:
+                if lazy_stats:
+                    trace["lazy_query_embed"] = lazy_stats
+                trace["vectors_ready"] = vectors_ready
+        retrieval = expand_vector_lane(
+            retrieval,
+            lexical_hit_count=len(preview_text),
+            name_hit_count=len(preview_name),
+            vectors_ready=vectors_ready,
         )
+        if trace is not None:
+            trace["retrieval_router"] = retrieval.trace
+            trace["retrieval_router_ms"] = retrieval.router_ms
+        self._ensure_open(db, outcome.pin_id)
+        if trace is not None:
+            trace.setdefault("lazy_query_embed", {})
+            self._lazy_embed_stats_sink = trace["lazy_query_embed"]
+        else:
+            self._lazy_embed_stats_sink = None
+        try:
+            name_hits, text_hits, vector_hits, name_seconds, text_seconds, vector_seconds = self._search_lanes(
+                generation,
+                retrieval,
+            )
+        finally:
+            self._lazy_embed_stats_sink = None
+        step = _trace_step(trace, "02_search_lanes_parallel", step)
+        if trace is not None and self._last_lane_trace is not None:
+            trace["lane_trace"] = self._last_lane_trace
         self._ensure_open(db, outcome.pin_id)
         lanes = [consecutive_ranks(name_hits), consecutive_ranks(text_hits), consecutive_ranks(vector_hits)]
         fused = fuse_anchors(lanes)
+        step = _trace_step(trace, "03_fuse_anchors_rrf", step)
         if trace is not None:
             trace["fused_anchor_ids"] = list(fused)
             trace["name_anchor_ids"] = [hit.anchor_id for hit in name_hits]
             trace["text_anchor_ids"] = [hit.anchor_id for hit in text_hits]
             trace["vector_anchor_ids"] = [hit.anchor_id for hit in vector_hits]
         ranks = {anchor: index for index, anchor in enumerate(fused, start=1)}
+        if retrieval.needs_source_bodies and revision.snapshot_path:
+            roles = _roles(db, generation.id, fused)
+            symbol_ids = [anchor for anchor in fused if roles.get(anchor) == "symbol"]
+            missing = missing_symbol_chunk_ids(db, generation.id, symbol_ids[: settings.retrieval_lane_limit])
+            if missing:
+                lazy_stats: dict = {}
+                try:
+                    materialize_symbol_chunks(
+                        db,
+                        repository_id=repository.id,
+                        generation_id=generation.id,
+                        fingerprint=generation.embedding_config_fingerprint,
+                        parser_version=generation.parser_version,
+                        symbol_ids=missing,
+                        snapshot_root=Path(revision.snapshot_path),
+                        generation=generation,
+                        qdrant_url=self.qdrant_url,
+                        embed=self.embed,
+                        vector_stats=lazy_stats,
+                    )
+                except Exception as exc:
+                    _note_lazy_embed_error(lazy_stats, exc)
+                if trace is not None and lazy_stats:
+                    trace.setdefault("lazy_query_embed", {}).update(lazy_stats)
         choices = _choices_for(db, generation.id, fused, name_hits + text_hits + vector_hits)
         spans = materialize_anchors(
             fused,
@@ -278,9 +451,10 @@ class AnswerService:
             choices,
             _chunks_by_symbol(choices),
         )
+        step = _trace_step(trace, "04_materialize_span_choices", step)
         self._ensure_open(db, outcome.pin_id)
         stage = perf_counter()
-        edges = self._edges(db, generation, fused, ranks)
+        edges = self._edges(db, generation, fused, ranks) if "graph" in retrieval.lanes else []
         for edge in edges:
             if edge.other_id in ranks:
                 continue
@@ -288,34 +462,44 @@ class AnswerService:
             if extra is not None and all(item.chunk_id != extra.chunk_id for item in spans):
                 spans.append(extra)
         graph_seconds = perf_counter() - stage
+        step = _trace_step(trace, "05_neo4j_edges_and_neighbor_chunks", step)
         path_chunks = {chunk_id for _, chunk_id in _path_file_hits(db, generation, question)}
         if path_chunks:
             front = [span for span in spans if span.chunk_id in path_chunks]
             rest = [span for span in spans if span.chunk_id not in path_chunks]
             spans = front + rest
+        step = _trace_step(trace, "06_path_chunk_reorder", step)
         if trace is not None:
             trace["candidate_chunk_ids"] = [span.chunk_id for span in spans]
         named = _named_symbol_spans(db, generation, question)
         expanded = _expansion_symbol_spans(db, generation, question)
         behavior = _behavior_symbol_spans(db, generation, question)
         spans = preserve_named_spans(spans, named + expanded + behavior, settings.retrieval_span_limit)
+        step = _trace_step(trace, "07_named_expansion_behavior_spans", step)
         self._ensure_open(db, outcome.pin_id)
         stage = perf_counter()
         blobs = _require_fresh_tree(repository, revision)
         loaded = implementation_before_tests(_load_span_text(db, generation.id, revision, spans, blobs), question)
+        step = _trace_step(trace, "08_snapshot_validate_and_load_span_text", step)
         priority_ids = {item.chunk_id for item in named + expanded + behavior}
         loaded = [span for span in loaded if span["chunk_id"] in priority_ids] + [
             span for span in loaded if span["chunk_id"] not in priority_ids
         ]
         load_seconds = perf_counter() - stage
+        technologies = _technologies(db, generation.id, question)
+        step = _trace_step(trace, "09_technology_rows", step)
         if trace is not None:
             trace["stage_seconds"] = {
-                "name": round(name_seconds, 3),
-                "text": round(text_seconds, 3),
-                "vector": round(vector_seconds, 3),
-                "graph": round(graph_seconds, 3),
-                "load": round(load_seconds, 3),
+                "search_lane_name": round(name_seconds, 3),
+                "search_lane_text": round(text_seconds, 3),
+                "search_lane_vector": round(vector_seconds, 3),
+                "post_search_graph": round(graph_seconds, 3),
+                "snapshot_load": round(load_seconds, 3),
             }
+            trace["stage_seconds_note"] = (
+                "search_lane_* are concurrent wall times inside step 02; "
+                "post_search_graph and snapshot_load are separate later steps."
+            )
             trace["spans_before_budget"] = [
                 {
                     "chunk_id": span["chunk_id"],
@@ -324,7 +508,6 @@ class AnswerService:
                 }
                 for span in loaded
             ]
-        technologies = _technologies(db, generation.id, question)
         if specific_technology_question(question, technologies):
             names = [str(item["name"]) for item in technologies]
             choices = _chunks_mentioning(db, generation, names)
@@ -337,6 +520,7 @@ class AnswerService:
             else:
                 loaded = [span for span in loaded if _mentions_any(str(span.get("text") or ""), names)]
             edges = [edge for edge in edges if _mentions_any(edge.mentioned_name, names)]
+        step = _trace_step(trace, "10_technology_specific_filter", step)
         user = question
         if not loaded and _file_count(db, generation.id) == 0:
             user += f"\nThe included tree is empty. evidence id tree:{generation.id}"
@@ -367,9 +551,33 @@ class AnswerService:
             edge_text=lambda edge: _edge_piece(edge, db),
             technology_text=lambda item: f"\ntechnology {item['id']} {item['name']} {item['evidence_text']}",
         )
+        step = _trace_step(trace, "11_pack_evidence_to_context_budget", step)
         if not packed.spans and not packed.edges:
-            packed.spans.extend(_indexed_file_spans(db, generation.id))
-        source_ids = [span["chunk_id"] for span in packed.spans]
+            loaded = _indexed_file_spans(db, generation.id)
+            packed = pack_evidence(
+                header,
+                loaded,
+                edges,
+                technologies,
+                context_tokens=context_tokens,
+                output_tokens=settings.openai_max_output_tokens,
+                margin_tokens=margin_tokens,
+                count_tokens=count_tokens,
+                span_text=lambda span: (span["raw_bytes"], _span_piece(span)),
+                edge_text=lambda edge: _edge_piece(edge, db),
+                technology_text=lambda item: f"\ntechnology {item['id']} {item['name']} {item['evidence_text']}",
+            )
+            if trace is not None:
+                trace["evidence_fallback"] = "indexed_file_paths"
+                trace["spans_before_budget"] = [
+                    {
+                        "chunk_id": span["chunk_id"],
+                        "relative_path": span["relative_path"],
+                        "qualified_name": span["qualified_name"],
+                    }
+                    for span in loaded
+                ]
+        source_ids = [_span_chunk_id(span) for span in packed.spans]
         source_ids.extend(edge.edge_id for edge in packed.edges)
         source_ids.extend(item["id"] for item in packed.technologies)
         if not loaded and _file_count(db, generation.id) == 0:
@@ -380,14 +588,26 @@ class AnswerService:
         if not loaded and _file_count(db, generation.id) == 0:
             packet += f"\nThe included tree is empty. evidence id {alias_for[f'tree:{generation.id}']}"
         for span in packed.spans:
-            packet += _span_piece(span, alias_for[span["chunk_id"]])
+            chunk_key = span["chunk_id"] if isinstance(span, dict) else span.chunk_id
+            alias = alias_for.get(chunk_key)
+            if alias is None:
+                continue
+            packet += _span_piece(span if isinstance(span, dict) else _span_dict_from_choice(span), alias)
         for edge in packed.edges:
-            packet += _edge_piece(edge, db, alias_for[edge.edge_id])
+            edge_alias = alias_for.get(edge.edge_id)
+            if edge_alias is None:
+                continue
+            packet += _edge_piece(edge, db, edge_alias)
         for item in packed.technologies:
-            packet += f"\ntechnology {alias_for[item['id']]} {item['name']} {item['evidence_text']}"
+            tech_alias = alias_for.get(item["id"])
+            if tech_alias is None:
+                continue
+            packet += f"\ntechnology {tech_alias} {item['name']} {item['evidence_text']}"
+        step = _trace_step(trace, "12_build_evidence_packet_and_aliases", step)
         prompt_tokens = count_tokens(SYSTEM_PROMPT + "\n" + packet)
         if not fits_model_context(prompt_tokens, settings.openai_max_output_tokens, margin_tokens, context_tokens):
             raise RetrievalError(409, "the evidence does not fit the model context")
+        step = _trace_step(trace, "13_prompt_token_budget_check", step)
         log_prompt_budget(
             prompt_tokens,
             context_tokens,
@@ -398,12 +618,15 @@ class AnswerService:
         )
         if trace is not None:
             trace["retrieval_seconds"] = perf_counter() - started
+            trace["lazy_query_embed"] = trace.get("lazy_query_embed")
+            trace["vectors_ready_after"] = count_vector_ready(db, generation.id)
             trace["packet_spans"] = [
                 {
-                    "chunk_id": span["chunk_id"],
-                    "qualified_name": span["qualified_name"],
-                    "chunk_kind": span["chunk_kind"],
-                    "text": span["text"],
+                    "chunk_id": span["chunk_id"] if isinstance(span, dict) else span.chunk_id,
+                    "relative_path": span.get("relative_path", "") if isinstance(span, dict) else "",
+                    "qualified_name": span.get("qualified_name", "") if isinstance(span, dict) else "",
+                    "chunk_kind": span.get("chunk_kind", "") if isinstance(span, dict) else getattr(span, "kind", ""),
+                    "text": span.get("text", "") if isinstance(span, dict) else "",
                 }
                 for span in packed.spans
             ]
@@ -427,6 +650,13 @@ class AnswerService:
         failure = ClaimFailureNote() if claim_diagnostics_enabled() else None
         if trace is not None:
             trace["answer_strategy"] = strategy
+            trace["prompt_tokens"] = prompt_tokens
+            trace["packed_counts"] = {
+                "spans": len(packed.spans),
+                "edges": len(packed.edges),
+                "technologies": len(packed.technologies),
+            }
+        step = _trace_step(trace, "14_route_answer_strategy", step)
         complete = self.complete
         if self._owns_complete and (model or provider):
             chosen_model = model
@@ -434,7 +664,7 @@ class AnswerService:
             complete = lambda system_message, user_message, max_output_tokens: LLMFactory.create_provider(
                 chosen_model, chosen_provider
             ).generate(system_message, user_message, max_output_tokens)
-        valid_ids = {span["chunk_id"] for span in packed.spans}
+        valid_ids = {_span_chunk_id(span) for span in packed.spans}
         valid_ids.update(edge.edge_id for edge in packed.edges)
         valid_ids.update(item["id"] for item in packed.technologies)
         if not loaded and _file_count(db, generation.id) == 0:
@@ -454,6 +684,7 @@ class AnswerService:
         finally:
             if trace is not None:
                 trace["answer_strategy"] = strategy
+        _trace_step(trace, "15_model_compose_claims", model_started)
         model_seconds = perf_counter() - model_started
         review_started = perf_counter()
         if trace is not None:
@@ -468,9 +699,14 @@ class AnswerService:
         log_claim_failure(model_claims, answered.claims, valid_ids, failure)
         cited = {item for claim in answered.claims for item in claim["evidence_ids"]}
         answered.graph_facts = [_fact(edge, db) for edge in packed.edges if edge.edge_id in cited]
+        _trace_step(trace, "16_finalize_answer", model_started + model_seconds)
+        if trace is not None and trace.get("record_steps"):
+            trace["total_ms"] = round((perf_counter() - started) * 1000, 2)
         return answered
 
     def _vector_hits(self, db: Session, generation: IndexGeneration, question: str) -> list[LaneHit]:
+        if count_vector_ready(db, generation.id) == 0:
+            return []
         file_ids = [row.file_id for row in db.query(GenerationFile.file_id).filter(GenerationFile.index_generation_id == generation.id).all()]
         if not file_ids:
             return []
@@ -478,7 +714,13 @@ class AnswerService:
             size, distance = self._cached_collection_config(generation.qdrant_collection)
         except VectorStoreError as error:
             raise RetrievalError(503, str(error)) from error
-        vector = self.embed(question)
+        try:
+            vector = self.embed(question)
+        except Exception as exc:
+            sink = getattr(self, "_lazy_embed_stats_sink", None)
+            if isinstance(sink, dict):
+                _note_lazy_embed_error(sink, exc)
+            return []
         query_filter = vector_query_filter(
             generation,
             file_ids,
@@ -525,6 +767,8 @@ class AnswerService:
                 seen.add(chunk_id)
                 chunk = chunks.get(chunk_id)
                 link = generation_links.get(chunk_id)
+                if link is None or link.vector_status != "ready":
+                    continue
                 if not _point_matches_cached(
                     generation,
                     chunk,
@@ -645,33 +889,6 @@ class AnswerService:
         return renewed
 
 
-def question_qualified_names(question: str) -> list[str]:
-    """Return dotted names written in the question, such as Flask.dispatch_request."""
-    found: list[str] = []
-    for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+", question):
-        if token not in found:
-            found.append(token)
-    return found
-
-
-def question_identifiers(question: str) -> list[str]:
-    found: list[str] = []
-    for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", question):
-        if len(token) < 3 or token in found:
-            continue
-        found.append(token)
-    return found
-
-
-def question_paths(question: str) -> list[str]:
-    found: list[str] = []
-    for token in re.findall(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+", question):
-        token = token.strip("./")
-        if token and token not in found:
-            found.append(token)
-    return found
-
-
 def _behavior_symbol_spans(db: Session, generation: IndexGeneration, question: str) -> list[ChunkChoice]:
     """Body spans for symbols found from behavioral concepts. This does not rescore fusion."""
     if not behavior_concepts(question):
@@ -786,7 +1003,12 @@ def _named_symbol_spans(db: Session, generation: IndexGeneration, question: str)
     return chosen
 
 
-def _name_hits(db: Session, generation: IndexGeneration, question: str) -> list[LaneHit]:
+def _name_hits(
+    db: Session,
+    generation: IndexGeneration,
+    question: str,
+    path_filters: list[str] | None = None,
+) -> list[LaneHit]:
     limit = settings.retrieval_lane_limit
     hits: list[LaneHit] = []
     seen: set[str] = set()
@@ -797,9 +1019,10 @@ def _name_hits(db: Session, generation: IndexGeneration, question: str) -> list[
         seen.add(anchor_id)
         hits.append(LaneHit(anchor_id, chunk_id, len(hits) + 1))
 
-    for file_id, chunk_id in _path_file_hits(db, generation, question):
+    path_question = " ".join(path_filters) if path_filters else question
+    for file_id, chunk_id in _path_file_hits(db, generation, path_question):
         add(file_id, chunk_id)
-    identifiers = question_identifiers(question)
+    identifiers = list(retrieval_identifiers(question, path_filters))
     matches = [Symbol.qualified_name == question, Symbol.name == question]
     if identifiers:
         matches.extend([Symbol.name.in_(identifiers), Symbol.qualified_name.in_(identifiers)])
@@ -874,16 +1097,48 @@ def _representative_chunk(chunks: list):
     return min(pool, key=lambda chunk: (chunk.end_byte - chunk.start_byte, chunk.ordinal, chunk.id))
 
 
-def _text_hits(db: Session, generation: IndexGeneration, question: str) -> list[LaneHit]:
-    query = func.plainto_tsquery("simple", question)
-    rows = (
-        db.query(GenerationChunk.chunk_id, Chunk.symbol_id, Chunk.file_id)
-        .join(Chunk, Chunk.id == GenerationChunk.chunk_id)
-        .filter(GenerationChunk.index_generation_id == generation.id, GenerationChunk.search_vector.op("@@")(query))
-        .order_by(desc(func.ts_rank(GenerationChunk.search_vector, query)), GenerationChunk.chunk_id)
-        .limit(settings.retrieval_lane_limit)
-        .all()
-    )
+def retrieval_identifiers(question: str, path_filters: list[str] | None = None) -> list[str]:
+    found = extract_router_identifiers(question)
+    for item in path_filters or []:
+        for part in item.replace("/", " ").split("."):
+            if len(part) >= 3 and part not in found:
+                found.append(part)
+    return found
+
+
+def extract_router_identifiers(question: str) -> list[str]:
+    terms = extract_search_terms(question)
+    return terms or question_identifiers(question)
+
+
+def _text_hits(db: Session, generation: IndexGeneration, lexical_queries: list[str]) -> list[LaneHit]:
+    limit = settings.retrieval_lane_limit
+    min_hits = settings.lexical_min_hits
+    rows: list = []
+    seen_chunks: set[str] = set()
+    for index, query_text in enumerate(lexical_queries or [""]):
+        if len(rows) >= limit:
+            break
+        if not query_text.strip():
+            continue
+        query = func.plainto_tsquery("simple", query_text)
+        batch = (
+            db.query(GenerationChunk.chunk_id, Chunk.symbol_id, Chunk.file_id)
+            .join(Chunk, Chunk.id == GenerationChunk.chunk_id)
+            .filter(GenerationChunk.index_generation_id == generation.id, GenerationChunk.search_vector.op("@@")(query))
+            .order_by(desc(func.ts_rank(GenerationChunk.search_vector, query)), GenerationChunk.chunk_id)
+            .limit(limit)
+            .all()
+        )
+        for row in batch:
+            if row.chunk_id in seen_chunks:
+                continue
+            seen_chunks.add(row.chunk_id)
+            rows.append(row)
+            if len(rows) >= limit:
+                break
+        if len(rows) >= min_hits or index == len(lexical_queries) - 1:
+            break
     return [LaneHit(row.symbol_id or row.file_id, row.chunk_id, index) for index, row in enumerate(rows, start=1)]
 
 
@@ -1203,7 +1458,7 @@ def _indexed_file_spans(db: Session, generation_id: str, limit: int = 20) -> lis
             "end_line": None,
             "text": row.relative_path,
             "context_prefix": "",
-            "raw_bytes": row.relative_path.encode("utf-8"),
+            "raw_bytes": len(row.relative_path.encode("utf-8")),
         }
         for row in rows
     ]
@@ -1211,6 +1466,21 @@ def _indexed_file_spans(db: Session, generation_id: str, limit: int = 20) -> lis
 
 def _file_count(db: Session, generation_id: str) -> int:
     return db.query(GenerationFile).filter(GenerationFile.index_generation_id == generation_id).count()
+
+
+def _span_chunk_id(span: dict | ChunkChoice) -> str:
+    return span["chunk_id"] if isinstance(span, dict) else span.chunk_id
+
+
+def _span_dict_from_choice(choice: ChunkChoice) -> dict:
+    return {
+        "chunk_id": choice.chunk_id,
+        "qualified_name": "",
+        "chunk_kind": choice.kind,
+        "text": "",
+        "context_prefix": "",
+        "raw_bytes": 0,
+    }
 
 
 def _span_piece(span: dict, evidence_id: str | None = None) -> str:

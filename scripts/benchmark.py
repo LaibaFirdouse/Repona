@@ -14,7 +14,7 @@ from time import perf_counter
 from typing import Any
 
 from sqlalchemy import text
-
+import psycopg
 from app.core.config import settings
 from app.db.session import SessionLocal, create_database_tables
 from app.ingestion.upstream import ls_remote_head

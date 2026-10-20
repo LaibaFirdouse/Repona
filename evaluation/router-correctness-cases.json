@@ -1,0 +1,24 @@
+[
+  {
+    "id": "exact_symbol",
+    "question": "Where is AnswerService.answer defined?",
+    "expect_paths_any": ["backend/app/retrieval/answer.py"],
+    "expect_lanes_any": ["symbol", "lexical"]
+  },
+  {
+    "id": "conceptual",
+    "question": "How do AnswerService and pack_evidence in packet.py assemble the evidence prompt before the model responds?",
+    "expect_paths_all": ["backend/app/retrieval/answer.py", "backend/app/retrieval/packet.py"]
+  },
+  {
+    "id": "execution_trace",
+    "question": "Trace ingest_commit from pipeline through graph_store write_graph.",
+    "expect_paths_any": ["backend/app/ingestion/pipeline.py", "backend/app/ingestion/graph_store.py"],
+    "expect_lanes_any": ["graph"]
+  },
+  {
+    "id": "path_lookup",
+    "question": "What does scripts/benchmark.py measure for repository latency?",
+    "expect_paths_any": ["scripts/benchmark.py"]
+  }
+]

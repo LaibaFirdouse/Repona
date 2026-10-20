@@ -77,7 +77,7 @@ def upsert_missing_points(
     fingerprint: str,
     vectors: dict[str, list[float]],
     chunks=None,
-) -> None:
+) -> int:
     symbols = {item.id: item for item in draft.symbols}
     files = {item.id: item for item in draft.files}
     chosen = draft.chunks if chunks is None else chunks
@@ -100,6 +100,8 @@ def upsert_missing_points(
             continue
         if current.get("chunk_id") != chunk.id or current.get("span_hash") != chunk.span_hash:
             raise VectorStoreError(f"point {identifier} does not match chunk {chunk.id}")
+    if not fresh:
+        return 0
     for start in range(0, len(fresh), _POINT_BATCH):
         _request(
             base_url,
@@ -109,6 +111,7 @@ def upsert_missing_points(
             required=True,
             timeout=120,
         )
+    return len(fresh)
 
 
 def _payload(chunk: ChunkRecord, file, symbol, repository_id: str, fingerprint: str) -> dict:
@@ -167,6 +170,25 @@ def search_points(base_url: str, collection: str, vector: list[float], query_fil
 
 def fetch_point_payloads(base_url: str, collection: str, identifiers: list[str]) -> dict[str, dict]:
     return _existing_points(base_url, collection, identifiers)
+
+
+def fetch_point_vectors(base_url: str, collection: str, identifiers: list[str]) -> dict[str, list[float]]:
+    found: dict[str, list[float]] = {}
+    for start in range(0, len(identifiers), _LOOKUP_BATCH):
+        batch = identifiers[start : start + _LOOKUP_BATCH]
+        body = _request(
+            base_url,
+            f"/collections/{collection}/points",
+            method="POST",
+            payload={"ids": batch, "with_payload": False, "with_vector": True},
+            required=True,
+        )
+        for point in body["result"]:
+            vector = point.get("vector")
+            if vector is None:
+                continue
+            found[str(point["id"])] = [float(value) for value in vector]
+    return found
 
 
 def _existing_points(base_url: str, collection: str, identifiers: list[str]) -> dict[str, dict]:

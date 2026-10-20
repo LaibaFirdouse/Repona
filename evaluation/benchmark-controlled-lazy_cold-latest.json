@@ -1,0 +1,988 @@
+{
+  "generated_at": "2026-10-20T11:10:36.030898+00:00",
+  "modes": {
+    "lazy_cold": {
+      "mode": "lazy_cold",
+      "repo_url": "https://github.com/LaibaFirdouse/Repona",
+      "git_head": "bb18f6f7b1eb8f859293a3fe67637dc809f100c4",
+      "working_tree_dirty": true,
+      "working_tree_diff_lines": 66,
+      "cache_action": {
+        "ok": false,
+        "stdout": "",
+        "stderr": "File \"<string>\", line 1\n    from app.db.session import SessionLocal;from app.ingestion.vector_store import delete_points_for_repository;from app.models.repository import Repository;from app.services.refresh_service import EMBEDDING_MODEL, VECTOR_DIMENSIONS;from app.storage.identity import collection_name, normalize_repository_url;from app.core.config import settings;db=SessionLocal();n=normalize_repository_url('https://github.com/LaibaFirdouse/Repona');r=db.query(Repository).filter(Repository.normalized_url==n).one_or_none();import sys;if r is None: print('skip'); sys.exit(0);c=collection_name(EMBEDDING_MODEL, VECTOR_DIMENSIONS);delete_points_for_repository(settings.qdrant_url, c, r.id);print('cleared', r.id, c)\n                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      ^^\nSyntaxError: invalid syntax"
+      },
+      "index": {
+        "generated_at": "2026-10-20T11:10:39.449976+00:00",
+        "repo_url": "https://github.com/LaibaFirdouse/Repona",
+        "question": "How does AnswerService retrieve evidence for a question?",
+        "note": "Prior benchmark-detailed-* files are unchanged; this run uses separate outputs.",
+        "ingestion_steps": [
+          {
+            "step": "preflight.ls_remote_head",
+            "ms": 794.7,
+            "upstream": "authorized",
+            "branch": "master"
+          },
+          {
+            "step": "preflight.refresh_index_join_or_reuse",
+            "ms": 1918.07
+          },
+          {
+            "step": "fetch.ensure_git_dir",
+            "ms": 0.16
+          },
+          {
+            "step": "fetch.git_fetch_depth1",
+            "ms": 1056.22,
+            "branch": "master"
+          },
+          {
+            "step": "fetch.git_rev_parse_branch",
+            "ms": 4.12
+          },
+          {
+            "step": "ingest.fetch_branch_total",
+            "ms": 1060.68,
+            "sha": "bb18f6f7b1eb"
+          },
+          {
+            "step": "ingest.lock_repository_row",
+            "ms": 58.51
+          },
+          {
+            "step": "ingest.claim_snapshot",
+            "ms": 0.01,
+            "mode": "reuse"
+          },
+          {
+            "step": "ingest.insert_pending_generation_commit",
+            "ms": 326.41,
+            "generation_id": "068e3d63-0b6"
+          },
+          {
+            "step": "ingest.read_commit_blobs_reuse",
+            "ms": 31.97,
+            "blob_count": 149
+          },
+          {
+            "step": "ingest.validate_published_worktree",
+            "ms": 24.49
+          },
+          {
+            "step": "ingest.assemble_generation",
+            "ms": 860.39,
+            "files": 142,
+            "chunks": 983,
+            "deferred_chunks": 1018,
+            "edges": 19765,
+            "progressive": true
+          },
+          {
+            "step": "ingest.write_draft_postgres",
+            "ms": 2567.55
+          },
+          {
+            "step": "ingest.write_graph_neo4j",
+            "ms": 21935.51
+          },
+          {
+            "step": "ingest.neo4j_prune_and_verify_edges",
+            "ms": 5632.54
+          },
+          {
+            "step": "ingest.assert_postgres_catalog",
+            "ms": 948.02
+          },
+          {
+            "step": "ingest.qdrant_catalog_embed_skipped",
+            "ms": 0.0,
+            "catalog_chunks": 983
+          },
+          {
+            "step": "ingest.neo4j_publish_graph_epoch",
+            "ms": 61.29
+          },
+          {
+            "step": "ingest.activate_generation_postgres",
+            "ms": 129.89
+          },
+          {
+            "step": "ingest.time_to_queryable",
+            "ms": 33308.66,
+            "catalog_chunks": 983,
+            "deferred_pending": 1018,
+            "vectors_required_before_activate": false
+          },
+          {
+            "step": "ingest.early_activate_commit",
+            "ms": 617.03,
+            "deferred": 1018
+          },
+          {
+            "step": "ingest.deferred_semantic_skipped_for_lazy_retrieval",
+            "ms": 0.0,
+            "deferred": 1018
+          },
+          {
+            "step": "ingest.qdrant_assert_points_skipped",
+            "ms": 0.0,
+            "reason": "no_ready_vectors"
+          },
+          {
+            "step": "ingest.finish_generation_success_total",
+            "ms": 33648.36
+          },
+          {
+            "step": "ingest.finish_generation_total",
+            "ms": 33663.09
+          },
+          {
+            "step": "ingest.ingest_commit_total",
+            "ms": 34135.69
+          },
+          {
+            "step": "ingest.pipeline_with_neo4j_session",
+            "ms": 34488.89
+          }
+        ],
+        "commit_sha": "bb18f6f7b1eb8f859293a3fe67637dc809f100c4",
+        "branch": "master",
+        "ingestion_total_ms": 34135.69,
+        "generation_id": "068e3d63-0b69-535e-92d7-14a4c1c7487f",
+        "ask_detail": {
+          "repository_id": "0c9e0ff2-5698-54c9-8503-5abae2f52ad0",
+          "generation_id": "068e3d63-0b69-535e-92d7-14a4c1c7487f",
+          "commit_sha": "bb18f6f7b1eb8f859293a3fe67637dc809f100c4",
+          "stats": {
+            "files": 142,
+            "chunks": 983,
+            "symbol_chunks": 0
+          },
+          "steps": [
+            {
+              "step": "preflight.github_ls_remote_head",
+              "ms": 1002.12,
+              "upstream": "authorized",
+              "sha": "bb18f6f7b1eb"
+            },
+            {
+              "step": "preflight.refresh_service_ask",
+              "ms": 2002.56,
+              "action": "serve",
+              "message": "The active generation matches this commit.",
+              "pin_id": "97795d5b-cdf2-465d-9183-bdb18ab2dd79"
+            },
+            {
+              "step": "ask.answer_total",
+              "ms": 12703.98
+            }
+          ],
+          "snapshot_validate": {
+            "strict": [
+              {
+                "step": "snapshot.path_is_dir",
+                "ms": 0.09
+              },
+              {
+                "step": "snapshot.git_rev_parse_head",
+                "ms": 5.16,
+                "commit": "bb18f6f7b1eb"
+              },
+              {
+                "step": "snapshot.light_validate_skip_blob_walk",
+                "ms": 5.33
+              }
+            ],
+            "light": [
+              {
+                "step": "snapshot.path_is_dir",
+                "ms": 0.09
+              },
+              {
+                "step": "snapshot.git_rev_parse_head",
+                "ms": 4.52,
+                "commit": "bb18f6f7b1eb"
+              },
+              {
+                "step": "snapshot.light_validate_skip_blob_walk",
+                "ms": 4.67
+              }
+            ]
+          },
+          "lane_sequential": [
+            {
+              "step": "lane.name_sequential",
+              "ms": 65.8,
+              "hits": 1
+            },
+            {
+              "step": "lane.text_sequential",
+              "ms": 45.95,
+              "hits": 4
+            },
+            {
+              "step": "lane.vector_sequential",
+              "ms": 52.99,
+              "hits": 0
+            },
+            {
+              "step": "lane.fuse_rrf_sequential",
+              "ms": 0.06,
+              "fused_anchors": 4
+            }
+          ],
+          "vector_substeps": [
+            {
+              "step": "vector.list_generation_file_ids",
+              "ms": 165.6,
+              "count": 142
+            },
+            {
+              "step": "vector.qdrant_collection_config",
+              "ms": 681.83,
+              "size": 384,
+              "distance": "Cosine"
+            },
+            {
+              "step": "vector.embed_question",
+              "ms": 22720.33,
+              "dimensions": 384
+            },
+            {
+              "step": "vector.build_query_filter",
+              "ms": 0.04
+            },
+            {
+              "step": "vector.qdrant_search_first_batch",
+              "ms": 839.74,
+              "hits": 16
+            },
+            {
+              "step": "vector.full_lane_with_postgres_hydration",
+              "ms": 44.55
+            }
+          ],
+          "ask_trace": {
+            "steps": [
+              {
+                "step": "01_load_generation_and_pin",
+                "ms": 45.91
+              },
+              {
+                "step": "02_search_lanes_parallel",
+                "ms": 6855.65
+              },
+              {
+                "step": "03_fuse_anchors_rrf",
+                "ms": 54.09
+              },
+              {
+                "step": "04_materialize_span_choices",
+                "ms": 4666.33
+              },
+              {
+                "step": "05_neo4j_edges_and_neighbor_chunks",
+                "ms": 43.66
+              },
+              {
+                "step": "06_path_chunk_reorder",
+                "ms": 0.07
+              },
+              {
+                "step": "07_named_expansion_behavior_spans",
+                "ms": 58.66
+              },
+              {
+                "step": "08_snapshot_validate_and_load_span_text",
+                "ms": 638.39
+              },
+              {
+                "step": "09_technology_rows",
+                "ms": 0.04
+              },
+              {
+                "step": "10_technology_specific_filter",
+                "ms": 0.02
+              },
+              {
+                "step": "11_pack_evidence_to_context_budget",
+                "ms": 0.13
+              },
+              {
+                "step": "12_build_evidence_packet_and_aliases",
+                "ms": 0.06
+              },
+              {
+                "step": "13_prompt_token_budget_check",
+                "ms": 0.01
+              },
+              {
+                "step": "14_route_answer_strategy",
+                "ms": 58.36
+              },
+              {
+                "step": "15_model_compose_claims",
+                "ms": 282.19
+              },
+              {
+                "step": "16_finalize_answer",
+                "ms": 0.28
+              }
+            ],
+            "stage_seconds_ms": {
+              "search_lane_name": 67.0,
+              "search_lane_text": 152.0,
+              "search_lane_vector": 0.0,
+              "post_search_graph": 0.0,
+              "snapshot_load": 555.0
+            },
+            "lane_anchor_counts": {
+              "name": 1,
+              "text": 1,
+              "vector": 0
+            },
+            "fused_anchor_count": 2,
+            "candidate_chunk_count": 4,
+            "spans_before_budget": [
+              {
+                "chunk_id": "30d65677-1073-593d-bb94-519a30c2b599",
+                "relative_path": "backend/app/retrieval/answer.py",
+                "qualified_name": "AnswerService"
+              },
+              {
+                "chunk_id": "420d1b56-41d2-59f8-9153-4ebd7b9240a9",
+                "relative_path": "backend/app/retrieval/answer.py",
+                "qualified_name": "AnswerService"
+              },
+              {
+                "chunk_id": "ab3485e4-dc40-55da-9c4f-af19d6be5779",
+                "relative_path": "backend/app/retrieval/answer.py",
+                "qualified_name": "AnswerService"
+              },
+              {
+                "chunk_id": "4b02f82a-d694-572b-8a6b-4ae169c58086",
+                "relative_path": "scripts/compare_retrieval_paths.py",
+                "qualified_name": null
+              }
+            ],
+            "packet_span_count": 4,
+            "packet_spans_summary": [
+              {
+                "chunk_id": "30d65677-1073-593d-bb94-519a30c2b599",
+                "qualified_name": "AnswerService",
+                "chunk_kind": "symbol_part"
+              },
+              {
+                "chunk_id": "420d1b56-41d2-59f8-9153-4ebd7b9240a9",
+                "qualified_name": "AnswerService",
+                "chunk_kind": "symbol_part"
+              },
+              {
+                "chunk_id": "ab3485e4-dc40-55da-9c4f-af19d6be5779",
+                "qualified_name": "AnswerService",
+                "chunk_kind": "symbol_part"
+              },
+              {
+                "chunk_id": "4b02f82a-d694-572b-8a6b-4ae169c58086",
+                "qualified_name": null,
+                "chunk_kind": "non_code"
+              }
+            ],
+            "technologies": [],
+            "prompt_tokens": 5998,
+            "packed_counts": {
+              "spans": 4,
+              "edges": 0,
+              "technologies": 0
+            },
+            "answer_strategy": "model",
+            "retrieval_ms": 12363.97,
+            "model_ms": 282.21,
+            "total_ms": 12703.87
+          },
+          "ok": true
+        },
+        "_subprocess": {
+          "returncode": 0,
+          "stderr_tail": "Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n\nLoading weights:   0%|          | 0/103 [00:00<?, ?it/s]\nLoading weights:  71%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588   | 73/103 [00:00<00:00, 685.88it/s]\nLoading weights: 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 103/103 [00:00<00:00, 775.59it/s]\nprompt_budget prompt_tokens=5998 context_tokens=128000 output_tokens=800 margin_tokens=0 spans=4 edges=0\nclaim_timing retrieval_seconds=12.421 model_seconds=0.282 review_seconds=0.000 model_calls=1 strategy=model\n"
+        },
+        "_mode_env": {
+          "PROGRESSIVE_INDEXING": "true",
+          "EMBED_CATALOGUE_BEFORE_ACTIVATE": "false",
+          "PROGRESSIVE_COMPLETE_DEFERRED_IN_INGEST": "false"
+        }
+      },
+      "ingestion_summary": {
+        "ingest_commit_total_ms": 34135.69,
+        "time_to_queryable_ms": 33308.66,
+        "write_draft_postgres_ms": 2567.55,
+        "write_graph_neo4j_ms": 21935.51,
+        "qdrant_assert_points_ms": null,
+        "catalog_embed_model_ms": null,
+        "catalog_embed_skipped": true
+      },
+      "lazy_asks": {
+        "ask_first": {
+          "repository_id": "0c9e0ff2-5698-54c9-8503-5abae2f52ad0",
+          "generation_id": "068e3d63-0b69-535e-92d7-14a4c1c7487f",
+          "commit_sha": "bb18f6f7b1eb8f859293a3fe67637dc809f100c4",
+          "stats": {
+            "files": 142,
+            "chunks": 986,
+            "symbol_chunks": 3
+          },
+          "steps": [
+            {
+              "step": "preflight.github_ls_remote_head",
+              "ms": 779.53,
+              "upstream": "authorized",
+              "sha": "bb18f6f7b1eb"
+            },
+            {
+              "step": "preflight.refresh_service_ask",
+              "ms": 1628.27,
+              "action": "serve",
+              "message": "The active generation matches this commit.",
+              "pin_id": "fadcad68-ea67-46d9-a8d7-a5c608fc3ad6"
+            },
+            {
+              "step": "ask.answer_total",
+              "ms": 8498.5
+            }
+          ],
+          "snapshot_validate": {
+            "strict": [
+              {
+                "step": "snapshot.path_is_dir",
+                "ms": 0.1
+              },
+              {
+                "step": "snapshot.git_rev_parse_head",
+                "ms": 4.26,
+                "commit": "bb18f6f7b1eb"
+              },
+              {
+                "step": "snapshot.light_validate_skip_blob_walk",
+                "ms": 4.44
+              }
+            ],
+            "light": [
+              {
+                "step": "snapshot.path_is_dir",
+                "ms": 0.09
+              },
+              {
+                "step": "snapshot.git_rev_parse_head",
+                "ms": 5.89,
+                "commit": "bb18f6f7b1eb"
+              },
+              {
+                "step": "snapshot.light_validate_skip_blob_walk",
+                "ms": 6.06
+              }
+            ]
+          },
+          "lane_sequential": [
+            {
+              "step": "lane.name_sequential",
+              "ms": 91.9,
+              "hits": 8
+            },
+            {
+              "step": "lane.text_sequential",
+              "ms": 49.32,
+              "hits": 4
+            },
+            {
+              "step": "lane.vector_sequential",
+              "ms": 21301.41,
+              "hits": 1
+            },
+            {
+              "step": "lane.fuse_rrf_sequential",
+              "ms": 0.1,
+              "fused_anchors": 13
+            }
+          ],
+          "vector_substeps": [
+            {
+              "step": "vector.list_generation_file_ids",
+              "ms": 45.78,
+              "count": 142
+            },
+            {
+              "step": "vector.qdrant_collection_config",
+              "ms": 0.03,
+              "size": 384,
+              "distance": "Cosine"
+            },
+            {
+              "step": "vector.embed_question",
+              "ms": 41.72,
+              "dimensions": 384
+            },
+            {
+              "step": "vector.build_query_filter",
+              "ms": 0.05
+            },
+            {
+              "step": "vector.qdrant_search_first_batch",
+              "ms": 795.18,
+              "hits": 16
+            },
+            {
+              "step": "vector.full_lane_with_postgres_hydration",
+              "ms": 4253.34
+            }
+          ],
+          "ask_trace": {
+            "steps": [
+              {
+                "step": "01_load_generation_and_pin",
+                "ms": 46.59
+              },
+              {
+                "step": "02_search_lanes_parallel",
+                "ms": 873.41
+              },
+              {
+                "step": "03_fuse_anchors_rrf",
+                "ms": 44.84
+              },
+              {
+                "step": "04_materialize_span_choices",
+                "ms": 5188.28
+              },
+              {
+                "step": "05_neo4j_edges_and_neighbor_chunks",
+                "ms": 44.44
+              },
+              {
+                "step": "06_path_chunk_reorder",
+                "ms": 0.08
+              },
+              {
+                "step": "07_named_expansion_behavior_spans",
+                "ms": 196.77
+              },
+              {
+                "step": "08_snapshot_validate_and_load_span_text",
+                "ms": 1711.76
+              },
+              {
+                "step": "09_technology_rows",
+                "ms": 0.06
+              },
+              {
+                "step": "10_technology_specific_filter",
+                "ms": 0.03
+              },
+              {
+                "step": "11_pack_evidence_to_context_budget",
+                "ms": 0.17
+              },
+              {
+                "step": "12_build_evidence_packet_and_aliases",
+                "ms": 0.06
+              },
+              {
+                "step": "13_prompt_token_budget_check",
+                "ms": 0.02
+              },
+              {
+                "step": "14_route_answer_strategy",
+                "ms": 75.3
+              },
+              {
+                "step": "15_model_compose_claims",
+                "ms": 316.37
+              },
+              {
+                "step": "16_finalize_answer",
+                "ms": 0.23
+              }
+            ],
+            "stage_seconds_ms": {
+              "search_lane_name": 120.0,
+              "search_lane_text": 148.0,
+              "search_lane_vector": 0.0,
+              "post_search_graph": 0.0,
+              "snapshot_load": 1621.0
+            },
+            "lane_anchor_counts": {
+              "name": 8,
+              "text": 0,
+              "vector": 0
+            },
+            "fused_anchor_count": 8,
+            "candidate_chunk_count": 9,
+            "spans_before_budget": [
+              {
+                "chunk_id": "57e68251-6a75-5c70-9f57-f98bd45f4aab",
+                "relative_path": "backend/app/retrieval/answer.py",
+                "qualified_name": "AnswerService.answer"
+              },
+              {
+                "chunk_id": "d8bcc7d8-87a4-58ee-ba8d-1f926770534d",
+                "relative_path": "backend/app/retrieval/implementation.py",
+                "qualified_name": "explain_implementation"
+              },
+              {
+                "chunk_id": "b642de6a-ffa3-5ce7-bd6a-b76b3788fe2f",
+                "relative_path": "backend/app/retrieval/answer.py",
+                "qualified_name": "AnswerService.answer"
+              },
+              {
+                "chunk_id": "30d65677-1073-593d-bb94-519a30c2b599",
+                "relative_path": "backend/app/retrieval/answer.py",
+                "qualified_name": "AnswerService"
+              },
+              {
+                "chunk_id": "420d1b56-41d2-59f8-9153-4ebd7b9240a9",
+                "relative_path": "backend/app/retrieval/answer.py",
+                "qualified_name": "AnswerService"
+              },
+              {
+                "chunk_id": "ab3485e4-dc40-55da-9c4f-af19d6be5779",
+                "relative_path": "backend/app/retrieval/answer.py",
+                "qualified_name": "AnswerService"
+              },
+              {
+                "chunk_id": "36ac1059-19e6-5d01-a3a6-71b7ce918ba6",
+                "relative_path": "backend/tests/test_llm_answer.py",
+                "qualified_name": "_RecordingAnswer.answer"
+              },
+              {
+                "chunk_id": "af34e0a5-db02-5b6b-a345-44b03e9eb0b8",
+                "relative_path": "backend/tests/test_llm_answer.py",
+                "qualified_name": "_FailingAnswer.answer"
+              },
+              {
+                "chunk_id": "412fe7f6-f085-5038-9e50-d8f593a00d8c",
+                "relative_path": "backend/tests/test_expansion.py",
+                "qualified_name": "ExpansionNameTests.test_an_explicit_qualified_name_stays_on_the_implementation_path"
+              }
+            ],
+            "packet_span_count": 4,
+            "packet_spans_summary": [
+              {
+                "chunk_id": "57e68251-6a75-5c70-9f57-f98bd45f4aab",
+                "qualified_name": "AnswerService.answer",
+                "chunk_kind": "symbol_part"
+              },
+              {
+                "chunk_id": "d8bcc7d8-87a4-58ee-ba8d-1f926770534d",
+                "qualified_name": "explain_implementation",
+                "chunk_kind": "symbol_body"
+              },
+              {
+                "chunk_id": "b642de6a-ffa3-5ce7-bd6a-b76b3788fe2f",
+                "qualified_name": "AnswerService.answer",
+                "chunk_kind": "symbol_part"
+              },
+              {
+                "chunk_id": "30d65677-1073-593d-bb94-519a30c2b599",
+                "qualified_name": "AnswerService",
+                "chunk_kind": "symbol_part"
+              }
+            ],
+            "technologies": [],
+            "prompt_tokens": 5655,
+            "packed_counts": {
+              "spans": 4,
+              "edges": 0,
+              "technologies": 0
+            },
+            "answer_strategy": "model",
+            "retrieval_ms": 8107.48,
+            "model_ms": 316.39,
+            "total_ms": 8498.38
+          },
+          "ok": true
+        },
+        "ask_repeat": {
+          "repository_id": "0c9e0ff2-5698-54c9-8503-5abae2f52ad0",
+          "generation_id": "068e3d63-0b69-535e-92d7-14a4c1c7487f",
+          "commit_sha": "bb18f6f7b1eb8f859293a3fe67637dc809f100c4",
+          "stats": {
+            "files": 142,
+            "chunks": 992,
+            "symbol_chunks": 9
+          },
+          "steps": [
+            {
+              "step": "preflight.github_ls_remote_head",
+              "ms": 762.01,
+              "upstream": "authorized",
+              "sha": "bb18f6f7b1eb"
+            },
+            {
+              "step": "preflight.refresh_service_ask",
+              "ms": 1537.92,
+              "action": "serve",
+              "message": "The active generation matches this commit.",
+              "pin_id": "a9c070e8-f891-428f-a0d6-d2e7dffca7e7"
+            },
+            {
+              "step": "ask.answer_total",
+              "ms": 3550.49
+            }
+          ],
+          "snapshot_validate": {
+            "strict": [
+              {
+                "step": "snapshot.path_is_dir",
+                "ms": 0.11
+              },
+              {
+                "step": "snapshot.git_rev_parse_head",
+                "ms": 5.97,
+                "commit": "bb18f6f7b1eb"
+              },
+              {
+                "step": "snapshot.light_validate_skip_blob_walk",
+                "ms": 6.17
+              }
+            ],
+            "light": [
+              {
+                "step": "snapshot.path_is_dir",
+                "ms": 0.1
+              },
+              {
+                "step": "snapshot.git_rev_parse_head",
+                "ms": 3.85,
+                "commit": "bb18f6f7b1eb"
+              },
+              {
+                "step": "snapshot.light_validate_skip_blob_walk",
+                "ms": 4.02
+              }
+            ]
+          },
+          "lane_sequential": [
+            {
+              "step": "lane.name_sequential",
+              "ms": 67.8,
+              "hits": 8
+            },
+            {
+              "step": "lane.text_sequential",
+              "ms": 46.12,
+              "hits": 4
+            },
+            {
+              "step": "lane.vector_sequential",
+              "ms": 4824.26,
+              "hits": 1
+            },
+            {
+              "step": "lane.fuse_rrf_sequential",
+              "ms": 0.09,
+              "fused_anchors": 13
+            }
+          ],
+          "vector_substeps": [
+            {
+              "step": "vector.list_generation_file_ids",
+              "ms": 44.99,
+              "count": 142
+            },
+            {
+              "step": "vector.qdrant_collection_config",
+              "ms": 0.02,
+              "size": 384,
+              "distance": "Cosine"
+            },
+            {
+              "step": "vector.embed_question",
+              "ms": 48.85,
+              "dimensions": 384
+            },
+            {
+              "step": "vector.build_query_filter",
+              "ms": 0.03
+            },
+            {
+              "step": "vector.qdrant_search_first_batch",
+              "ms": 786.19,
+              "hits": 16
+            },
+            {
+              "step": "vector.full_lane_with_postgres_hydration",
+              "ms": 4247.49
+            }
+          ],
+          "ask_trace": {
+            "steps": [
+              {
+                "step": "01_load_generation_and_pin",
+                "ms": 61.88
+              },
+              {
+                "step": "02_search_lanes_parallel",
+                "ms": 751.36
+              },
+              {
+                "step": "03_fuse_anchors_rrf",
+                "ms": 42.81
+              },
+              {
+                "step": "04_materialize_span_choices",
+                "ms": 238.91
+              },
+              {
+                "step": "05_neo4j_edges_and_neighbor_chunks",
+                "ms": 44.78
+              },
+              {
+                "step": "06_path_chunk_reorder",
+                "ms": 0.08
+              },
+              {
+                "step": "07_named_expansion_behavior_spans",
+                "ms": 205.12
+              },
+              {
+                "step": "08_snapshot_validate_and_load_span_text",
+                "ms": 1884.97
+              },
+              {
+                "step": "09_technology_rows",
+                "ms": 0.05
+              },
+              {
+                "step": "10_technology_specific_filter",
+                "ms": 0.03
+              },
+              {
+                "step": "11_pack_evidence_to_context_budget",
+                "ms": 0.15
+              },
+              {
+                "step": "12_build_evidence_packet_and_aliases",
+                "ms": 0.06
+              },
+              {
+                "step": "13_prompt_token_budget_check",
+                "ms": 0.02
+              },
+              {
+                "step": "14_route_answer_strategy",
+                "ms": 56.69
+              },
+              {
+                "step": "15_model_compose_claims",
+                "ms": 263.27
+              },
+              {
+                "step": "16_finalize_answer",
+                "ms": 0.22
+              }
+            ],
+            "stage_seconds_ms": {
+              "search_lane_name": 94.0,
+              "search_lane_text": 188.0,
+              "search_lane_vector": 0.0,
+              "post_search_graph": 0.0,
+              "snapshot_load": 1783.0
+            },
+            "lane_anchor_counts": {
+              "name": 8,
+              "text": 0,
+              "vector": 0
+            },
+            "fused_anchor_count": 8,
+            "candidate_chunk_count": 9,
+            "spans_before_budget": [
+              {
+                "chunk_id": "57e68251-6a75-5c70-9f57-f98bd45f4aab",
+                "relative_path": "backend/app/retrieval/answer.py",
+                "qualified_name": "AnswerService.answer"
+              },
+              {
+                "chunk_id": "d8bcc7d8-87a4-58ee-ba8d-1f926770534d",
+                "relative_path": "backend/app/retrieval/implementation.py",
+                "qualified_name": "explain_implementation"
+              },
+              {
+                "chunk_id": "b642de6a-ffa3-5ce7-bd6a-b76b3788fe2f",
+                "relative_path": "backend/app/retrieval/answer.py",
+                "qualified_name": "AnswerService.answer"
+              },
+              {
+                "chunk_id": "30d65677-1073-593d-bb94-519a30c2b599",
+                "relative_path": "backend/app/retrieval/answer.py",
+                "qualified_name": "AnswerService"
+              },
+              {
+                "chunk_id": "420d1b56-41d2-59f8-9153-4ebd7b9240a9",
+                "relative_path": "backend/app/retrieval/answer.py",
+                "qualified_name": "AnswerService"
+              },
+              {
+                "chunk_id": "ab3485e4-dc40-55da-9c4f-af19d6be5779",
+                "relative_path": "backend/app/retrieval/answer.py",
+                "qualified_name": "AnswerService"
+              },
+              {
+                "chunk_id": "36ac1059-19e6-5d01-a3a6-71b7ce918ba6",
+                "relative_path": "backend/tests/test_llm_answer.py",
+                "qualified_name": "_RecordingAnswer.answer"
+              },
+              {
+                "chunk_id": "af34e0a5-db02-5b6b-a345-44b03e9eb0b8",
+                "relative_path": "backend/tests/test_llm_answer.py",
+                "qualified_name": "_FailingAnswer.answer"
+              },
+              {
+                "chunk_id": "412fe7f6-f085-5038-9e50-d8f593a00d8c",
+                "relative_path": "backend/tests/test_expansion.py",
+                "qualified_name": "ExpansionNameTests.test_an_explicit_qualified_name_stays_on_the_implementation_path"
+              }
+            ],
+            "packet_span_count": 4,
+            "packet_spans_summary": [
+              {
+                "chunk_id": "57e68251-6a75-5c70-9f57-f98bd45f4aab",
+                "qualified_name": "AnswerService.answer",
+                "chunk_kind": "symbol_part"
+              },
+              {
+                "chunk_id": "d8bcc7d8-87a4-58ee-ba8d-1f926770534d",
+                "qualified_name": "explain_implementation",
+                "chunk_kind": "symbol_body"
+              },
+              {
+                "chunk_id": "b642de6a-ffa3-5ce7-bd6a-b76b3788fe2f",
+                "qualified_name": "AnswerService.answer",
+                "chunk_kind": "symbol_part"
+              },
+              {
+                "chunk_id": "30d65677-1073-593d-bb94-519a30c2b599",
+                "qualified_name": "AnswerService",
+                "chunk_kind": "symbol_part"
+              }
+            ],
+            "technologies": [],
+            "prompt_tokens": 5655,
+            "packed_counts": {
+              "spans": 4,
+              "edges": 0,
+              "technologies": 0
+            },
+            "answer_strategy": "model",
+            "retrieval_ms": 3230.44,
+            "model_ms": 263.29,
+            "total_ms": 3550.4
+          },
+          "ok": true
+        },
+        "subprocess_returncode": 0,
+        "ok": true
+      }
+    }
+  },
+  "total_wall_ms": 148992.06
+}

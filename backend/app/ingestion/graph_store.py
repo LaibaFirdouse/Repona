@@ -137,9 +137,10 @@ def write_graph(
 
 
 def _write_nodes(session, statement: str, rows: list[dict], renewed: float, on_progress, **common) -> float:
-    for start in range(0, len(rows), 400):
+    batch = 800
+    for start in range(0, len(rows), batch):
         renewed = _touch(on_progress, renewed)
-        session.run(statement, rows=rows[start : start + 400], **common)
+        session.run(statement, rows=rows[start : start + batch], **common)
     return renewed
 
 
@@ -184,11 +185,12 @@ def _write_edges(session, draft: GenerationDraft, generation_id: str, epoch: int
                 WHEN rel.writer_epoch IS NULL OR rel.writer_epoch < $epoch THEN $epoch
                 ELSE rel.writer_epoch END
         """
-        for start in range(0, len(rows), 400):
+        batch = 800
+        for start in range(0, len(rows), batch):
             renewed = _touch(on_progress, renewed)
             session.run(
                 statement,
-                rows=rows[start : start + 400],
+                rows=rows[start : start + batch],
                 generation_id=generation_id,
                 epoch=epoch,
             )

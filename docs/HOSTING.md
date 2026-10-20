@@ -133,6 +133,19 @@ Co-locate Neon, Qdrant, and Neo4j in the same region as EC2 when you can. Run `n
 After pulling a new API image:
 
 ```bash
+git pull origin master
 docker compose -f docker-compose.hosted.yml up -d --build
 docker exec repona-api env PYTHONPATH=/app/backend python /app/scripts/repair_catalog.py --all --reset-expired-refresh
 ```
+
+### Progressive lazy indexing (production)
+
+| Step | Who | Action |
+|---|---|---|
+| Merge + ship code | GitHub | PR to `master`; CI green |
+| Redeploy API | EC2 | Commands above (`--build` picks up new code) |
+| Re-index | Operator / visitor | **Index** each repo again so the active generation is built with the new ingest + lazy flags. Old generations (e.g. pre-lazy commit) do not gain query-time materialisation retroactively. |
+| Lazy env | `.env` on VM | Hosted compose defaults: `EMBED_CATALOGUE_BEFORE_ACTIVATE=false`, `PROGRESSIVE_COMPLETE_DEFERRED_IN_INGEST=false`, `LAZY_EMBED_ON_QUERY=true`. Override in `.env` if you need catalogue embed before activate. |
+| Acceptance | Dev machine or VM | `npm run benchmark:lazy-validation` (optional smoke after re-index) |
+
+Embedding provider outages are handled in ask (vector lane degrades); regression coverage is the `embedding_unavailable` lazy-validation case, not every question type.
