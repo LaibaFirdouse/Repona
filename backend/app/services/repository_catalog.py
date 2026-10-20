@@ -36,14 +36,17 @@ def list_user_repositories(db: Session, user_id: str) -> list[dict]:
     )
     items: list[dict] = []
     for repository, generation in rows:
+        resolved = generation
+        if resolved is None and repository.active_generation_id:
+            resolved = db.get(IndexGeneration, repository.active_generation_id)
         items.append(
             {
                 "repository_id": repository.id,
                 "normalized_url": repository.normalized_url,
                 "tracked_branch": repository.tracked_branch,
-                "commit_sha": _commit_for_generation(db, generation),
+                "commit_sha": _commit_for_generation(db, resolved),
                 "generation_id": repository.active_generation_id,
-                "index_state": _index_state(repository, generation),
+                "index_state": _index_state(repository, resolved),
                 "updated_at": repository.updated_at.isoformat() if repository.updated_at else None,
             }
         )
@@ -53,7 +56,10 @@ def list_user_repositories(db: Session, user_id: str) -> list[dict]:
 def _commit_for_generation(db: Session, generation: IndexGeneration | None) -> str | None:
     if generation is None:
         return None
-    revision = db.get(SourceRevision, generation.source_revision_id)
+    revision_id = getattr(generation, "source_revision_id", None)
+    if not revision_id:
+        return None
+    revision = db.get(SourceRevision, revision_id)
     return None if revision is None else revision.commit_sha
 
 
