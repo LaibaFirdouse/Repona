@@ -24,6 +24,13 @@ _META_SNIPPETS = (
     re.compile(r"\bwhich are not (?:included|shown) in\b[^.!?]*[.!?]?", re.I),
 )
 
+PROSE_STYLE_SUFFIX = (
+    "\nWrite readable prose: one or two short paragraphs per major idea. "
+    "Mention specific file paths only where they anchor a non-obvious claim (roughly two to four paths per answer, not every sentence). "
+    "Do not enumerate every import, export, or function name in a row; describe behavior and structure in plain language. "
+    "evidence_ids still cite all supporting excerpts in JSON."
+)
+
 
 def sanitize_answer_prose(text: str) -> str:
     """Remove internal evidence labels and collapse whitespace after cleanup."""

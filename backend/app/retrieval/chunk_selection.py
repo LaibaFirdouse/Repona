@@ -40,10 +40,14 @@ _IMPLEMENTATION_QUESTION = re.compile(
     re.I,
 )
 
-_WEB_IMPL_PATH_TERMS = (
+_IMPL_PATH_TERMS = (
     "app/api/",
     "lib/",
     "lib/models",
+    "internal/api",
+    "internal/",
+    "cmd/",
+    "backend/",
     "pages/api",
     "src/",
     "server/",
@@ -118,11 +122,18 @@ def deprioritize_meta_config_spans(spans: list) -> list:
     return front + back
 
 
-def filter_meta_config_when_impl(loaded: list[dict], *, min_keep: int = 3) -> list[dict]:
-    impl = [span for span in loaded if not is_meta_config_path(str(span.get("relative_path") or ""))]
-    if len(impl) >= min_keep:
-        return impl
-    return loaded
+def limit_spans_per_file(loaded: list[dict], *, max_per_file: int = 2) -> list[dict]:
+    """Keep the evidence pack diverse—avoid ten chunks from the same file."""
+    counts: dict[str, int] = {}
+    kept: list[dict] = []
+    for span in loaded:
+        path = str(span.get("relative_path") or "")
+        used = counts.get(path, 0)
+        if used >= max_per_file:
+            continue
+        counts[path] = used + 1
+        kept.append(span)
+    return kept if kept else loaded
 
 
 def implementation_chunk_choices(
@@ -141,7 +152,7 @@ def implementation_chunk_choices(
         anchor_id = anchor or chunk.symbol_id or chunk.file_id
         choices.append(ChunkChoice(chunk.id, anchor_id, chunk.kind, chunk.ordinal))
 
-    filters = [File.relative_path.ilike(f"%{term}%") for term in _WEB_IMPL_PATH_TERMS]
+    filters = [File.relative_path.ilike(f"%{term}%") for term in _IMPL_PATH_TERMS]
     files = (
         db.query(File)
         .join(GenerationFile, GenerationFile.file_id == File.id)

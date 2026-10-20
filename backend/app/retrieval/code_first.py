@@ -121,8 +121,8 @@ def _span_path(span) -> str:
 
 
 CODE_FIRST_SUFFIX = (
-    "\nThe user wants implementation detail from source files (include/, src/, .hpp, .cpp), "
-    "not README.md marketing or benchmark tables. Ground every claim in those implementation excerpts. "
-    "Do not say \"the excerpts\", \"this packet\", or \"README alone\"; explain what the code does. "
-    "If an allocator header is missing from the excerpts, say which files you do see and what they show—briefly."
+    "\nGround the answer in implementation source (handlers, models, main, lib/, internal/, include/). "
+    "Use README or package.json only when they add product or setup facts the code excerpts do not cover—never instead of code for how-it-works questions. "
+    "Do not say \"the excerpts\", \"this packet\", or \"README alone\". "
+    "Write in flowing paragraphs: do not put a file path, import list, or export name in every sentence."
 )

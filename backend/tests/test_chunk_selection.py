@@ -1,7 +1,12 @@
 import unittest
 from types import SimpleNamespace
 
-from app.retrieval.chunk_selection import is_meta_config_path, representative_chunk, wants_substantive_implementation
+from app.retrieval.chunk_selection import (
+    is_meta_config_path,
+    limit_spans_per_file,
+    representative_chunk,
+    wants_substantive_implementation,
+)
 
 
 def _chunk(kind: str, size: int, ordinal: int = 0) -> SimpleNamespace:
@@ -27,6 +32,16 @@ class ChunkSelectionTests(unittest.TestCase):
 
     def test_substantive_workflow_question(self) -> None:
         self.assertTrue(wants_substantive_implementation("tell me the end to end workflow", []))
+
+    def test_limit_spans_per_file(self) -> None:
+        loaded = [
+            {"relative_path": "main.go", "chunk_id": "1"},
+            {"relative_path": "main.go", "chunk_id": "2"},
+            {"relative_path": "main.go", "chunk_id": "3"},
+            {"relative_path": "api.go", "chunk_id": "4"},
+        ]
+        kept = limit_spans_per_file(loaded, max_per_file=2)
+        self.assertEqual(len(kept), 3)
 
 
 if __name__ == "__main__":

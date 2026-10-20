@@ -139,7 +139,7 @@ MORE_EVIDENCE_SUFFIX = (
 FINAL_ONLY_SUFFIX = (
     '\nRespond with JSON only: {"status":"final","claims":[{"kind":"observed","text":"...",'
     '"evidence_ids":["E1"]}]}. kind must be observed, inference, or suggestion. '
-    "The text field is shown to the user: write natural prose with file paths and code detail only—no E1/E2 labels. "
+    "The text field is shown to the user: natural paragraphs, not a path/import laundry list—no E1/E2 labels. "
     "You must use status final — do not request more evidence."
 )
 

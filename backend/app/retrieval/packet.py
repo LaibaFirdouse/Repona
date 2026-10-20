@@ -186,10 +186,34 @@ def resolve_evidence_aliases(claims: list[dict], aliases: dict[str, str]) -> lis
     return resolved
 
 
+def dedupe_citations_by_path(citations: list[dict]) -> list[dict]:
+    """One chip per file in the UI; merge line ranges when multiple chunks cite the same path."""
+    merged: dict[str, dict] = {}
+    order: list[str] = []
+    for item in citations:
+        path = str(item.get("path") or "")
+        if path not in merged:
+            merged[path] = dict(item)
+            order.append(path)
+            continue
+        row = merged[path]
+        start = item.get("start_line")
+        end = item.get("end_line")
+        if start is not None and end is not None:
+            prev_s, prev_e = row.get("start_line"), row.get("end_line")
+            if prev_s is not None and prev_e is not None:
+                row["start_line"] = min(prev_s, start)
+                row["end_line"] = max(prev_e, end)
+            else:
+                row["start_line"] = start
+                row["end_line"] = end
+    return [merged[path] for path in order]
+
+
 def span_citations(spans: list[dict], claims: list[dict]) -> list[dict]:
     """Map kept evidence ids to the span path and lines. Edges are not citations."""
     cited = {item for claim in claims for item in claim["evidence_ids"]}
-    return [
+    raw = [
         {
             "chunk_id": span["chunk_id"],
             "path": span["relative_path"],
@@ -199,6 +223,7 @@ def span_citations(spans: list[dict], claims: list[dict]) -> list[dict]:
         for span in spans
         if span["chunk_id"] in cited
     ]
+    return dedupe_citations_by_path(raw)
 
 
 def review_claims(claims: list[dict], valid_ids: set[str]) -> tuple[list[dict], bool]:

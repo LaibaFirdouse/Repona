@@ -1837,16 +1837,41 @@
       return frag;
     }
 
+    function mergeCitationsByPath(citations) {
+      const merged = new Map();
+      for (const citation of citations || []) {
+        const path = citation.path || "";
+        const prev = merged.get(path);
+        if (!prev) {
+          merged.set(path, { ...citation });
+          continue;
+        }
+        const start = citation.start_line;
+        const end = citation.end_line;
+        if (start != null && end != null) {
+          if (prev.start_line != null && prev.end_line != null) {
+            prev.start_line = Math.min(prev.start_line, start);
+            prev.end_line = Math.max(prev.end_line, end);
+          } else {
+            prev.start_line = start;
+            prev.end_line = end;
+          }
+        }
+      }
+      return [...merged.values()];
+    }
+
     function renderSources(citations) {
+      const deduped = mergeCitationsByPath(citations);
       const wrap = document.createElement("div");
       wrap.className = "sources";
       const label = document.createElement("div");
       label.className = "sources-label";
-      label.textContent = `Sources · ${citations.length}`;
+      label.textContent = `Sources · ${deduped.length}`;
       wrap.appendChild(label);
       const grid = document.createElement("div");
       grid.className = "source-grid";
-      citations.forEach((citation, i) => {
+      deduped.forEach((citation, i) => {
         const chip = document.createElement("button");
         chip.type = "button";
         chip.className = "source-chip" + (i === 0 ? " primary" : "");

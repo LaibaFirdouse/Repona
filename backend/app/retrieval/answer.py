@@ -91,12 +91,12 @@ from app.retrieval.answer_turn import (
     MORE_EVIDENCE_SUFFIX,
     collect_answer_turn,
 )
-from app.retrieval.answer_prose import META_ANSWER_SUFFIX, meta_reasoning_question
+from app.retrieval.answer_prose import META_ANSWER_SUFFIX, PROSE_STYLE_SUFFIX, meta_reasoning_question
 from app.retrieval.chunk_selection import (
     deprioritize_meta_config_spans,
     enrich_spans_with_bodies,
-    filter_meta_config_when_impl,
     implementation_chunk_choices,
+    limit_spans_per_file,
     pick_file_chunk,
     wants_substantive_implementation,
 )
@@ -104,7 +104,6 @@ from app.retrieval.code_first import (
     CODE_FIRST_SUFFIX,
     code_first_chunk_choices,
     deprioritize_readme_spans,
-    filter_readme_when_code_first,
     wants_implementation_evidence,
 )
 from app.retrieval.conversation_context import (
@@ -159,8 +158,9 @@ SYSTEM_PROMPT = (
     "In claim text, never write (E4), E17, \"the excerpts\", \"the prior answer\", \"this packet\", or how evidence was chosen. "
     "Use one or more claims; each claim text may be a paragraph when the question warrants it. "
     "Write for the user, not for a reviewer of the retrieval system. "
-    "Sound like a colleague explaining the codebase: paths, functions, and behavior—not a retrieval audit. "
-    "When implementation source is in the excerpts, prefer it over README.md unless the question is only high-level purpose. "
+    "Sound like a colleague explaining the codebase—not a retrieval audit or a file manifest. "
+    "Use README when it helps (purpose, setup, stack); always support how-it-works questions with implementation excerpts when present. "
+    "Do not repeat a file path, import line, or symbol name in every sentence; group ideas into clear paragraphs. "
     "Never write that material is \"not in the excerpts\" or \"not shown\"; state what the code you have does, or say briefly that a file was not retrieved. "
     "kind is observed, inference, or suggestion. Every claim must cite at least one evidence_id from the excerpts. "
     "An observed claim states a fact shown in the excerpts. "
@@ -570,10 +570,7 @@ class AnswerService:
             _load_span_text(db, generation.id, revision, spans, blobs),
             search_question,
         )
-        if code_first:
-            loaded = filter_readme_when_code_first(loaded)
-        elif prefer_impl:
-            loaded = filter_meta_config_when_impl(loaded)
+        loaded = limit_spans_per_file(loaded)
         step = _trace_step(trace, "08_snapshot_validate_and_load_span_text", step)
         priority_ids = {item.chunk_id for item in named + expanded + behavior}
         loaded = [span for span in loaded if span["chunk_id"] in priority_ids] + [
@@ -642,7 +639,7 @@ class AnswerService:
         force_final = False
         for round_index in range(max_rounds + 1):
             allow_more = round_index < max_rounds and not force_final
-            suffix = JSON_FORMAT_SUFFIX + (MORE_EVIDENCE_SUFFIX if allow_more else FINAL_ONLY_SUFFIX)
+            suffix = JSON_FORMAT_SUFFIX + PROSE_STYLE_SUFFIX + (MORE_EVIDENCE_SUFFIX if allow_more else FINAL_ONLY_SUFFIX)
             if meta_reasoning_question(question):
                 suffix += META_ANSWER_SUFFIX
             if code_first or substantive:
