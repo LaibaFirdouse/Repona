@@ -1,0 +1,33 @@
+import unittest
+from types import SimpleNamespace
+
+from app.retrieval.chunk_selection import is_meta_config_path, representative_chunk, wants_substantive_implementation
+
+
+def _chunk(kind: str, size: int, ordinal: int = 0) -> SimpleNamespace:
+    return SimpleNamespace(kind=kind, start_byte=0, end_byte=size, ordinal=ordinal, id=f"{kind}-{size}")
+
+
+class ChunkSelectionTests(unittest.TestCase):
+    def test_prefers_largest_symbol_body_over_imports(self) -> None:
+        chunks = [
+            _chunk("import_block", 200),
+            _chunk("symbol_body", 4000, 1),
+            _chunk("symbol_body", 800, 0),
+        ]
+        pick = representative_chunk(chunks)
+        assert pick is not None
+        self.assertEqual(pick.kind, "symbol_body")
+        self.assertEqual(pick.end_byte, 4000)
+
+    def test_meta_config_paths(self) -> None:
+        self.assertTrue(is_meta_config_path("package.json"))
+        self.assertTrue(is_meta_config_path("README.md"))
+        self.assertFalse(is_meta_config_path("app/api/plans/route.ts"))
+
+    def test_substantive_workflow_question(self) -> None:
+        self.assertTrue(wants_substantive_implementation("tell me the end to end workflow", []))
+
+
+if __name__ == "__main__":
+    unittest.main()

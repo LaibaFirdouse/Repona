@@ -92,6 +92,14 @@ from app.retrieval.answer_turn import (
     collect_answer_turn,
 )
 from app.retrieval.answer_prose import META_ANSWER_SUFFIX, meta_reasoning_question
+from app.retrieval.chunk_selection import (
+    deprioritize_meta_config_spans,
+    enrich_spans_with_bodies,
+    filter_meta_config_when_impl,
+    implementation_chunk_choices,
+    pick_file_chunk,
+    wants_substantive_implementation,
+)
 from app.retrieval.code_first import (
     CODE_FIRST_SUFFIX,
     code_first_chunk_choices,
@@ -385,6 +393,8 @@ class AnswerService:
         search_question = retrieval_question_text(question, history)
         history_prefix = format_answer_history(history)
         code_first = wants_implementation_evidence(question, history)
+        substantive = wants_substantive_implementation(question, history)
+        prefer_impl = code_first or substantive
         if outcome.pin_id is None or outcome.generation_id is None:
             raise RetrievalError(409, "the question has no pinned generation")
         self._ensure_open(db, outcome.pin_id)
@@ -402,6 +412,8 @@ class AnswerService:
                 trace["conversation_turns"] = len(history)
             if code_first:
                 trace["code_first"] = True
+            if substantive:
+                trace["substantive_implementation"] = True
         vectors_ready = count_vector_ready(db, generation.id)
         preview_text: list = []
         preview_name: list = []
@@ -534,6 +546,11 @@ class AnswerService:
             boost = code_first_chunk_choices(db, generation, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
             spans = deprioritize_readme_spans(spans)
+        elif prefer_impl:
+            span_limit += settings.answer_overview_span_bonus
+            boost = implementation_chunk_choices(db, generation, limit=span_limit)
+            spans = _merge_chunk_choices(spans, boost, span_limit)
+            spans = deprioritize_meta_config_spans(spans)
         elif overview_question(search_question) or overview_question(question) or retrieval.intent in {
             "architecture_question",
             "conceptual_search",
@@ -542,6 +559,9 @@ class AnswerService:
             boost = overview_chunk_choices(db, generation, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
         spans = preserve_named_spans(spans, named + expanded + behavior, span_limit)
+        spans = enrich_spans_with_bodies(db, generation.id, spans)
+        if prefer_impl:
+            spans = deprioritize_meta_config_spans(spans)
         step = _trace_step(trace, "07_named_expansion_behavior_spans", step)
         self._ensure_open(db, outcome.pin_id)
         stage = perf_counter()
@@ -552,6 +572,8 @@ class AnswerService:
         )
         if code_first:
             loaded = filter_readme_when_code_first(loaded)
+        elif prefer_impl:
+            loaded = filter_meta_config_when_impl(loaded)
         step = _trace_step(trace, "08_snapshot_validate_and_load_span_text", step)
         priority_ids = {item.chunk_id for item in named + expanded + behavior}
         loaded = [span for span in loaded if span["chunk_id"] in priority_ids] + [
@@ -623,7 +645,7 @@ class AnswerService:
             suffix = JSON_FORMAT_SUFFIX + (MORE_EVIDENCE_SUFFIX if allow_more else FINAL_ONLY_SUFFIX)
             if meta_reasoning_question(question):
                 suffix += META_ANSWER_SUFFIX
-            if code_first:
+            if code_first or substantive:
                 suffix += CODE_FIRST_SUFFIX
             user_block = _dialog_user_block(question, dialog_notes, history_prefix=history_prefix)
             header = SYSTEM_PROMPT + suffix + "\n" + user_block
@@ -1199,18 +1221,10 @@ def _path_file_hits(db: Session, generation: IndexGeneration, question: str) -> 
         by_file.setdefault(chunk.file_id, []).append(chunk)
     chosen = []
     for item in files:
-        chunk = _representative_chunk(by_file.get(item.id, []))
+        chunk = pick_file_chunk(by_file.get(item.id, []))
         if chunk is not None:
             chosen.append((item.id, chunk.id))
     return chosen
-
-
-def _representative_chunk(chunks: list):
-    if not chunks:
-        return None
-    preferred = [chunk for chunk in chunks if chunk.kind in {"file_overview", "non_code", "import_block"}]
-    pool = preferred or [chunk for chunk in chunks if chunk.kind == "symbol_body"] or list(chunks)
-    return min(pool, key=lambda chunk: (chunk.end_byte - chunk.start_byte, chunk.ordinal, chunk.id))
 
 
 def retrieval_identifiers(question: str, path_filters: list[str] | None = None) -> list[str]:

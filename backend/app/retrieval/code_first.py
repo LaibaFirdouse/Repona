@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.catalog import Chunk, File, GenerationChunk, GenerationFile, IndexGeneration
 from app.retrieval.conversation_context import QaTurn
+from app.retrieval.chunk_selection import is_meta_config_path, representative_chunk
 from app.retrieval.fusion import ChunkChoice
 
 _CODE_FIRST = re.compile(
@@ -47,9 +48,7 @@ def wants_implementation_evidence(question: str, history: list[QaTurn]) -> bool:
 
 
 def is_readme_path(relative_path: str) -> bool:
-    path = relative_path.replace("\\", "/").lower()
-    name = path.rsplit("/", 1)[-1]
-    return name in {"readme.md", "readme", "readme.txt"}
+    return is_meta_config_path(relative_path) and "readme" in relative_path.lower()
 
 
 def deprioritize_readme_spans(spans: list) -> list:
@@ -107,9 +106,9 @@ def code_first_chunk_choices(
         pool = by_file.get(file.id, [])
         if not pool:
             continue
-        body = [c for c in pool if c.kind in {"symbol_body", "non_code", "file_overview", "import_block"}]
-        pick = min(body or pool, key=lambda c: (0 if c.kind == "symbol_body" else 1, c.end_byte - c.start_byte, c.ordinal))
-        add_chunk(pick)
+        pick = representative_chunk(pool)
+        if pick is not None:
+            add_chunk(pick)
         if len(choices) >= limit:
             break
     return choices

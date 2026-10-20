@@ -8,6 +8,7 @@ from sqlalchemy import desc, func, or_
 from sqlalchemy.orm import Session
 
 from app.models.catalog import Chunk, File, GenerationChunk, GenerationFile, IndexGeneration
+from app.retrieval.chunk_selection import representative_chunk
 from app.retrieval.fusion import ChunkChoice
 
 _OVERVIEW = re.compile(
@@ -86,9 +87,9 @@ def overview_chunk_choices(
                 pool = by_file.get(file.id, [])
                 if not pool:
                     continue
-                body = [c for c in pool if c.kind in {"symbol_body", "non_code", "file_overview", "import_block"}]
-                pick = min(body or pool, key=lambda c: (0 if c.kind == "symbol_body" else 1, c.end_byte - c.start_byte, c.ordinal))
-                add_chunk(pick)
+                pick = representative_chunk(pool)
+                if pick is not None:
+                    add_chunk(pick)
 
     queries = ["readme", "purpose", "overview", "leaderboard", "package main"]
     for item in extra_lexical or []:
