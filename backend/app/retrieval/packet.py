@@ -132,16 +132,14 @@ def _qwen():
 
 
 def render_answer(claims: list[dict]) -> str:
-    """Turn kept claims into the sentences a person reads."""
-    sentences = []
+    """Turn kept claims into the prose a person reads."""
+    paragraphs = []
     for claim in claims:
         text = str(claim.get("text") or "").strip()
         if not text:
             continue
-        if text[-1] not in ".?!":
-            text += "."
-        sentences.append(text)
-    return " ".join(sentences) if sentences else NO_CITED_CLAIM
+        paragraphs.append(text)
+    return "\n\n".join(paragraphs) if paragraphs else NO_CITED_CLAIM
 
 
 def implementation_before_tests(spans: list[dict], question: str = "") -> list[dict]:

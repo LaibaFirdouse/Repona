@@ -253,11 +253,11 @@ class PacketTests(unittest.TestCase):
         )
         self.assertEqual([span["chunk_id"] for span in named], ["a", "v", "t"])
 
-    def test_the_prompt_asks_for_the_implementation_steps_and_exact_aliases(self) -> None:
-        self.assertIn("Cite that alias exactly", SYSTEM_PROMPT)
-        self.assertIn("which functions it calls", SYSTEM_PROMPT)
-        self.assertIn("Cite a test span only when the question asks about the test", SYSTEM_PROMPT)
-        self.assertIn("open-ended questions", SYSTEM_PROMPT)
+    def test_the_prompt_asks_for_natural_grounded_answers(self) -> None:
+        self.assertIn("Never mention internal ids such as E1", SYSTEM_PROMPT)
+        self.assertIn("inputs, calls, and returns", SYSTEM_PROMPT)
+        self.assertIn("Cite tests only when the question is about tests", SYSTEM_PROMPT)
+        self.assertIn("the way a helpful assistant would", SYSTEM_PROMPT)
         self.assertNotIn("evidence packet", SYSTEM_PROMPT)
 
     def test_a_full_span_id_still_resolves_when_aliases_are_in_use(self) -> None:
