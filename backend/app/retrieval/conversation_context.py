@@ -54,6 +54,7 @@ def format_planner_user(question: str, history: list[QaTurn]) -> str:
     lines = [
         "Return JSON for QueryPlanV1 fields only.",
         "Resolve pronouns and references from the conversation when planning retrieval.",
+        "For workflow or how-it-works questions, set path_filters and lexical_queries toward handlers (app/api, lib, src, internal) not only README.",
     ]
     if history:
         lines.append("")

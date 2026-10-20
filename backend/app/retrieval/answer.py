@@ -115,6 +115,11 @@ from app.retrieval.conversation_context import (
     retrieval_question_text,
 )
 from app.retrieval.overview_boost import overview_chunk_choices, overview_question
+from app.retrieval.workflow_boost import (
+    lexical_workflow_chunk_choices,
+    loaded_needs_more_bodies,
+    workflow_lexical_queries,
+)
 from app.retrieval.query_router import (
     PLANNER_SYSTEM,
     RetrievalRequest,
@@ -541,21 +546,29 @@ class AnswerService:
         named = _named_symbol_spans(db, generation, search_question)
         expanded = _expansion_symbol_spans(db, generation, search_question)
         behavior = _behavior_symbol_spans(db, generation, search_question)
+        is_overview = overview_question(search_question) or overview_question(question) or retrieval.intent in {
+            "architecture_question",
+            "conceptual_search",
+        }
         span_limit = settings.retrieval_span_limit
+        workflow_queries = list(dict.fromkeys(workflow_lexical_queries(question) + workflow_lexical_queries(search_question)))
         if code_first:
-            span_limit += settings.answer_overview_span_bonus
+            span_limit += settings.answer_overview_span_bonus + settings.answer_workflow_span_bonus
             boost = code_first_chunk_choices(db, generation, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
             spans = deprioritize_readme_spans(spans)
         elif prefer_impl:
-            span_limit += settings.answer_overview_span_bonus
+            span_limit += settings.answer_overview_span_bonus + settings.answer_workflow_span_bonus
             boost = implementation_chunk_choices(db, generation, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
+            if workflow_queries:
+                lexical_boost = lexical_workflow_chunk_choices(db, generation, workflow_queries, limit=span_limit)
+                spans = _merge_chunk_choices(spans, lexical_boost, span_limit)
+            if is_overview:
+                doc_boost = overview_chunk_choices(db, generation, limit=8)
+                spans = _merge_chunk_choices(spans, doc_boost, span_limit)
             spans = deprioritize_meta_config_spans(spans)
-        elif overview_question(search_question) or overview_question(question) or retrieval.intent in {
-            "architecture_question",
-            "conceptual_search",
-        }:
+        elif is_overview:
             span_limit += settings.answer_overview_span_bonus
             boost = overview_chunk_choices(db, generation, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
@@ -563,9 +576,12 @@ class AnswerService:
         spans = enrich_spans_with_bodies(db, generation.id, spans)
         if prefer_impl or code_first:
             spans = expand_spans_with_sibling_bodies(db, generation.id, spans)
-            spans = spans[: span_limit + settings.answer_overview_span_bonus]
+            cap = span_limit + settings.answer_overview_span_bonus
+            spans = spans[:cap]
         if prefer_impl:
             spans = deprioritize_meta_config_spans(spans)
+        if trace is not None and workflow_queries:
+            trace["workflow_lexical_queries"] = workflow_queries[:8]
         step = _trace_step(trace, "07_named_expansion_behavior_spans", step)
         self._ensure_open(db, outcome.pin_id)
         stage = perf_counter()
@@ -576,6 +592,24 @@ class AnswerService:
         )
         per_file_cap = settings.answer_impl_chunks_per_file if (prefer_impl or code_first) else 2
         loaded = limit_spans_per_file(loaded, max_per_file=per_file_cap)
+        if (
+            settings.answer_impl_reload_on_thin
+            and prefer_impl
+            and loaded_needs_more_bodies(loaded)
+        ):
+            reload_spans = implementation_chunk_choices(db, generation, limit=span_limit)
+            if workflow_queries:
+                reload_spans = _merge_chunk_choices(
+                    reload_spans,
+                    lexical_workflow_chunk_choices(db, generation, workflow_queries, limit=12),
+                    span_limit,
+                )
+            reload_spans = expand_spans_with_sibling_bodies(db, generation.id, reload_spans, max_added=20)
+            extra_loaded = _load_span_text(db, generation.id, revision, reload_spans, blobs)
+            loaded = _merge_loaded_spans(loaded, extra_loaded)
+            loaded = limit_spans_per_file(loaded, max_per_file=per_file_cap)
+            if trace is not None:
+                trace["impl_evidence_reload"] = True
         step = _trace_step(trace, "08_snapshot_validate_and_load_span_text", step)
         priority_ids = {item.chunk_id for item in named + expanded + behavior}
         loaded = [span for span in loaded if span["chunk_id"] in priority_ids] + [
