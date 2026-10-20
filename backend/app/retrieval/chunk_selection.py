@@ -32,9 +32,10 @@ _META_CONFIG_NAMES = frozenset(
 
 _IMPLEMENTATION_QUESTION = re.compile(
     r"\b("
-    r"workflow|end[- ]to[- ]end|how (?:is|does|are|do) .+ (?:work|stored|persist)|"
-    r"data (?:is )?stored|persist(?:ed|ence)?|mongoose|schema|api route|route handler|"
-    r"functions? implemented|what (?:are|is) the different|lib/|app/api|"
+    r"workflow|workflows|end[- ]to[- ]end|request flow|how (?:is|does|are|do) .+ (?:work|stored|persist|implemented)|"
+    r"implemented in code|in code|data (?:is )?stored|persist(?:ed|ence)?|mongoose|schema|api route|route handler|"
+    r"functions? implemented|list and explain|what (?:are|is) the different|lib/|app/api|"
+    r"import rules|export rules|modify rules|declarativeNetRequest|chrome\.storage|service worker|"
     r"implementation|source code|from code|not (?:the )?readme"
     r")\b",
     re.I,
@@ -50,8 +51,13 @@ _IMPL_PATH_TERMS = (
     "backend/",
     "pages/api",
     "src/",
+    "src/background",
+    "background.ts",
+    "App.tsx",
+    "popup",
     "server/",
     "components/",
+    "route.ts",
 )
 
 
@@ -122,6 +128,52 @@ def deprioritize_meta_config_spans(spans: list) -> list:
     return front + back
 
 
+def expand_spans_with_sibling_bodies(
+    db: Session,
+    generation_id: str,
+    spans: list[ChunkChoice],
+    *,
+    max_bodies_per_file: int | None = None,
+    max_added: int = 16,
+) -> list[ChunkChoice]:
+    """Large files are split into many chunks; retrieval often keeps only one—add sibling bodies."""
+    cap = max_bodies_per_file if max_bodies_per_file is not None else settings.answer_impl_chunks_per_file
+    seen = {span.chunk_id for span in spans}
+    file_ids: set[str] = set()
+    for span in spans:
+        chunk = db.get(Chunk, span.chunk_id)
+        if chunk is not None:
+            file_ids.add(chunk.file_id)
+    extra: list[ChunkChoice] = []
+    for file_id in file_ids:
+        bodies = (
+            db.query(Chunk)
+            .join(GenerationChunk, GenerationChunk.chunk_id == Chunk.id)
+            .filter(
+                GenerationChunk.index_generation_id == generation_id,
+                Chunk.file_id == file_id,
+                Chunk.kind == "symbol_body",
+            )
+            .all()
+        )
+        bodies.sort(key=lambda item: (item.end_byte - item.start_byte, item.ordinal), reverse=True)
+        added_for_file = 0
+        for body in bodies:
+            if body.id in seen:
+                continue
+            if added_for_file >= cap:
+                break
+            seen.add(body.id)
+            anchor = body.symbol_id or body.file_id
+            extra.append(ChunkChoice(body.id, anchor, body.kind, body.ordinal))
+            added_for_file += 1
+            if len(extra) >= max_added:
+                break
+        if len(extra) >= max_added:
+            break
+    return list(spans) + extra
+
+
 def limit_spans_per_file(loaded: list[dict], *, max_per_file: int = 2) -> list[dict]:
     """Keep the evidence pack diverse—avoid ten chunks from the same file."""
     counts: dict[str, int] = {}
@@ -174,10 +226,18 @@ def implementation_chunk_choices(
     by_file: dict[str, list[Chunk]] = {}
     for chunk in chunks:
         by_file.setdefault(chunk.file_id, []).append(chunk)
+    per_file = max(2, min(settings.answer_impl_chunks_per_file, 4))
     for file in files:
-        best = representative_chunk(by_file.get(file.id, []))
-        if best is not None:
-            add_chunk(best)
+        pool = by_file.get(file.id, []) or []
+        bodies = [c for c in pool if c.kind == "symbol_body"]
+        bodies.sort(key=lambda item: (item.end_byte - item.start_byte, item.ordinal), reverse=True)
+        if not bodies:
+            best = representative_chunk(pool)
+            if best is not None:
+                add_chunk(best)
+        else:
+            for body in bodies[:per_file]:
+                add_chunk(body)
         if len(choices) >= limit:
             break
     return choices

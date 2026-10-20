@@ -57,13 +57,6 @@ def deprioritize_readme_spans(spans: list) -> list:
     return front + back
 
 
-def filter_readme_when_code_first(loaded: list[dict], *, min_keep: int = 2) -> list[dict]:
-    non_readme = [span for span in loaded if not is_readme_path(str(span.get("relative_path") or ""))]
-    if len(non_readme) >= min_keep:
-        return non_readme
-    return loaded
-
-
 def code_first_chunk_choices(
     db: Session,
     generation: IndexGeneration,
@@ -124,5 +117,6 @@ CODE_FIRST_SUFFIX = (
     "\nGround the answer in implementation source (handlers, models, main, lib/, internal/, include/). "
     "Use README or package.json only when they add product or setup facts the code excerpts do not cover—never instead of code for how-it-works questions. "
     "Do not say \"the excerpts\", \"this packet\", or \"README alone\". "
-    "Write in flowing paragraphs: do not put a file path, import list, or export name in every sentence."
+    "Write in flowing paragraphs: do not put a file path, import list, or export name in every sentence. "
+    "When multiple workflows exist (import/export/monitor/rules), explain each from the code excerpts provided—do not stop at imports."
 )

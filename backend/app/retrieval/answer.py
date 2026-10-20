@@ -95,6 +95,7 @@ from app.retrieval.answer_prose import META_ANSWER_SUFFIX, PROSE_STYLE_SUFFIX, m
 from app.retrieval.chunk_selection import (
     deprioritize_meta_config_spans,
     enrich_spans_with_bodies,
+    expand_spans_with_sibling_bodies,
     implementation_chunk_choices,
     limit_spans_per_file,
     pick_file_chunk,
@@ -560,6 +561,9 @@ class AnswerService:
             spans = _merge_chunk_choices(spans, boost, span_limit)
         spans = preserve_named_spans(spans, named + expanded + behavior, span_limit)
         spans = enrich_spans_with_bodies(db, generation.id, spans)
+        if prefer_impl or code_first:
+            spans = expand_spans_with_sibling_bodies(db, generation.id, spans)
+            spans = spans[: span_limit + settings.answer_overview_span_bonus]
         if prefer_impl:
             spans = deprioritize_meta_config_spans(spans)
         step = _trace_step(trace, "07_named_expansion_behavior_spans", step)
@@ -570,7 +574,8 @@ class AnswerService:
             _load_span_text(db, generation.id, revision, spans, blobs),
             search_question,
         )
-        loaded = limit_spans_per_file(loaded)
+        per_file_cap = settings.answer_impl_chunks_per_file if (prefer_impl or code_first) else 2
+        loaded = limit_spans_per_file(loaded, max_per_file=per_file_cap)
         step = _trace_step(trace, "08_snapshot_validate_and_load_span_text", step)
         priority_ids = {item.chunk_id for item in named + expanded + behavior}
         loaded = [span for span in loaded if span["chunk_id"] in priority_ids] + [

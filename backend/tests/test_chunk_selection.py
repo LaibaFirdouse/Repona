@@ -7,6 +7,7 @@ from app.retrieval.chunk_selection import (
     representative_chunk,
     wants_substantive_implementation,
 )
+from app.retrieval.conversation_context import QaTurn
 
 
 def _chunk(kind: str, size: int, ordinal: int = 0) -> SimpleNamespace:
@@ -32,6 +33,18 @@ class ChunkSelectionTests(unittest.TestCase):
 
     def test_substantive_workflow_question(self) -> None:
         self.assertTrue(wants_substantive_implementation("tell me the end to end workflow", []))
+        self.assertTrue(
+            wants_substantive_implementation(
+                "how are import rules and export rules implemented in code",
+                [],
+            )
+        )
+        self.assertTrue(
+            wants_substantive_implementation(
+                "explain the workflows",
+                [QaTurn("how is monitor implemented", "")],
+            )
+        )
 
     def test_limit_spans_per_file(self) -> None:
         loaded = [
