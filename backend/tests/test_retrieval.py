@@ -257,6 +257,8 @@ class PacketTests(unittest.TestCase):
         self.assertIn("Cite that alias exactly", SYSTEM_PROMPT)
         self.assertIn("which functions it calls", SYSTEM_PROMPT)
         self.assertIn("Cite a test span only when the question asks about the test", SYSTEM_PROMPT)
+        self.assertIn("open-ended questions", SYSTEM_PROMPT)
+        self.assertNotIn("evidence packet", SYSTEM_PROMPT)
 
     def test_a_full_span_id_still_resolves_when_aliases_are_in_use(self) -> None:
         span_id = "fa7a557f-672c-5d55-84de-0242ea4c64b1"

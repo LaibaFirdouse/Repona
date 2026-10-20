@@ -47,6 +47,18 @@ def main() -> int:
     parser.add_argument("--skip-index", action="store_true")
     parser.add_argument("--skip-delete", action="store_true")
     parser.add_argument("--ask-count", type=int, default=5)
+    parser.add_argument(
+        "--questions-file",
+        type=Path,
+        default=None,
+        help="JSON array of question strings (overrides default itsdangerous prompts)",
+    )
+    parser.add_argument(
+        "--index-poll-max",
+        type=int,
+        default=36,
+        help="Max index polls (interval 5s); increase for very large repos",
+    )
     args = parser.parse_args()
     base = args.base_url.rstrip("/")
     jar = http.cookiejar.CookieJar()
@@ -86,7 +98,7 @@ def main() -> int:
     if not args.skip_index:
         polls = 0
         action = ""
-        while polls < 36:
+        while polls < args.index_poll_max:
             status, body = _request(
                 opener,
                 "POST",
@@ -132,13 +144,17 @@ def main() -> int:
     found = any(r.get("repository_id") == repository_id for r in repos)
     record("list repositories", status == 200 and found, f"count={len(repos)}")
 
-    questions = [
-        "Which functions call derive_key?",
-        "What does URLSafeSerializer do?",
-        "How does timed signature validation work?",
-        "Where is BadSignature raised or handled?",
-        "What module defines signing interfaces?",
-    ][: max(1, args.ask_count)]
+    if args.questions_file is not None:
+        questions = json.loads(args.questions_file.read_text(encoding="utf-8"))
+    else:
+        questions = [
+            "Which functions call derive_key?",
+            "What does URLSafeSerializer do?",
+            "How does timed signature validation work?",
+            "Where is BadSignature raised or handled?",
+            "What module defines signing interfaces?",
+        ]
+    questions = questions[: max(1, args.ask_count)]
 
     served = 0
     for index, question in enumerate(questions, start=1):

@@ -190,7 +190,10 @@ def main() -> int:
     if report.get("error"):
         print(report["error"], file=sys.stderr)
         return 1
-    if not (report.get("ask_detail") or {}).get("ok"):
+    detail = report.get("ask_detail") or {}
+    if not detail.get("ok"):
+        if detail.get("error"):
+            print(detail["error"], file=sys.stderr)
         return 1
     return 0
 

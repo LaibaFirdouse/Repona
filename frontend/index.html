@@ -1159,6 +1159,52 @@
       return fetch(url, { ...init, credentials: "include" });
     }
 
+    const ASK_PHASE_LABELS = {
+      fetching: "Fetching relevant data…",
+      thinking: "Thinking…",
+    };
+
+    function askPhaseLabel(phase) {
+      return ASK_PHASE_LABELS[phase] || ASK_PHASE_LABELS.fetching;
+    }
+
+    function setPendingAskPhase(phase) {
+      const label = askPhaseLabel(phase);
+      const pending = chatTurns.find((t) => t.pending);
+      if (pending) pending.phaseLabel = label;
+      const bodies = chat.querySelectorAll(".msg-pending .body");
+      if (bodies.length) bodies[bodies.length - 1].textContent = label;
+      setPill("busy", label);
+    }
+
+    async function readAskStream(response) {
+      if (!response.body) throw new Error("No response body");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let newline = buffer.indexOf("\n");
+        while (newline >= 0) {
+          const line = buffer.slice(0, newline).trim();
+          buffer = buffer.slice(newline + 1);
+          newline = buffer.indexOf("\n");
+          if (!line) continue;
+          const event = JSON.parse(line);
+          if (event.type === "phase") {
+            setPendingAskPhase(event.phase);
+          } else if (event.type === "complete") {
+            return event.response;
+          } else if (event.type === "error") {
+            throw new Error(event.detail || "Request failed");
+          }
+        }
+      }
+      throw new Error("The answer stream ended early");
+    }
+
     function setStatusLine(text) {
       status.textContent = text || "";
     }
@@ -1176,6 +1222,8 @@
       if (m.includes("repository url must be https")) return "Use HTTPS URL";
       if (m.includes("model provider") || m.includes("unavailable")) return "Model offline";
       if (m.includes("too many")) return "Rate limited";
+      if (m.includes("indexing failed") || m.includes("ingestion failed")) return "Indexing failed";
+      if (m.includes("already running")) return "Index already running";
       if (m.includes("session")) return "Session error";
       if (message && message.length < 40) return message;
       return "Failed";
@@ -1401,6 +1449,57 @@
       document.getElementById("app-root").classList.remove("indexing-active");
     }
 
+    function clearIndexResumeState() {
+      saveState({ indexPhase: "", indexMessage: "", indexStatus: "" });
+    }
+
+    function cancelInFlightIndexPoll() {
+      indexRun += 1;
+    }
+
+    async function reconcileIndexUiAfterStop() {
+      finishIndexingWorkspace();
+      syncAppShell();
+      try {
+        await fetchRepositories();
+      } catch {
+        /* keep local state */
+      }
+      if (repositoryId) {
+        updateWorkspaceMode();
+        const repo = currentRepo();
+        if (repo) {
+          updateMetaPanel(repo.index_state);
+          if (repo.index_state === "ready") {
+            setPill("ready", "Ready");
+          } else if (repo.index_state === "indexing") {
+            setPill("indexing", "Indexing…");
+          } else {
+            setPill("", "Needs index");
+          }
+        } else {
+          updateMetaPanel("wait");
+          setPill("", "Needs index");
+        }
+      } else {
+        updateChecklist("idle");
+        setPill("", "");
+        statusPill.className = "status-pill";
+        renderEmptyWorkspace();
+      }
+    }
+
+    async function dismissIndexModal() {
+      const hadError = modalError.classList.contains("visible");
+      closeModal();
+      if (!hadError && !indexingUrl) {
+        return;
+      }
+      cancelInFlightIndexPoll();
+      clearIndexResumeState();
+      await reconcileIndexUiAfterStop();
+    }
+
     function clearSelection() {
       if (indexingUrl) return;
       repositoryId = "";
@@ -1567,7 +1666,12 @@
       indexButton.disabled = busy;
       askButton.disabled = busy;
       refreshListButton.disabled = busy;
-      if (busy && statusPill.textContent !== "Indexing…" && statusPill.textContent !== "Thinking…") {
+      if (
+        busy &&
+        statusPill.textContent !== "Indexing…" &&
+        statusPill.textContent !== "Thinking…" &&
+        statusPill.textContent !== ASK_PHASE_LABELS.fetching
+      ) {
         /* keep explicit states */
       }
     }
@@ -1942,7 +2046,7 @@
       const body = document.createElement("div");
       body.className = "body";
       if (turn.pending) {
-        body.textContent = "Thinking…";
+        body.textContent = turn.phaseLabel || ASK_PHASE_LABELS.fetching;
       } else if (turn.error) {
         body.textContent = turn.error;
       } else {
@@ -1971,7 +2075,13 @@
     function appendPendingQuestion(question) {
       if (chat.querySelector(".welcome-card")) chat.replaceChildren();
       chatTurns = chatTurns.filter((t) => !t.pending);
-      chatTurns.push({ question, answer: "", citations: [], pending: true });
+      chatTurns.push({
+        question,
+        answer: "",
+        citations: [],
+        pending: true,
+        phaseLabel: ASK_PHASE_LABELS.fetching,
+      });
       for (const node of renderChatTurn(chatTurns[chatTurns.length - 1])) chat.appendChild(node);
       chat.scrollTop = chat.scrollHeight;
     }
@@ -2109,8 +2219,10 @@
         setPill("indexing", "Still working…");
         setStatusLine("Slow — refresh");
       } else {
+        clearIndexResumeState();
         setPill("", "Pending");
         setStatusLine("Not ready");
+        updateMetaPanel("wait");
       }
       await fetchRepositories();
       const match = indexedRepositories.find((item) => item.repository_id === repositoryId);
@@ -2132,12 +2244,25 @@
         const token = tokenInput.value.trim();
         await pollIndexUntilReady(repoUrl, token, 0);
       } catch (error) {
+        cancelInFlightIndexPoll();
+        clearIndexResumeState();
         finishIndexingWorkspace();
         indexingUrl = "";
         setPill("error", friendlyError(error.message));
         setStatusLine(friendlyError(error.message));
         syncAppShell();
-        renderEmptyWorkspace();
+        try {
+          await fetchRepositories();
+        } catch {
+          /* ignore */
+        }
+        if (repositoryId && currentRepo()) {
+          updateWorkspaceMode();
+          updateMetaPanel(currentRepo().index_state);
+        } else {
+          updateChecklist("idle");
+          renderEmptyWorkspace();
+        }
         openModal();
         showModalError(error.message);
         urlInput.value = repoUrl;
@@ -2161,9 +2286,9 @@
       saveState({ question: "" });
       appendPendingQuestion(question);
       setBusy(true);
-      setPill("busy", "Thinking…");
+      setPill("busy", ASK_PHASE_LABELS.fetching);
       try {
-        const response = await apiFetch("/api/v1/ask", {
+        const response = await apiFetch("/api/v1/ask/stream", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -2173,7 +2298,7 @@
           }),
         });
         if (!response.ok) throw new Error(await errorText(response));
-        const body = await response.json();
+        const body = await readAskStream(response);
         if (body.action === "wait") {
           chatTurns = chatTurns.filter((t) => !t.pending);
           chatTurns.push({ question, answer: "", error: "Index not ready", citations: [] });
@@ -2248,9 +2373,11 @@
       closeSidebar();
       clearSelection();
     });
-    document.getElementById("modal-cancel").addEventListener("click", closeModal);
+    document.getElementById("modal-cancel").addEventListener("click", () => {
+      dismissIndexModal();
+    });
     document.getElementById("new-repo-overlay").addEventListener("click", (e) => {
-      if (e.target.id === "new-repo-overlay") closeModal();
+      if (e.target.id === "new-repo-overlay") dismissIndexModal();
     });
 
     document.getElementById("preview-expand").addEventListener("click", openPreviewExpanded);
@@ -2301,11 +2428,18 @@
         try {
           await pollIndexUntilReady(state.url, "", 0);
         } catch (error) {
+          cancelInFlightIndexPoll();
+          clearIndexResumeState();
           finishIndexingWorkspace();
           indexingUrl = "";
           setPill("error", friendlyError(error.message));
           syncAppShell();
-          renderEmptyWorkspace();
+          if (repositoryId && currentRepo()) {
+            updateMetaPanel(currentRepo().index_state);
+          } else {
+            updateChecklist("idle");
+            renderEmptyWorkspace();
+          }
         } finally {
           setBusy(false);
         }

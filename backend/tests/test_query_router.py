@@ -6,22 +6,29 @@ from app.retrieval.query_terms import build_lexical_queries, extract_search_term
 
 
 class QueryRouterTests(unittest.TestCase):
-    def test_exact_symbol_routes_symbol_and_lexical_only(self) -> None:
-        request = route_question("Where is authenticate_user defined?")
+    def test_fallback_uses_full_lanes_without_planner(self) -> None:
+        request = route_question("Where is authenticate_user defined?", planner=None)
         self.assertIn("symbol", request.lanes)
         self.assertIn("lexical", request.lanes)
-        self.assertNotIn("vector", request.lanes)
+        self.assertIn("vector", request.lanes)
+        self.assertFalse(request.used_llm_planner)
+
+    def test_planner_overrides_lanes(self) -> None:
+        def planner(_question: str) -> QueryPlanV1:
+            return QueryPlanV1(
+                intent="exact_lookup",
+                retrieval_lanes=["symbol", "lexical"],
+                lexical_queries=["authenticate_user"],
+            )
+
+        request = route_question("Where is authenticate_user defined?", planner=planner)
+        self.assertEqual(request.lanes, ["symbol", "lexical"])
+        self.assertTrue(request.used_llm_planner)
         self.assertEqual(request.intent, "exact_lookup")
 
-    def test_path_lookup(self) -> None:
-        request = route_question("Show src/flask/app.py")
-        self.assertEqual(request.intent, "exact_lookup")
+    def test_path_terms_in_fallback(self) -> None:
+        request = route_question("Show src/flask/app.py", planner=None)
         self.assertTrue(any("/" in item for item in request.path_filters + extract_search_terms(request.question)))
-
-    def test_execution_trace_includes_graph(self) -> None:
-        request = route_question("Trace the call chain from dispatch_request to make_response")
-        self.assertEqual(request.intent, "execution_trace")
-        self.assertIn("graph", request.lanes)
 
     def test_planner_json_validation(self) -> None:
         plan = parse_planner_json(
