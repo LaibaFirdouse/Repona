@@ -129,8 +129,12 @@ class GenerationDraft:
     directories: list[DirectoryRecord] = field(default_factory=list)
     symbols: list[SymbolRecord] = field(default_factory=list)
     chunks: list[ChunkRecord] = field(default_factory=list)
+    deferred_chunks: list[ChunkRecord] = field(default_factory=list)
     edges: list[EdgeRecord] = field(default_factory=list)
     technologies: list[TechnologyRecord] = field(default_factory=list)
+
+
+PROGRESSIVE_DEFER_KINDS = frozenset({"symbol_body", "symbol_part"})
 
 
 def assemble_generation(
@@ -142,6 +146,7 @@ def assemble_generation(
     on_progress=None,
     workers: int | None = None,
     cache=None,
+    progressive: bool = False,
 ) -> GenerationDraft:
     included = [blob for blob in blobs if is_included(blob.relative_path, blob.mode)]
     included.sort(key=lambda blob: blob.relative_path.encode("utf-8"))
@@ -172,6 +177,10 @@ def assemble_generation(
         draft.directories,
         on_progress,
     )
+    if progressive and draft.chunks:
+        deferred = [chunk for chunk in draft.chunks if chunk.kind in PROGRESSIVE_DEFER_KINDS]
+        draft.chunks = [chunk for chunk in draft.chunks if chunk.kind not in PROGRESSIVE_DEFER_KINDS]
+        draft.deferred_chunks = deferred
     return draft
 
 
@@ -329,6 +338,9 @@ def _chunk_records(
     parsed: ParsedFile,
     payload: bytes,
     fingerprint: str,
+    *,
+    only_symbol_id: str | None = None,
+    chunk_kinds: frozenset[str] | None = None,
 ) -> list[ChunkRecord]:
     by_key = {(symbol.kind, symbol.qualified_name, symbol.signature, symbol.ordinal): symbol for symbol in symbols}
     symbol_spans = []
@@ -339,7 +351,11 @@ def _chunk_records(
     records = []
     spans = line_spans(payload)
     for draft in drafts:
+        if chunk_kinds is not None and draft.kind not in chunk_kinds:
+            continue
         symbol = by_key.get(draft.symbol_ordinal_key) if draft.symbol_ordinal_key else None
+        if only_symbol_id is not None and (symbol is None or symbol.id != only_symbol_id):
+            continue
         span = payload[draft.start_byte : draft.end_byte]
         digest = content_hash(span)
         prefix = ""

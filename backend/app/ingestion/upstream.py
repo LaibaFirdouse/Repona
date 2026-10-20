@@ -7,7 +7,9 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.ingestion.benchmark_trace import record_step
 from app.ingestion.coordination import classify_git_failure
+from time import perf_counter
 
 
 @dataclass(frozen=True)
@@ -41,22 +43,30 @@ def ls_remote_head(url: str, token: str, runner=subprocess.run, timeout: int = 3
 
 def fetch_branch(git_dir: Path, url: str, branch: str, token: str, runner=subprocess.run, timeout: int = 1800) -> str:
     _reject_branch(branch)
+    started = perf_counter()
     git_dir.mkdir(parents=True, exist_ok=True)
+    record_step("fetch.ensure_git_dir", started)
     if not (git_dir / "HEAD").exists():
+        t = perf_counter()
         init = runner(["git", "init", "--bare", str(git_dir)], check=False, capture_output=True, timeout=timeout)
         if init.returncode != 0:
             raise RuntimeError(_stderr(init) or "git init failed")
+        record_step("fetch.git_init_bare", t)
     ref = f"refs/heads/{branch}"
     command = _command(url, token, f"--git-dir={git_dir}", "fetch", "--depth", "1", url, f"+{ref}:{ref}")
+    t = perf_counter()
     completed = _run(command, runner, timeout)
+    record_step("fetch.git_fetch_depth1", t, branch=branch)
     if completed.returncode != 0:
         raise RuntimeError(_stderr(completed) or "git fetch failed")
+    t = perf_counter()
     shown = runner(
         ["git", f"--git-dir={git_dir}", "rev-parse", ref],
         check=False,
         capture_output=True,
         timeout=timeout,
     )
+    record_step("fetch.git_rev_parse_branch", t)
     sha = shown.stdout.decode("utf-8", errors="replace").strip()
     if shown.returncode != 0 or len(sha) not in {40, 64}:
         raise RuntimeError(_stderr(shown) or "fetched branch has no commit")

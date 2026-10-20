@@ -322,6 +322,7 @@ class GenerationChunk(Base):
     embedding_input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     embedding_config_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     search_vector: Mapped[str] = mapped_column(TSVECTOR, nullable=False)
+    vector_status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
 
 
 class DetectedTechnology(Base):

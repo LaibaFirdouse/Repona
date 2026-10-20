@@ -1,0 +1,939 @@
+{
+  "generated_at": "2026-10-20T11:05:02.505782+00:00",
+  "git_head": "bb18f6f7b1eb8f859293a3fe67637dc809f100c4",
+  "working_tree_dirty": true,
+  "repo_url": "https://github.com/LaibaFirdouse/Repona",
+  "env": {
+    "PROGRESSIVE_INDEXING": "true",
+    "EMBED_CATALOGUE_BEFORE_ACTIVATE": "false",
+    "PROGRESSIVE_COMPLETE_DEFERRED_IN_INGEST": "false",
+    "LAZY_EMBED_ON_QUERY": "true"
+  },
+  "cases": [
+    {
+      "case": {
+        "id": "exact_symbol",
+        "category": "exact_lookup",
+        "question": "Where is AnswerService.answer defined and what does it do?",
+        "expect_paths_any": [
+          "backend/app/retrieval/answer.py"
+        ],
+        "expect_lanes_any": [
+          "symbol",
+          "lexical"
+        ]
+      },
+      "first_query": {
+        "ok": true,
+        "error": null,
+        "elapsed_ms": 3363.31,
+        "vectors_before": 0,
+        "vectors_after": 0,
+        "vectors_added": 0,
+        "vectors_ready": 0,
+        "lanes_requested": [
+          "symbol",
+          "lexical"
+        ],
+        "lane_hit_counts": {
+          "name": 7,
+          "text": 0,
+          "vector": 0
+        },
+        "vector_lane_expanded": null,
+        "lazy_query_embed": {},
+        "retrieved_paths": [
+          "backend/app/retrieval/answer.py",
+          "backend/app/retrieval/answer.py",
+          "backend/app/retrieval/answer.py",
+          "backend/app/retrieval/answer.py",
+          "backend/app/retrieval/answer.py",
+          "backend/app/retrieval/answer.py",
+          "backend/app/retrieval/answer.py",
+          "backend/tests/test_llm_answer.py",
+          "backend/tests/test_llm_answer.py"
+        ],
+        "fused_anchor_count": 7,
+        "packet_span_count": 3,
+        "ask_trace_steps": [
+          {
+            "step": "01_load_generation_and_pin",
+            "ms": 102.55
+          },
+          {
+            "step": "02_search_lanes_parallel",
+            "ms": 865.25
+          },
+          {
+            "step": "03_fuse_anchors_rrf",
+            "ms": 45.31
+          },
+          {
+            "step": "04_materialize_span_choices",
+            "ms": 275.26
+          },
+          {
+            "step": "05_neo4j_edges_and_neighbor_chunks",
+            "ms": 45.95
+          },
+          {
+            "step": "06_path_chunk_reorder",
+            "ms": 0.08
+          },
+          {
+            "step": "07_named_expansion_behavior_spans",
+            "ms": 155.15
+          },
+          {
+            "step": "08_snapshot_validate_and_load_span_text",
+            "ms": 1544.99
+          },
+          {
+            "step": "09_technology_rows",
+            "ms": 0.04
+          },
+          {
+            "step": "10_technology_specific_filter",
+            "ms": 0.03
+          },
+          {
+            "step": "11_pack_evidence_to_context_budget",
+            "ms": 0.13
+          },
+          {
+            "step": "12_build_evidence_packet_and_aliases",
+            "ms": 0.05
+          },
+          {
+            "step": "13_prompt_token_budget_check",
+            "ms": 0.01
+          },
+          {
+            "step": "14_route_answer_strategy",
+            "ms": 51.7
+          },
+          {
+            "step": "15_model_compose_claims",
+            "ms": 276.43
+          },
+          {
+            "step": "16_finalize_answer",
+            "ms": 0.31
+          }
+        ],
+        "subprocess_returncode": 0,
+        "score": {
+          "hit": true,
+          "recall_at_k": 1.0,
+          "matched": [
+            "backend/app/retrieval/answer.py"
+          ],
+          "lane_expectation_met": true,
+          "embed_fallback_ok": true,
+          "passed": true
+        }
+      },
+      "repeat_query": null,
+      "embed_unavailable": null
+    },
+    {
+      "case": {
+        "id": "conceptual",
+        "category": "conceptual_search",
+        "question": "How does AnswerService pack evidence into the prompt before the language model responds?",
+        "expect_paths_any": [
+          "backend/app/retrieval/answer.py",
+          "backend/app/retrieval/packet.py"
+        ],
+        "expect_lanes_any": [
+          "lexical"
+        ]
+      },
+      "first_query": {
+        "ok": true,
+        "error": null,
+        "elapsed_ms": 2310.56,
+        "vectors_before": 0,
+        "vectors_after": 0,
+        "vectors_added": 0,
+        "vectors_ready": 0,
+        "lanes_requested": [
+          "vector",
+          "lexical",
+          "symbol"
+        ],
+        "lane_hit_counts": {
+          "name": 1,
+          "text": 0,
+          "vector": 0
+        },
+        "vector_lane_expanded": null,
+        "lazy_query_embed": {},
+        "retrieved_paths": [
+          "backend/app/retrieval/answer.py",
+          "backend/app/retrieval/answer.py",
+          "backend/app/retrieval/answer.py"
+        ],
+        "fused_anchor_count": 1,
+        "packet_span_count": 3,
+        "ask_trace_steps": [
+          {
+            "step": "01_load_generation_and_pin",
+            "ms": 87.08
+          },
+          {
+            "step": "02_search_lanes_parallel",
+            "ms": 906.82
+          },
+          {
+            "step": "03_fuse_anchors_rrf",
+            "ms": 45.61
+          },
+          {
+            "step": "04_materialize_span_choices",
+            "ms": 284.38
+          },
+          {
+            "step": "05_neo4j_edges_and_neighbor_chunks",
+            "ms": 42.81
+          },
+          {
+            "step": "06_path_chunk_reorder",
+            "ms": 0.08
+          },
+          {
+            "step": "07_named_expansion_behavior_spans",
+            "ms": 101.43
+          },
+          {
+            "step": "08_snapshot_validate_and_load_span_text",
+            "ms": 511.96
+          },
+          {
+            "step": "09_technology_rows",
+            "ms": 0.06
+          },
+          {
+            "step": "10_technology_specific_filter",
+            "ms": 0.03
+          },
+          {
+            "step": "11_pack_evidence_to_context_budget",
+            "ms": 0.2
+          },
+          {
+            "step": "12_build_evidence_packet_and_aliases",
+            "ms": 0.08
+          },
+          {
+            "step": "13_prompt_token_budget_check",
+            "ms": 0.02
+          },
+          {
+            "step": "14_route_answer_strategy",
+            "ms": 44.93
+          },
+          {
+            "step": "15_model_compose_claims",
+            "ms": 284.64
+          },
+          {
+            "step": "16_finalize_answer",
+            "ms": 0.37
+          }
+        ],
+        "subprocess_returncode": 0,
+        "score": {
+          "hit": true,
+          "recall_at_k": 0.5,
+          "matched": [
+            "backend/app/retrieval/answer.py"
+          ],
+          "lane_expectation_met": true,
+          "embed_fallback_ok": true,
+          "passed": true
+        }
+      },
+      "repeat_query": null,
+      "embed_unavailable": null
+    },
+    {
+      "case": {
+        "id": "cross_file_trace",
+        "category": "execution_trace",
+        "question": "Trace how ingest_commit writes graph edges from assemble_generation through write_graph.",
+        "expect_paths_any": [
+          "backend/app/ingestion/pipeline.py",
+          "backend/app/ingestion/graph_store.py"
+        ],
+        "expect_lanes_any": [
+          "symbol",
+          "lexical",
+          "graph"
+        ]
+      },
+      "first_query": {
+        "ok": true,
+        "error": null,
+        "elapsed_ms": 11825.1,
+        "vectors_before": 0,
+        "vectors_after": 0,
+        "vectors_added": 0,
+        "vectors_ready": 0,
+        "lanes_requested": [
+          "lexical",
+          "graph",
+          "symbol"
+        ],
+        "lane_hit_counts": {
+          "name": 3,
+          "text": 0,
+          "vector": 0
+        },
+        "vector_lane_expanded": null,
+        "lazy_query_embed": {},
+        "retrieved_paths": [
+          "backend/app/ingestion/assemble.py",
+          "backend/app/ingestion/pipeline.py",
+          "backend/app/ingestion/graph_store.py"
+        ],
+        "fused_anchor_count": 3,
+        "packet_span_count": 3,
+        "ask_trace_steps": [
+          {
+            "step": "01_load_generation_and_pin",
+            "ms": 89.56
+          },
+          {
+            "step": "02_search_lanes_parallel",
+            "ms": 878.65
+          },
+          {
+            "step": "03_fuse_anchors_rrf",
+            "ms": 43.56
+          },
+          {
+            "step": "04_materialize_span_choices",
+            "ms": 306.36
+          },
+          {
+            "step": "05_neo4j_edges_and_neighbor_chunks",
+            "ms": 2980.11
+          },
+          {
+            "step": "06_path_chunk_reorder",
+            "ms": 0.08
+          },
+          {
+            "step": "07_named_expansion_behavior_spans",
+            "ms": 51.13
+          },
+          {
+            "step": "08_snapshot_validate_and_load_span_text",
+            "ms": 674.59
+          },
+          {
+            "step": "09_technology_rows",
+            "ms": 0.06
+          },
+          {
+            "step": "10_technology_specific_filter",
+            "ms": 0.03
+          },
+          {
+            "step": "11_pack_evidence_to_context_budget",
+            "ms": 3301.88
+          },
+          {
+            "step": "12_build_evidence_packet_and_aliases",
+            "ms": 3146.94
+          },
+          {
+            "step": "13_prompt_token_budget_check",
+            "ms": 0.07
+          },
+          {
+            "step": "14_route_answer_strategy",
+            "ms": 71.9
+          },
+          {
+            "step": "15_model_compose_claims",
+            "ms": 279.57
+          },
+          {
+            "step": "16_finalize_answer",
+            "ms": 0.45
+          }
+        ],
+        "subprocess_returncode": 0,
+        "score": {
+          "hit": true,
+          "recall_at_k": 1.0,
+          "matched": [
+            "backend/app/ingestion/pipeline.py",
+            "backend/app/ingestion/graph_store.py"
+          ],
+          "lane_expectation_met": true,
+          "embed_fallback_ok": true,
+          "passed": true
+        }
+      },
+      "repeat_query": null,
+      "embed_unavailable": null
+    },
+    {
+      "case": {
+        "id": "deferred_symbol_body",
+        "category": "missing_vector",
+        "question": "How does _write_edges batch Neo4j relationship writes in graph_store?",
+        "expect_paths_any": [
+          "backend/app/ingestion/graph_store.py"
+        ],
+        "expect_materialisation": true,
+        "run_embed_unavailable": true
+      },
+      "first_query": {
+        "ok": true,
+        "error": null,
+        "elapsed_ms": 2058.47,
+        "vectors_before": 0,
+        "vectors_after": 0,
+        "vectors_added": 0,
+        "vectors_ready": 0,
+        "lanes_requested": [
+          "lexical",
+          "symbol"
+        ],
+        "lane_hit_counts": {
+          "name": 2,
+          "text": 0,
+          "vector": 0
+        },
+        "vector_lane_expanded": null,
+        "lazy_query_embed": {},
+        "retrieved_paths": [
+          "backend/app/ingestion/graph_store.py"
+        ],
+        "fused_anchor_count": 2,
+        "packet_span_count": 1,
+        "ask_trace_steps": [
+          {
+            "step": "01_load_generation_and_pin",
+            "ms": 87.35
+          },
+          {
+            "step": "02_search_lanes_parallel",
+            "ms": 940.19
+          },
+          {
+            "step": "03_fuse_anchors_rrf",
+            "ms": 42.79
+          },
+          {
+            "step": "04_materialize_span_choices",
+            "ms": 261.05
+          },
+          {
+            "step": "05_neo4j_edges_and_neighbor_chunks",
+            "ms": 43.99
+          },
+          {
+            "step": "06_path_chunk_reorder",
+            "ms": 0.11
+          },
+          {
+            "step": "07_named_expansion_behavior_spans",
+            "ms": 58.39
+          },
+          {
+            "step": "08_snapshot_validate_and_load_span_text",
+            "ms": 291.62
+          },
+          {
+            "step": "09_technology_rows",
+            "ms": 0.05
+          },
+          {
+            "step": "10_technology_specific_filter",
+            "ms": 0.05
+          },
+          {
+            "step": "11_pack_evidence_to_context_budget",
+            "ms": 0.08
+          },
+          {
+            "step": "12_build_evidence_packet_and_aliases",
+            "ms": 0.04
+          },
+          {
+            "step": "13_prompt_token_budget_check",
+            "ms": 0.01
+          },
+          {
+            "step": "14_route_answer_strategy",
+            "ms": 56.66
+          },
+          {
+            "step": "15_model_compose_claims",
+            "ms": 275.65
+          },
+          {
+            "step": "16_finalize_answer",
+            "ms": 0.37
+          }
+        ],
+        "subprocess_returncode": 0,
+        "score": {
+          "hit": true,
+          "recall_at_k": 1.0,
+          "matched": [
+            "backend/app/ingestion/graph_store.py"
+          ],
+          "lane_expectation_met": true,
+          "embed_fallback_ok": true,
+          "passed": true
+        }
+      },
+      "repeat_query": null,
+      "embed_unavailable": {
+        "ok": true,
+        "error": null,
+        "elapsed_ms": 2054.66,
+        "vectors_before": 0,
+        "vectors_after": 0,
+        "vectors_added": 0,
+        "vectors_ready": 0,
+        "lanes_requested": [
+          "lexical",
+          "symbol"
+        ],
+        "lane_hit_counts": {
+          "name": 2,
+          "text": 0,
+          "vector": 0
+        },
+        "vector_lane_expanded": null,
+        "lazy_query_embed": {},
+        "retrieved_paths": [
+          "backend/app/ingestion/graph_store.py"
+        ],
+        "fused_anchor_count": 2,
+        "packet_span_count": 1,
+        "ask_trace_steps": [
+          {
+            "step": "01_load_generation_and_pin",
+            "ms": 87.46
+          },
+          {
+            "step": "02_search_lanes_parallel",
+            "ms": 936.77
+          },
+          {
+            "step": "03_fuse_anchors_rrf",
+            "ms": 42.84
+          },
+          {
+            "step": "04_materialize_span_choices",
+            "ms": 264.46
+          },
+          {
+            "step": "05_neo4j_edges_and_neighbor_chunks",
+            "ms": 41.98
+          },
+          {
+            "step": "06_path_chunk_reorder",
+            "ms": 0.07
+          },
+          {
+            "step": "07_named_expansion_behavior_spans",
+            "ms": 48.37
+          },
+          {
+            "step": "08_snapshot_validate_and_load_span_text",
+            "ms": 287.47
+          },
+          {
+            "step": "09_technology_rows",
+            "ms": 0.04
+          },
+          {
+            "step": "10_technology_specific_filter",
+            "ms": 0.02
+          },
+          {
+            "step": "11_pack_evidence_to_context_budget",
+            "ms": 0.06
+          },
+          {
+            "step": "12_build_evidence_packet_and_aliases",
+            "ms": 0.03
+          },
+          {
+            "step": "13_prompt_token_budget_check",
+            "ms": 0.01
+          },
+          {
+            "step": "14_route_answer_strategy",
+            "ms": 51.64
+          },
+          {
+            "step": "15_model_compose_claims",
+            "ms": 293.02
+          },
+          {
+            "step": "16_finalize_answer",
+            "ms": 0.34
+          }
+        ],
+        "subprocess_returncode": 0,
+        "embed_fail_mode": true,
+        "score": {
+          "hit": true,
+          "recall_at_k": 1.0,
+          "matched": [
+            "backend/app/ingestion/graph_store.py"
+          ],
+          "lane_expectation_met": true,
+          "embed_fallback_ok": true,
+          "passed": true
+        }
+      }
+    },
+    {
+      "case": {
+        "id": "outside_catalogue_file",
+        "category": "missing_vector",
+        "question": "In scripts/benchmark.py how is repository latency measured?",
+        "expect_paths_any": [
+          "scripts/benchmark.py"
+        ],
+        "expect_materialisation": true
+      },
+      "first_query": {
+        "ok": true,
+        "error": null,
+        "elapsed_ms": 2214.0,
+        "vectors_before": 0,
+        "vectors_after": 0,
+        "vectors_added": 0,
+        "vectors_ready": 0,
+        "lanes_requested": [
+          "lexical",
+          "symbol"
+        ],
+        "lane_hit_counts": {
+          "name": 5,
+          "text": 0,
+          "vector": 0
+        },
+        "vector_lane_expanded": null,
+        "lazy_query_embed": {},
+        "retrieved_paths": [
+          "scripts/benchmark.py"
+        ],
+        "fused_anchor_count": 5,
+        "packet_span_count": 1,
+        "ask_trace_steps": [
+          {
+            "step": "01_load_generation_and_pin",
+            "ms": 90.4
+          },
+          {
+            "step": "02_search_lanes_parallel",
+            "ms": 1023.77
+          },
+          {
+            "step": "03_fuse_anchors_rrf",
+            "ms": 43.29
+          },
+          {
+            "step": "04_materialize_span_choices",
+            "ms": 199.11
+          },
+          {
+            "step": "05_neo4j_edges_and_neighbor_chunks",
+            "ms": 53.4
+          },
+          {
+            "step": "06_path_chunk_reorder",
+            "ms": 103.21
+          },
+          {
+            "step": "07_named_expansion_behavior_spans",
+            "ms": 106.23
+          },
+          {
+            "step": "08_snapshot_validate_and_load_span_text",
+            "ms": 266.07
+          },
+          {
+            "step": "09_technology_rows",
+            "ms": 0.04
+          },
+          {
+            "step": "10_technology_specific_filter",
+            "ms": 0.02
+          },
+          {
+            "step": "11_pack_evidence_to_context_budget",
+            "ms": 0.09
+          },
+          {
+            "step": "12_build_evidence_packet_and_aliases",
+            "ms": 0.03
+          },
+          {
+            "step": "13_prompt_token_budget_check",
+            "ms": 0.01
+          },
+          {
+            "step": "14_route_answer_strategy",
+            "ms": 44.71
+          },
+          {
+            "step": "15_model_compose_claims",
+            "ms": 283.14
+          },
+          {
+            "step": "16_finalize_answer",
+            "ms": 0.39
+          }
+        ],
+        "subprocess_returncode": 0,
+        "score": {
+          "hit": true,
+          "recall_at_k": 1.0,
+          "matched": [
+            "scripts/benchmark.py"
+          ],
+          "lane_expectation_met": true,
+          "embed_fallback_ok": true,
+          "passed": true
+        }
+      },
+      "repeat_query": null,
+      "embed_unavailable": null
+    },
+    {
+      "case": {
+        "id": "embedding_unavailable",
+        "category": "embedding_unavailable",
+        "question": "Where is upsert_missing_points defined in backend/app/ingestion/vector_store.py?",
+        "expect_paths_any": [
+          "backend/app/ingestion/vector_store.py"
+        ],
+        "run_embed_unavailable": true
+      },
+      "first_query": {
+        "ok": true,
+        "error": null,
+        "elapsed_ms": 6574.59,
+        "vectors_before": 0,
+        "vectors_after": 0,
+        "vectors_added": 0,
+        "vectors_ready": 0,
+        "lanes_requested": [
+          "symbol",
+          "lexical"
+        ],
+        "lane_hit_counts": {
+          "name": 8,
+          "text": 0,
+          "vector": 0
+        },
+        "vector_lane_expanded": null,
+        "lazy_query_embed": {
+          "embed_error": "AttributeError: 'Symbol' object has no attribute 'relative_path'"
+        },
+        "retrieved_paths": [
+          "backend/app/ingestion/vector_store.py",
+          "backend/app/ingestion/vector_store.py"
+        ],
+        "fused_anchor_count": 8,
+        "packet_span_count": 2,
+        "ask_trace_steps": [
+          {
+            "step": "01_load_generation_and_pin",
+            "ms": 90.6
+          },
+          {
+            "step": "02_search_lanes_parallel",
+            "ms": 1011.26
+          },
+          {
+            "step": "03_fuse_anchors_rrf",
+            "ms": 42.71
+          },
+          {
+            "step": "04_materialize_span_choices",
+            "ms": 4473.86
+          },
+          {
+            "step": "05_neo4j_edges_and_neighbor_chunks",
+            "ms": 48.93
+          },
+          {
+            "step": "06_path_chunk_reorder",
+            "ms": 103.6
+          },
+          {
+            "step": "07_named_expansion_behavior_spans",
+            "ms": 101.87
+          },
+          {
+            "step": "08_snapshot_validate_and_load_span_text",
+            "ms": 373.62
+          },
+          {
+            "step": "09_technology_rows",
+            "ms": 0.08
+          },
+          {
+            "step": "10_technology_specific_filter",
+            "ms": 0.03
+          },
+          {
+            "step": "11_pack_evidence_to_context_budget",
+            "ms": 0.1
+          },
+          {
+            "step": "12_build_evidence_packet_and_aliases",
+            "ms": 0.05
+          },
+          {
+            "step": "13_prompt_token_budget_check",
+            "ms": 0.01
+          },
+          {
+            "step": "14_route_answer_strategy",
+            "ms": 58.92
+          },
+          {
+            "step": "15_model_compose_claims",
+            "ms": 268.56
+          },
+          {
+            "step": "16_finalize_answer",
+            "ms": 0.31
+          }
+        ],
+        "subprocess_returncode": 0,
+        "score": {
+          "hit": true,
+          "recall_at_k": 1.0,
+          "matched": [
+            "backend/app/ingestion/vector_store.py"
+          ],
+          "lane_expectation_met": true,
+          "embed_fallback_ok": true,
+          "passed": true
+        }
+      },
+      "repeat_query": null,
+      "embed_unavailable": {
+        "ok": true,
+        "error": null,
+        "elapsed_ms": 2486.11,
+        "vectors_before": 0,
+        "vectors_after": 0,
+        "vectors_added": 0,
+        "vectors_ready": 0,
+        "lanes_requested": [
+          "lexical",
+          "symbol"
+        ],
+        "lane_hit_counts": {
+          "name": 8,
+          "text": 0,
+          "vector": 0
+        },
+        "vector_lane_expanded": null,
+        "lazy_query_embed": {},
+        "retrieved_paths": [
+          "backend/app/ingestion/vector_store.py",
+          "backend/app/ingestion/vector_store.py"
+        ],
+        "fused_anchor_count": 8,
+        "packet_span_count": 2,
+        "ask_trace_steps": [
+          {
+            "step": "01_load_generation_and_pin",
+            "ms": 101.39
+          },
+          {
+            "step": "02_search_lanes_parallel",
+            "ms": 1062.3
+          },
+          {
+            "step": "03_fuse_anchors_rrf",
+            "ms": 44.18
+          },
+          {
+            "step": "04_materialize_span_choices",
+            "ms": 241.63
+          },
+          {
+            "step": "05_neo4j_edges_and_neighbor_chunks",
+            "ms": 45.62
+          },
+          {
+            "step": "06_path_chunk_reorder",
+            "ms": 98.93
+          },
+          {
+            "step": "07_named_expansion_behavior_spans",
+            "ms": 109.05
+          },
+          {
+            "step": "08_snapshot_validate_and_load_span_text",
+            "ms": 402.13
+          },
+          {
+            "step": "09_technology_rows",
+            "ms": 0.04
+          },
+          {
+            "step": "10_technology_specific_filter",
+            "ms": 0.03
+          },
+          {
+            "step": "11_pack_evidence_to_context_budget",
+            "ms": 0.09
+          },
+          {
+            "step": "12_build_evidence_packet_and_aliases",
+            "ms": 0.05
+          },
+          {
+            "step": "13_prompt_token_budget_check",
+            "ms": 0.01
+          },
+          {
+            "step": "14_route_answer_strategy",
+            "ms": 51.57
+          },
+          {
+            "step": "15_model_compose_claims",
+            "ms": 328.8
+          },
+          {
+            "step": "16_finalize_answer",
+            "ms": 0.23
+          }
+        ],
+        "subprocess_returncode": 0,
+        "embed_fail_mode": true,
+        "score": {
+          "hit": true,
+          "recall_at_k": 1.0,
+          "matched": [
+            "backend/app/ingestion/vector_store.py"
+          ],
+          "lane_expectation_met": true,
+          "embed_fallback_ok": true,
+          "passed": true
+        }
+      }
+    }
+  ]
+}

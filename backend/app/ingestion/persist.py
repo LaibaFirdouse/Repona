@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from datetime import datetime
 
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from app.ingestion.assemble import GenerationDraft
@@ -277,22 +277,15 @@ def write_draft(
         if len(pending) >= _BATCH:
             _release(db, pending)
     _release(db, pending)
-    for chunk in draft.chunks:
-        renewed = _touch(on_progress, renewed)
-        pending.append(
-            GenerationChunk(
-                repository_id=repository_id,
-                index_generation_id=generation_id,
-                chunk_id=chunk.id,
-                context_prefix=without_nul(chunk.context_prefix),
-                embedding_input_hash=chunk.embedding_input_hash,
-                embedding_config_fingerprint=fingerprint,
-                search_vector=func.to_tsvector("simple", without_nul(chunk.lexical_text)),
-            )
-        )
-        db.add(pending[-1])
-        if len(pending) >= _BATCH:
-            _release(db, pending)
+    renewed = _bulk_insert_generation_chunks(
+        db,
+        repository_id,
+        generation_id,
+        fingerprint,
+        draft.chunks,
+        on_progress=on_progress,
+        renewed=renewed,
+    )
     for technology in draft.technologies:
         pending.append(
             DetectedTechnology(
@@ -305,6 +298,114 @@ def write_draft(
         )
         db.add(pending[-1])
     _release(db, pending)
+
+
+def append_generation_chunks(
+    db: Session,
+    repository_id: str,
+    generation_id: str,
+    fingerprint: str,
+    draft: GenerationDraft,
+    on_progress=None,
+) -> None:
+    """Insert chunk rows added after the initial draft write (lazy or deferred semantic indexing)."""
+    renewed = time.monotonic()
+    known_chunks = {row.id: row.span_hash for row in _batched_chunks(db, [item.id for item in draft.chunks])}
+    pending: list = []
+    for chunk in draft.chunks:
+        renewed = _touch(on_progress, renewed)
+        existing = known_chunks.get(chunk.id)
+        if existing is None:
+            pending.append(
+                Chunk(
+                    id=chunk.id,
+                    repository_id=repository_id,
+                    file_id=chunk.file_id,
+                    symbol_id=chunk.symbol_id,
+                    parser_version=PARSER_VERSION,
+                    chunking_version=CHUNKING_VERSION,
+                    parent_chunk_id=None,
+                    kind=chunk.kind,
+                    ordinal=chunk.ordinal,
+                    start_byte=chunk.start_byte,
+                    end_byte=chunk.end_byte,
+                    start_line=chunk.start_line,
+                    end_line=chunk.end_line,
+                    span_hash=chunk.span_hash,
+                )
+            )
+            db.add(pending[-1])
+        elif existing != chunk.span_hash:
+            raise GenerationWriteError(f"chunk id {chunk.id} does not match this span")
+        if len(pending) >= _BATCH:
+            _release(db, pending)
+    _release(db, pending)
+    _bulk_insert_generation_chunks(
+        db,
+        repository_id,
+        generation_id,
+        fingerprint,
+        draft.chunks,
+        on_progress=on_progress,
+        renewed=renewed,
+    )
+
+
+def _bulk_insert_generation_chunks(
+    db: Session,
+    repository_id: str,
+    generation_id: str,
+    fingerprint: str,
+    chunks: list,
+    *,
+    on_progress=None,
+    renewed: float,
+) -> float:
+    for start in range(0, len(chunks), _BATCH):
+        part = chunks[start : start + _BATCH]
+        renewed = _touch(on_progress, renewed)
+        rows = [
+            {
+                "repository_id": repository_id,
+                "index_generation_id": generation_id,
+                "chunk_id": chunk.id,
+                "context_prefix": without_nul(chunk.context_prefix),
+                "embedding_input_hash": chunk.embedding_input_hash,
+                "embedding_config_fingerprint": fingerprint,
+                "lexical": without_nul(chunk.lexical_text),
+            }
+            for chunk in part
+        ]
+        db.execute(
+            text(
+                """
+                INSERT INTO generation_chunks (
+                    repository_id,
+                    index_generation_id,
+                    chunk_id,
+                    context_prefix,
+                    embedding_input_hash,
+                    embedding_config_fingerprint,
+                    search_vector,
+                    vector_status
+                )
+                VALUES (
+                    :repository_id,
+                    :index_generation_id,
+                    :chunk_id,
+                    :context_prefix,
+                    :embedding_input_hash,
+                    :embedding_config_fingerprint,
+                    to_tsvector('simple', :lexical),
+                    'pending'
+                )
+                ON CONFLICT (repository_id, index_generation_id, chunk_id) DO NOTHING
+                """
+            ),
+            rows,
+        )
+    db.flush()
+    return renewed
 
 
 def _batched_files(db: Session, ids: list[str]):

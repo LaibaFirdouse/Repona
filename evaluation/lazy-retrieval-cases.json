@@ -1,0 +1,45 @@
+[
+  {
+    "id": "exact_symbol",
+    "category": "exact_lookup",
+    "question": "Where is AnswerService.answer defined and what does it do?",
+    "expect_paths_any": ["backend/app/retrieval/answer.py"],
+    "expect_lanes_any": ["symbol", "lexical"]
+  },
+  {
+    "id": "conceptual",
+    "category": "conceptual_search",
+    "question": "How does AnswerService pack evidence into the prompt before the language model responds?",
+    "expect_paths_any": ["backend/app/retrieval/answer.py", "backend/app/retrieval/packet.py"],
+    "expect_lanes_any": ["lexical"]
+  },
+  {
+    "id": "cross_file_trace",
+    "category": "execution_trace",
+    "question": "Trace how ingest_commit writes graph edges from assemble_generation through write_graph.",
+    "expect_paths_any": ["backend/app/ingestion/pipeline.py", "backend/app/ingestion/graph_store.py"],
+    "expect_lanes_any": ["symbol", "lexical", "graph"]
+  },
+  {
+    "id": "deferred_symbol_body",
+    "category": "missing_vector",
+    "question": "How does _write_edges batch Neo4j relationship writes in graph_store?",
+    "expect_paths_any": ["backend/app/ingestion/graph_store.py"],
+    "expect_materialisation": true,
+    "run_embed_unavailable": true
+  },
+  {
+    "id": "outside_catalogue_file",
+    "category": "missing_vector",
+    "question": "In scripts/benchmark.py how is repository latency measured?",
+    "expect_paths_any": ["scripts/benchmark.py"],
+    "expect_materialisation": true
+  },
+  {
+    "id": "embedding_unavailable",
+    "category": "embedding_unavailable",
+    "question": "Where is upsert_missing_points defined in backend/app/ingestion/vector_store.py?",
+    "expect_paths_any": ["backend/app/ingestion/vector_store.py"],
+    "run_embed_unavailable": true
+  }
+]
