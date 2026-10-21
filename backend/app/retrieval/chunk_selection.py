@@ -31,6 +31,16 @@ _META_CONFIG_NAMES = frozenset(
     }
 )
 
+_HOW_EXACTLY = re.compile(r"\bhow exactly\b", re.I)
+
+_CODE_TRACE = re.compile(
+    r"\b("
+    r"trace|walk through|step by step|call sequence|which functions?|what functions?|"
+    r"logic behind|functions?/.+logic|behind (?:it|this|that)"
+    r")\b",
+    re.I,
+)
+
 _IMPLEMENTATION_QUESTION = re.compile(
     r"\b("
     r"workflow|workflows|end[- ]to[- ]end|request flow|how (?:is|does|are|do) .+ (?:work|stored|persist|implemented)|"
@@ -64,9 +74,19 @@ def is_meta_config_path(relative_path: str) -> bool:
 
 
 def wants_substantive_implementation(question: str, history: list[QaTurn]) -> bool:
-    if _IMPLEMENTATION_QUESTION.search(question.strip()):
+    text = question.strip()
+    if _HOW_EXACTLY.search(text) or _IMPLEMENTATION_QUESTION.search(text):
         return True
-    return any(_IMPLEMENTATION_QUESTION.search(turn.question) for turn in history[-4:])
+    return any(
+        _HOW_EXACTLY.search(turn.question) or _IMPLEMENTATION_QUESTION.search(turn.question)
+        for turn in history[-4:]
+    )
+
+
+def wants_code_trace(question: str, history: list[QaTurn]) -> bool:
+    if _CODE_TRACE.search(question.strip()):
+        return True
+    return any(_CODE_TRACE.search(turn.question) for turn in history[-4:])
 
 
 def representative_chunk(chunks: list[Chunk]) -> Chunk | None:
