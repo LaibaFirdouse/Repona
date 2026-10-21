@@ -52,6 +52,19 @@ class ImplementationIntentTests(unittest.TestCase):
             )
         )
 
+    def test_overview_questions_skip_implementation_mode(self) -> None:
+        self.assertFalse(
+            retrieval_prefers_implementation(
+                "tell me everything about this repo",
+                [],
+                retrieval=_req(intent="architecture_question"),
+                preview_mostly_non_body=False,
+                code_first=False,
+                substantive=False,
+                overview_question=True,
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

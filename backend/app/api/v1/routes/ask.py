@@ -149,5 +149,9 @@ def ask_repository_question_stream(
             yield json.dumps({"type": "error", "status": error.status_code, "detail": error.detail}) + "\n"
         except Cancelled:
             yield json.dumps({"type": "error", "status": 408, "detail": "the question was cancelled"}) + "\n"
+        except Exception as error:
+            yield json.dumps(
+                {"type": "error", "status": 500, "detail": f"the question failed: {error}"},
+            ) + "\n"
 
     return StreamingResponse(event_lines(), media_type="application/x-ndjson")
