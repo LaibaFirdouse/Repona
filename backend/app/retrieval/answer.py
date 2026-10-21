@@ -116,7 +116,8 @@ from app.retrieval.conversation_context import (
     retrieval_question_text,
 )
 from app.retrieval.overview_boost import overview_chunk_choices, overview_question
-from app.retrieval.hydrate import hydrate_deferred_from_preview
+from app.retrieval.hydrate import file_ids_for_chunk_hits, hydrate_deferred_from_preview
+from app.retrieval.vector_lane import should_retry_vector_lane, should_skip_vector_lane
 from app.retrieval.workflow_boost import (
     lexical_workflow_chunk_choices,
     loaded_needs_more_bodies,
@@ -313,7 +314,13 @@ class AnswerService:
             try:
                 gen = db.get(IndexGeneration, generation_id)
                 started = perf_counter()
-                hits = self._vector_hits(db, gen, request.semantic_query or question)
+                scope = getattr(self, "_vector_scope_file_ids", None)
+                hits = self._vector_hits(
+                    db,
+                    gen,
+                    request.semantic_query or question,
+                    scope_file_ids=scope,
+                )
                 return hits, perf_counter() - started
             finally:
                 db.close()
@@ -497,6 +504,8 @@ class AnswerService:
             trace["retrieval_router"] = retrieval.trace
             trace["retrieval_router_ms"] = retrieval.router_ms
         self._ensure_open(db, outcome.pin_id)
+        preview_scope_files = file_ids_for_chunk_hits(db, generation.id, preview_name + preview_text)
+        self._vector_scope_file_ids = preview_scope_files or None
         if trace is not None:
             trace.setdefault("lazy_query_embed", {})
             self._lazy_embed_stats_sink = trace["lazy_query_embed"]
@@ -509,6 +518,56 @@ class AnswerService:
             )
         finally:
             self._lazy_embed_stats_sink = None
+            self._vector_scope_file_ids = None
+        if should_retry_vector_lane(
+            retrieval,
+            vector_hits,
+            lazy_embed_on_query=settings.lazy_embed_on_query,
+            snapshot_available=revision is not None and bool(revision.snapshot_path),
+        ):
+            retry_stats: dict = {}
+            try:
+                warm_lazy_vectors_before_search(
+                    db,
+                    generation=generation,
+                    repository_id=repository.id,
+                    path_filters=retrieval.path_filters,
+                    identifiers=retrieval.identifiers,
+                    name_hits=name_hits,
+                    text_hits=text_hits,
+                    snapshot_root=Path(revision.snapshot_path),
+                    qdrant_url=self.qdrant_url,
+                    embed=self.embed,
+                    stats=retry_stats,
+                )
+                db.commit()
+                scope = file_ids_for_chunk_hits(db, generation.id, name_hits + text_hits) or preview_scope_files
+                retry_started = perf_counter()
+                if trace is not None:
+                    self._lazy_embed_stats_sink = trace.setdefault("lazy_query_embed", {})
+                else:
+                    self._lazy_embed_stats_sink = None
+                try:
+                    vector_hits = self._vector_hits(
+                        db,
+                        generation,
+                        retrieval.semantic_query or search_question,
+                        scope_file_ids=scope or None,
+                    )
+                finally:
+                    self._lazy_embed_stats_sink = None
+                vector_seconds += perf_counter() - retry_started
+                if trace is not None:
+                    trace["vector_lane_retry"] = {
+                        **retry_stats,
+                        "hits": len(vector_hits),
+                        "scope_files": len(scope or []),
+                    }
+                    trace["vectors_ready"] = count_vector_ready(db, generation.id)
+            except Exception as exc:
+                _note_lazy_embed_error(retry_stats, exc)
+                if trace is not None:
+                    trace["vector_lane_retry"] = {"error": str(exc)}
         step = _trace_step(trace, "02_search_lanes_parallel", step)
         if trace is not None and self._last_lane_trace is not None:
             trace["lane_trace"] = self._last_lane_trace
@@ -912,10 +971,25 @@ class AnswerService:
             trace["total_ms"] = round((perf_counter() - started) * 1000, 2)
         yield {"type": "complete", "answer": answered}
 
-    def _vector_hits(self, db: Session, generation: IndexGeneration, question: str) -> list[LaneHit]:
-        if count_vector_ready(db, generation.id) == 0:
+    def _vector_hits(
+        self,
+        db: Session,
+        generation: IndexGeneration,
+        question: str,
+        *,
+        scope_file_ids: list[str] | None = None,
+    ) -> list[LaneHit]:
+        if should_skip_vector_lane(db, generation.id):
             return []
-        file_ids = [row.file_id for row in db.query(GenerationFile.file_id).filter(GenerationFile.index_generation_id == generation.id).all()]
+        all_file_ids = [
+            row.file_id
+            for row in db.query(GenerationFile.file_id).filter(GenerationFile.index_generation_id == generation.id).all()
+        ]
+        if scope_file_ids:
+            allowed = set(scope_file_ids)
+            file_ids = [item for item in all_file_ids if item in allowed] or list(scope_file_ids)
+        else:
+            file_ids = all_file_ids
         if not file_ids:
             return []
         try:
