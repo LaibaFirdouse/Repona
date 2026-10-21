@@ -116,6 +116,7 @@ from app.retrieval.conversation_context import (
     retrieval_question_text,
 )
 from app.retrieval.overview_boost import overview_chunk_choices, overview_question
+from app.retrieval.hydrate import hydrate_deferred_from_preview
 from app.retrieval.workflow_boost import (
     lexical_workflow_chunk_choices,
     loaded_needs_more_bodies,
@@ -430,6 +431,34 @@ class AnswerService:
             preview_text = _text_hits(db, generation, retrieval.lexical_queries)
         if "symbol" in retrieval.lanes:
             preview_name = _name_hits(db, generation, retrieval.question, retrieval.path_filters)
+        if (
+            revision is not None
+            and revision.snapshot_path
+            and retrieval.needs_source_bodies
+        ):
+            hydrate_stats: dict = {}
+            try:
+                hydrate_report = hydrate_deferred_from_preview(
+                    db,
+                    generation=generation,
+                    repository_id=repository.id,
+                    retrieval=retrieval,
+                    name_hits=preview_name,
+                    text_hits=preview_text,
+                    snapshot_root=Path(revision.snapshot_path),
+                    qdrant_url=self.qdrant_url,
+                    embed=self.embed,
+                    stats=hydrate_stats,
+                )
+                db.commit()
+                if hydrate_report.get("materialized_symbols") and "lexical" in retrieval.lanes:
+                    preview_text = _text_hits(db, generation, retrieval.lexical_queries)
+                if trace is not None:
+                    trace["hydrate_preview"] = {**hydrate_report, **hydrate_stats}
+            except Exception as exc:
+                _note_lazy_embed_error(hydrate_stats, exc)
+                if trace is not None:
+                    trace["hydrate_preview"] = {"error": str(exc)}
         if (
             settings.lazy_embed_on_query
             and revision is not None
