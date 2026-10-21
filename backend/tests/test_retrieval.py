@@ -62,13 +62,14 @@ class FusionTests(unittest.TestCase):
             1 / 61,
         )
 
-    def test_name_only_symbol_uses_parts_when_it_has_no_body(self) -> None:
+    def test_name_only_symbol_picks_largest_part(self) -> None:
         parts = [
-            ChunkChoice("part-1", "authenticate_user", "symbol_part", 0),
-            ChunkChoice("part-0", "authenticate_user", "symbol_part", 1),
+            ChunkChoice("part-small", "authenticate_user", "symbol_part", 0),
+            ChunkChoice("part-large", "authenticate_user", "symbol_part", 1),
         ]
-        chosen = materialize_anchors(["authenticate_user"], {}, {}, {"authenticate_user": parts})
-        self.assertEqual([item.chunk_id for item in chosen], ["part-1", "part-0"])
+        sizes = {"part-small": 100, "part-large": 9000}
+        chosen = materialize_anchors(["authenticate_user"], {}, {}, {"authenticate_user": parts}, sizes)
+        self.assertEqual([item.chunk_id for item in chosen], ["part-large"])
 
     def test_chunk_hits_are_kept_and_ordered_by_anchor_rank(self) -> None:
         body = ChunkChoice("small", "small_fn", "symbol_body", 0)
@@ -81,14 +82,15 @@ class FusionTests(unittest.TestCase):
         )
         self.assertEqual([item.chunk_id for item in chosen], ["large-part", "small"])
 
-    def test_neighbor_without_a_body_uses_the_first_part(self) -> None:
+    def test_neighbor_without_a_body_uses_the_largest_part(self) -> None:
         chosen = neighbor_chunk(
             [
                 ChunkChoice("later", "verify_password", "symbol_part", 2),
                 ChunkChoice("first", "verify_password", "symbol_part", 0),
-            ]
+            ],
+            {"later": 5000, "first": 200},
         )
-        self.assertEqual(chosen.chunk_id, "first")
+        self.assertEqual(chosen.chunk_id, "later")
 
     def test_edge_direction_and_cap_are_deterministic(self) -> None:
         self.assertTrue(allow_edge("CALLS", False, "symbol", "symbol"))

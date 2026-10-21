@@ -57,7 +57,6 @@ from app.retrieval.fusion import (
     fuse_anchors,
     materialize_anchors,
     preserve_named_spans,
-    neighbor_chunk,
     select_edges,
 )
 from app.retrieval.model_call import (
@@ -93,11 +92,13 @@ from app.retrieval.answer_turn import (
 )
 from app.retrieval.answer_prose import META_ANSWER_SUFFIX, PROSE_STYLE_SUFFIX, meta_reasoning_question
 from app.retrieval.chunk_selection import (
+    chunk_byte_sizes,
     deprioritize_meta_config_spans,
     enrich_spans_with_bodies,
     expand_spans_with_sibling_bodies,
     implementation_chunk_choices,
     limit_spans_per_file,
+    pick_best_symbol_chunk,
     pick_file_chunk,
     wants_substantive_implementation,
 )
@@ -516,12 +517,16 @@ class AnswerService:
                     _note_lazy_embed_error(lazy_stats, exc)
                 if trace is not None and lazy_stats:
                     trace.setdefault("lazy_query_embed", {}).update(lazy_stats)
-        choices = _choices_for(db, generation.id, fused, name_hits + text_hits + vector_hits)
+        lane_hits = name_hits + text_hits + vector_hits
+        choices = _choices_for(db, generation.id, fused, lane_hits)
+        size_ids = list(choices.keys())
+        chunk_sizes = chunk_byte_sizes(db, generation.id, size_ids)
         spans = materialize_anchors(
             fused,
-            chunk_ids_for_anchor(name_hits + text_hits + vector_hits),
+            chunk_ids_for_anchor(lane_hits),
             choices,
             _chunks_by_symbol(choices),
+            chunk_sizes,
         )
         step = _trace_step(trace, "04_materialize_span_choices", step)
         self._ensure_open(db, outcome.pin_id)
@@ -530,7 +535,7 @@ class AnswerService:
         for edge in edges:
             if edge.other_id in ranks:
                 continue
-            extra = neighbor_chunk(_symbol_chunks(db, generation.id, edge.other_id))
+            extra = pick_best_symbol_chunk(db, generation.id, edge.other_id)
             if extra is not None and all(item.chunk_id != extra.chunk_id for item in spans):
                 spans.append(extra)
         graph_seconds = perf_counter() - stage
@@ -1071,7 +1076,7 @@ def _behavior_symbol_spans(db: Session, generation: IndexGeneration, question: s
     chosen: list[ChunkChoice] = []
     seen: set[str] = set()
     for item in choose_behavior_symbols(question, catalog):
-        body = neighbor_chunk(_symbol_chunks(db, generation.id, item["id"]))
+        body = pick_best_symbol_chunk(db, generation.id, item["id"])
         if body is None or body.chunk_id in seen:
             continue
         seen.add(body.chunk_id)
@@ -1142,7 +1147,7 @@ def _expansion_symbol_spans(db: Session, generation: IndexGeneration, question: 
     chosen: list[ChunkChoice] = []
     seen: set[str] = set()
     for item in choose_expansion_symbols(question, catalog):
-        body = neighbor_chunk(_symbol_chunks(db, generation.id, item["id"]))
+        body = pick_best_symbol_chunk(db, generation.id, item["id"])
         if body is None or body.chunk_id in seen:
             continue
         seen.add(body.chunk_id)
@@ -1169,7 +1174,7 @@ def _named_symbol_spans(db: Session, generation: IndexGeneration, question: str)
     chosen: list[ChunkChoice] = []
     seen: set[str] = set()
     for row in rows:
-        body = neighbor_chunk(_symbol_chunks(db, generation.id, row.id))
+        body = pick_best_symbol_chunk(db, generation.id, row.id)
         if body is None or body.chunk_id in seen:
             continue
         seen.add(body.chunk_id)

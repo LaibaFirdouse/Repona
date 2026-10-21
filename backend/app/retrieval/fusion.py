@@ -83,12 +83,37 @@ def chunk_ids_for_anchor(hits: list[LaneHit]) -> dict[str, list[str]]:
     return grouped
 
 
-def name_only_chunks(chunks: list[ChunkChoice]) -> list[ChunkChoice]:
-    bodies = [chunk for chunk in chunks if chunk.kind == "symbol_body"]
+def _span_bytes(choice: ChunkChoice, chunk_sizes: dict[str, int]) -> int:
+    return chunk_sizes.get(choice.chunk_id, 0)
+
+
+def representative_chunk_choices(
+    choices: list[ChunkChoice],
+    chunk_sizes: dict[str, int] | None = None,
+) -> list[ChunkChoice]:
+    """Pick the largest implementation chunk for an anchor (not the first ordinal slice)."""
+    if not choices:
+        return []
+    sizes = chunk_sizes or {}
+    bodies = [chunk for chunk in choices if chunk.kind == "symbol_body"]
     if bodies:
-        return sorted(bodies, key=lambda chunk: (chunk.ordinal, chunk.chunk_id))[:1]
-    parts = [chunk for chunk in chunks if chunk.kind == "symbol_part"]
-    return sorted(parts, key=lambda chunk: (chunk.ordinal, chunk.chunk_id))
+        pick = max(bodies, key=lambda chunk: (_span_bytes(chunk, sizes), chunk.ordinal))
+        return [pick]
+    parts = [chunk for chunk in choices if chunk.kind == "symbol_part"]
+    if parts:
+        pick = max(parts, key=lambda chunk: (_span_bytes(chunk, sizes), chunk.ordinal))
+        return [pick]
+    avoid = {chunk for chunk in choices if chunk.kind in {"import_block", "file_overview"}}
+    pool = [chunk for chunk in choices if chunk not in avoid] or list(choices)
+    pick = max(pool, key=lambda chunk: (_span_bytes(chunk, sizes), chunk.ordinal))
+    return [pick]
+
+
+def name_only_chunks(
+    chunks: list[ChunkChoice],
+    chunk_sizes: dict[str, int] | None = None,
+) -> list[ChunkChoice]:
+    return representative_chunk_choices(chunks, chunk_sizes)
 
 
 def preserve_named_spans(spans: list[ChunkChoice], named: list[ChunkChoice], limit: int) -> list[ChunkChoice]:
@@ -114,6 +139,7 @@ def materialize_anchors(
     hits_by_anchor: dict[str, list[str]],
     chunks_by_id: dict[str, ChunkChoice],
     chunks_by_symbol: dict[str, list[ChunkChoice]],
+    chunk_sizes: dict[str, int] | None = None,
 ) -> list[ChunkChoice]:
     chosen: list[ChunkChoice] = []
     seen: set[str] = set()
@@ -121,9 +147,17 @@ def materialize_anchors(
         hit_ids = hits_by_anchor.get(anchor, [])
         if hit_ids:
             group = [chunks_by_id[chunk_id] for chunk_id in hit_ids if chunk_id in chunks_by_id]
+            id_order = {chunk_id: index for index, chunk_id in enumerate(hit_ids)}
+            group.sort(
+                key=lambda chunk: (
+                    id_order.get(chunk.chunk_id, 999),
+                    KIND_ORDER.get(chunk.kind, 9),
+                    chunk.ordinal,
+                    chunk.chunk_id,
+                )
+            )
         else:
-            group = name_only_chunks(chunks_by_symbol.get(anchor, []))
-        group.sort(key=lambda chunk: (KIND_ORDER.get(chunk.kind, 9), chunk.ordinal, chunk.chunk_id))
+            group = representative_chunk_choices(chunks_by_symbol.get(anchor, []), chunk_sizes)
         for chunk in group:
             if chunk.chunk_id in seen:
                 continue
@@ -132,14 +166,12 @@ def materialize_anchors(
     return chosen
 
 
-def neighbor_chunk(chunks: list[ChunkChoice]) -> ChunkChoice | None:
-    bodies = [chunk for chunk in chunks if chunk.kind == "symbol_body"]
-    if bodies:
-        return sorted(bodies, key=lambda chunk: (chunk.ordinal, chunk.chunk_id))[0]
-    parts = [chunk for chunk in chunks if chunk.kind == "symbol_part"]
-    if not parts:
-        return None
-    return sorted(parts, key=lambda chunk: (chunk.ordinal, chunk.chunk_id))[0]
+def neighbor_chunk(
+    chunks: list[ChunkChoice],
+    chunk_sizes: dict[str, int] | None = None,
+) -> ChunkChoice | None:
+    picked = representative_chunk_choices(chunks, chunk_sizes)
+    return picked[0] if picked else None
 
 
 def allow_edge(relationship: str, outgoing: bool, anchor_role: str, other_role: str) -> bool:
