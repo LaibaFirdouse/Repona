@@ -117,6 +117,7 @@ from app.retrieval.conversation_context import (
 )
 from app.retrieval.overview_boost import overview_chunk_choices, overview_question
 from app.retrieval.hydrate import file_ids_for_chunk_hits, hydrate_deferred_from_preview
+from app.retrieval.evidence_scoring import pack_overview_mode, resolve_span_limit, sort_loaded_spans
 from app.retrieval.vector_lane import should_retry_vector_lane, should_skip_vector_lane
 from app.retrieval.workflow_boost import (
     lexical_workflow_chunk_choices,
@@ -639,19 +640,26 @@ class AnswerService:
         named = _named_symbol_spans(db, generation, search_question)
         expanded = _expansion_symbol_spans(db, generation, search_question)
         behavior = _behavior_symbol_spans(db, generation, search_question)
-        is_overview = overview_question(search_question) or overview_question(question) or retrieval.intent in {
+        overview_q = overview_question(search_question) or overview_question(question)
+        is_overview = overview_q or retrieval.intent in {
             "architecture_question",
             "conceptual_search",
         }
-        span_limit = settings.retrieval_span_limit
+        span_limit, per_file_cap = resolve_span_limit(
+            retrieval,
+            overview_question=overview_q,
+            code_first=code_first,
+            prefer_impl=prefer_impl,
+        )
+        pack_for_overview = pack_overview_mode(retrieval, overview_question=overview_q)
+        if trace is not None:
+            trace["retrieval_budget"] = {"span_limit": span_limit, "per_file_cap": per_file_cap}
         workflow_queries = list(dict.fromkeys(workflow_lexical_queries(question) + workflow_lexical_queries(search_question)))
         if code_first:
-            span_limit += settings.answer_overview_span_bonus + settings.answer_workflow_span_bonus
             boost = code_first_chunk_choices(db, generation, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
             spans = deprioritize_readme_spans(spans)
         elif prefer_impl:
-            span_limit += settings.answer_overview_span_bonus + settings.answer_workflow_span_bonus
             boost = implementation_chunk_choices(db, generation, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
             if workflow_queries:
@@ -662,7 +670,6 @@ class AnswerService:
                 spans = _merge_chunk_choices(spans, doc_boost, span_limit)
             spans = deprioritize_meta_config_spans(spans)
         elif is_overview:
-            span_limit += settings.answer_overview_span_bonus
             boost = overview_chunk_choices(db, generation, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
         spans = preserve_named_spans(spans, named + expanded + behavior, span_limit)
@@ -683,7 +690,6 @@ class AnswerService:
             _load_span_text(db, generation.id, revision, spans, blobs),
             search_question,
         )
-        per_file_cap = settings.answer_impl_chunks_per_file if (prefer_impl or code_first) else 2
         loaded = limit_spans_per_file(loaded, max_per_file=per_file_cap)
         if (
             settings.answer_impl_reload_on_thin
@@ -705,9 +711,18 @@ class AnswerService:
                 trace["impl_evidence_reload"] = True
         step = _trace_step(trace, "08_snapshot_validate_and_load_span_text", step)
         priority_ids = {item.chunk_id for item in named + expanded + behavior}
-        loaded = [span for span in loaded if span["chunk_id"] in priority_ids] + [
-            span for span in loaded if span["chunk_id"] not in priority_ids
-        ]
+        score_terms = extract_search_terms(search_question)
+        priority_loaded = sort_loaded_spans(
+            [span for span in loaded if span["chunk_id"] in priority_ids],
+            overview=pack_for_overview,
+            terms=score_terms,
+        )
+        rest_loaded = sort_loaded_spans(
+            [span for span in loaded if span["chunk_id"] not in priority_ids],
+            overview=pack_for_overview,
+            terms=score_terms,
+        )
+        loaded = priority_loaded + rest_loaded
         load_seconds = perf_counter() - stage
         technologies = _technologies(db, generation.id, search_question)
         step = _trace_step(trace, "09_technology_rows", step)
