@@ -47,6 +47,11 @@ from app.retrieval.expansion import (
 )
 from app.retrieval.implementation import direct_implementation_claims, implementation_claims_for_spans
 from app.retrieval.structure import defer_structural_abstain, route_explanation, structure_decision
+from app.retrieval.graph_expand import (
+    _EDGE_QUERY,
+    next_symbol_frontier,
+    seed_symbol_anchors,
+)
 from app.retrieval.fusion import (
     ChunkChoice,
     GraphEdge,
@@ -641,13 +646,50 @@ class AnswerService:
         step = _trace_step(trace, "04_materialize_span_choices", step)
         self._ensure_open(db, outcome.pin_id)
         stage = perf_counter()
-        edges = self._edges(db, generation, fused, ranks) if "graph" in retrieval.lanes else []
+        edges = (
+            self._edges(db, generation, fused, ranks, max_hops=retrieval.max_graph_hops)
+            if "graph" in retrieval.lanes
+            else []
+        )
+        if trace is not None and "graph" in retrieval.lanes:
+            trace["graph_max_hops"] = retrieval.max_graph_hops
+            trace["graph_edge_count"] = len(edges)
+        graph_neighbor_symbols: list[str] = []
         for edge in edges:
             if edge.other_id in ranks:
                 continue
+            if edge.other_role == "symbol":
+                graph_neighbor_symbols.append(edge.other_id)
             extra = pick_best_symbol_chunk(db, generation.id, edge.other_id)
             if extra is not None and all(item.chunk_id != extra.chunk_id for item in spans):
                 spans.append(extra)
+        if (
+            retrieval.needs_source_bodies
+            and revision.snapshot_path
+            and graph_neighbor_symbols
+        ):
+            missing_neighbors = missing_symbol_chunk_ids(
+                db,
+                generation.id,
+                list(dict.fromkeys(graph_neighbor_symbols))[: settings.retrieval_lane_limit],
+            )
+            if missing_neighbors:
+                try:
+                    materialize_symbol_chunks(
+                        db,
+                        repository_id=repository.id,
+                        generation_id=generation.id,
+                        fingerprint=generation.embedding_config_fingerprint,
+                        parser_version=generation.parser_version,
+                        symbol_ids=missing_neighbors,
+                        snapshot_root=Path(revision.snapshot_path),
+                        generation=generation,
+                        qdrant_url=self.qdrant_url,
+                        embed=self.embed,
+                    )
+                except Exception as exc:
+                    if trace is not None:
+                        trace.setdefault("graph_expand", {})["materialize_error"] = str(exc)
         graph_seconds = perf_counter() - stage
         step = _trace_step(trace, "05_neo4j_edges_and_neighbor_chunks", step)
         path_chunks = {chunk_id for _, chunk_id in _path_file_hits(db, generation, search_question)}
@@ -1108,36 +1150,56 @@ class AnswerService:
                 break
         return kept
 
-    def _edges(self, db: Session, generation: IndexGeneration, fused: list[str], ranks: dict[str, int]) -> list[GraphEdge]:
+    def _edges(
+        self,
+        db: Session,
+        generation: IndexGeneration,
+        fused: list[str],
+        ranks: dict[str, int],
+        *,
+        max_hops: int = 1,
+    ) -> list[GraphEdge]:
         if not fused:
             return []
+        hop_cap = max(0, min(max_hops, 3))
+        seed_roles = _roles(db, generation.id, fused)
+        frontier = seed_symbol_anchors(fused, seed_roles, limit=settings.retrieval_lane_limit)
+        visited = set(frontier)
+        rows: list[dict] = []
         session = self._graph_session()
         try:
-            records = session.run(
-                """
-                MATCH (generation:IndexGeneration {id: $generation_id})
-                MATCH (anchor)-[rel]-(other)
-                WHERE anchor.id IN $anchor_ids
-                  AND rel.index_generation_id = generation.id
-                  AND rel.writer_epoch = generation.graph_epoch
-                  AND type(rel) <> 'HAS_SOURCE'
-                  AND type(rel) <> 'HAS_GENERATION'
-                RETURN anchor.id AS anchor_id,
-                       other.id AS other_id,
-                       type(rel) AS relationship_type,
-                       rel.edge_id AS edge_id,
-                       coalesce(rel.mentioned_name, '') AS mentioned_name,
-                       coalesce(rel.resolution, '') AS resolution,
-                       startNode(rel).id = anchor.id AS outgoing
-                """,
-                generation_id=generation.id,
-                anchor_ids=fused,
-            )
-            rows = list(records)
+            for hop in range(hop_cap + 1):
+                if not frontier:
+                    break
+                records = session.run(
+                    _EDGE_QUERY,
+                    generation_id=generation.id,
+                    anchor_ids=list(frontier),
+                )
+                batch = [dict(record) for record in records]
+                rows.extend(batch)
+                if hop >= hop_cap:
+                    break
+                hop_roles = _roles(
+                    db,
+                    generation.id,
+                    [row["anchor_id"] for row in batch] + [row["other_id"] for row in batch],
+                )
+                seed_roles.update(hop_roles)
+                frontier = next_symbol_frontier(
+                    set(frontier),
+                    batch,
+                    seed_roles,
+                    limit=settings.retrieval_lane_limit,
+                )
+                frontier = [item for item in frontier if item not in visited]
+                visited.update(frontier)
         finally:
             close = getattr(session, "close", None)
             if close is not None:
                 close()
+        if not rows:
+            return []
         roles = _roles(db, generation.id, [row["anchor_id"] for row in rows] + [row["other_id"] for row in rows])
         member_ids = _generation_member_ids(db, generation)
         accepted = []
