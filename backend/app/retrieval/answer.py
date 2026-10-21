@@ -47,6 +47,7 @@ from app.retrieval.expansion import (
 )
 from app.retrieval.implementation import direct_implementation_claims, implementation_claims_for_spans
 from app.retrieval.structure import defer_structural_abstain, route_explanation, structure_decision
+from app.retrieval.more_evidence import empty_pack_fallback_choices, fetch_more_evidence_choices
 from app.retrieval.graph_expand import (
     _EDGE_QUERY,
     next_symbol_frontier,
@@ -852,7 +853,7 @@ class AnswerService:
             suffix = JSON_FORMAT_SUFFIX + PROSE_STYLE_SUFFIX + (MORE_EVIDENCE_SUFFIX if allow_more else FINAL_ONLY_SUFFIX)
             if meta_reasoning_question(question):
                 suffix += META_ANSWER_SUFFIX
-            if code_first or substantive:
+            if code_first or substantive or prefer_impl:
                 suffix += CODE_FIRST_SUFFIX
             user_block = _dialog_user_block(question, dialog_notes, history_prefix=history_prefix)
             header = SYSTEM_PROMPT + suffix + "\n" + user_block
@@ -869,6 +870,9 @@ class AnswerService:
                 margin_tokens=margin_tokens,
                 count_tokens=count_tokens,
                 edge_db=db,
+                search_question=search_question,
+                prefer_implementation=prefer_impl,
+                allow_overview=pack_for_overview,
             )
             step = _trace_step(trace, "11_pack_evidence_to_context_budget", step)
             if trace is not None:
@@ -941,12 +945,14 @@ class AnswerService:
                 if trace is not None:
                     trace.setdefault("answer_more_evidence", []).append(turn.more_evidence)
                 yield {"type": "phase", "phase": "fetching"}
-                extra_choices = overview_chunk_choices(
+                extra_choices = fetch_more_evidence_choices(
                     db,
                     generation,
-                    extra_lexical=turn.more_evidence.get("lexical_queries"),
-                    path_contains=turn.more_evidence.get("path_contains"),
-                    limit=settings.answer_overview_span_bonus + 8,
+                    question=search_question,
+                    more_evidence=turn.more_evidence,
+                    prefer_implementation=prefer_impl,
+                    allow_overview=pack_for_overview,
+                    limit=settings.answer_overview_span_bonus + 12,
                 )
                 if extra_choices:
                     extra_loaded = _load_span_text(db, generation.id, revision, extra_choices, blobs)
@@ -1855,6 +1861,9 @@ def _pack_repository_evidence(
     margin_tokens: int,
     count_tokens,
     edge_db: Session,
+    search_question: str = "",
+    prefer_implementation: bool = False,
+    allow_overview: bool = True,
 ):
     loaded_work = list(loaded)
     packed = pack_evidence(
@@ -1871,7 +1880,14 @@ def _pack_repository_evidence(
         technology_text=lambda item: f"\ntechnology {item['id']} {item['name']} {item['evidence_text']}",
     )
     if not packed.spans and not packed.edges:
-        boost = overview_chunk_choices(db, generation, limit=24)
+        boost = empty_pack_fallback_choices(
+            db,
+            generation,
+            question=search_question or "",
+            prefer_implementation=prefer_implementation,
+            allow_overview=allow_overview,
+            limit=24,
+        )
         if boost and revision.snapshot_path:
             loaded_work = _load_span_text(db, generation.id, revision, boost, blobs)
             packed = pack_evidence(
