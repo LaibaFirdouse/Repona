@@ -7,6 +7,7 @@ import re
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.catalog import Chunk, GenerationChunk, GenerationFile, File, IndexGeneration
 from app.retrieval.conversation_context import QaTurn
 from app.retrieval.fusion import ChunkChoice
@@ -86,6 +87,35 @@ def representative_chunk(chunks: list[Chunk]) -> Chunk | None:
 def pick_file_chunk(chunks: list[Chunk]) -> Chunk | None:
     """Single chunk to represent a file in path-based retrieval."""
     return representative_chunk(chunks)
+
+
+def chunk_byte_sizes(db: Session, generation_id: str, chunk_ids: list[str]) -> dict[str, int]:
+    if not chunk_ids:
+        return {}
+    rows = (
+        db.query(Chunk.id, Chunk.start_byte, Chunk.end_byte)
+        .join(GenerationChunk, GenerationChunk.chunk_id == Chunk.id)
+        .filter(GenerationChunk.index_generation_id == generation_id, Chunk.id.in_(chunk_ids))
+        .all()
+    )
+    return {row.id: max(0, row.end_byte - row.start_byte) for row in rows}
+
+
+def pick_best_symbol_chunk(db: Session, generation_id: str, symbol_id: str) -> ChunkChoice | None:
+    """Best symbol_body (by span size) for graph and name expansion paths."""
+    from app.retrieval.fusion import ChunkChoice, neighbor_chunk
+
+    rows = (
+        db.query(Chunk)
+        .join(GenerationChunk, GenerationChunk.chunk_id == Chunk.id)
+        .filter(GenerationChunk.index_generation_id == generation_id, Chunk.symbol_id == symbol_id)
+        .all()
+    )
+    if not rows:
+        return None
+    choices = [ChunkChoice(row.id, symbol_id, row.kind, row.ordinal) for row in rows]
+    sizes = {row.id: max(0, row.end_byte - row.start_byte) for row in rows}
+    return neighbor_chunk(choices, sizes)
 
 
 def upgrade_chunk_choice(db: Session, generation_id: str, chunk: Chunk) -> Chunk:
