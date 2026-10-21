@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from app.core.config import settings
-from app.retrieval.chunk_selection import is_meta_config_path
+from app.retrieval.chunk_selection import is_meta_config_path, wants_code_trace
+from app.retrieval.conversation_context import QaTurn
 from app.retrieval.query_router import RetrievalRequest
 
 _CHUNK_KIND_RANK = {
@@ -92,6 +93,29 @@ def resolve_span_limit(
     )
     per_file = intent_per_file_cap(retrieval, code_first=code_first, prefer_impl=prefer_impl)
     return limit, per_file
+
+
+def retrieval_prefers_implementation(
+    question: str,
+    history: list[QaTurn],
+    *,
+    retrieval: RetrievalRequest,
+    preview_mostly_non_body: bool,
+    code_first: bool,
+    substantive: bool,
+) -> bool:
+    """When to run implementation boosts, sibling expansion, and thin-pack reload."""
+    if code_first or substantive:
+        return True
+    if not retrieval.needs_source_bodies:
+        return False
+    if retrieval.intent in {"execution_trace", "debugging"}:
+        return True
+    if retrieval.intent == "architecture_question":
+        return True
+    if preview_mostly_non_body:
+        return True
+    return wants_code_trace(question, history)
 
 
 def pack_overview_mode(retrieval: RetrievalRequest, *, overview_question: bool) -> bool:

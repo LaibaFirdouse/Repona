@@ -116,8 +116,17 @@ from app.retrieval.conversation_context import (
     retrieval_question_text,
 )
 from app.retrieval.overview_boost import overview_chunk_choices, overview_question
-from app.retrieval.hydrate import file_ids_for_chunk_hits, hydrate_deferred_from_preview
-from app.retrieval.evidence_scoring import pack_overview_mode, resolve_span_limit, sort_loaded_spans
+from app.retrieval.hydrate import (
+    file_ids_for_chunk_hits,
+    hydrate_deferred_from_preview,
+    preview_hits_mostly_non_body,
+)
+from app.retrieval.evidence_scoring import (
+    pack_overview_mode,
+    resolve_span_limit,
+    retrieval_prefers_implementation,
+    sort_loaded_spans,
+)
 from app.retrieval.vector_lane import should_retry_vector_lane, should_skip_vector_lane
 from app.retrieval.workflow_boost import (
     lexical_workflow_chunk_choices,
@@ -410,7 +419,7 @@ class AnswerService:
         history_prefix = format_answer_history(history)
         code_first = wants_implementation_evidence(question, history)
         substantive = wants_substantive_implementation(question, history)
-        prefer_impl = code_first or substantive
+        prefer_impl = False
         if outcome.pin_id is None or outcome.generation_id is None:
             raise RetrievalError(409, "the question has no pinned generation")
         self._ensure_open(db, outcome.pin_id)
@@ -467,6 +476,18 @@ class AnswerService:
                 _note_lazy_embed_error(hydrate_stats, exc)
                 if trace is not None:
                     trace["hydrate_preview"] = {"error": str(exc)}
+        preview_thin = preview_hits_mostly_non_body(db, generation.id, preview_text)
+        prefer_impl = retrieval_prefers_implementation(
+            question,
+            history,
+            retrieval=retrieval,
+            preview_mostly_non_body=preview_thin,
+            code_first=code_first,
+            substantive=substantive,
+        )
+        if trace is not None:
+            trace["prefer_implementation"] = prefer_impl
+            trace["preview_mostly_non_body"] = preview_thin
         if (
             settings.lazy_embed_on_query
             and revision is not None

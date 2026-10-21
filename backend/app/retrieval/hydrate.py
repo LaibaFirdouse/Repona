@@ -168,3 +168,20 @@ def hydrate_deferred_from_preview(
     )
     report["materialized_symbols"] = len(missing)
     return report
+
+
+def preview_hits_mostly_non_body(db: Session, generation_id: str, text_hits: list[LaneHit]) -> bool:
+    """True when lexical preview returned mostly import/overview chunks (progressive index)."""
+    chunk_ids = [hit.chunk_id for hit in text_hits if hit.chunk_id][:12]
+    if len(chunk_ids) < 2:
+        return False
+    rows = (
+        db.query(Chunk.kind)
+        .join(GenerationChunk, GenerationChunk.chunk_id == Chunk.id)
+        .filter(GenerationChunk.index_generation_id == generation_id, Chunk.id.in_(chunk_ids))
+        .all()
+    )
+    if not rows:
+        return False
+    weak = sum(1 for row in rows if row[0] in {"import_block", "file_overview", "non_code"})
+    return weak > len(rows) // 2
