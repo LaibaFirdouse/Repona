@@ -423,6 +423,7 @@ class AnswerService:
         history = normalize_turns(conversation)
         search_question = retrieval_question_text(question, history)
         history_prefix = format_answer_history(history)
+        overview_q = overview_question(search_question) or overview_question(question)
         code_first = wants_implementation_evidence(question, history)
         substantive = wants_substantive_implementation(question, history)
         prefer_impl = False
@@ -490,6 +491,7 @@ class AnswerService:
             preview_mostly_non_body=preview_thin,
             code_first=code_first,
             substantive=substantive,
+            overview_question=overview_q,
         )
         if trace is not None:
             trace["prefer_implementation"] = prefer_impl
@@ -647,11 +649,14 @@ class AnswerService:
         step = _trace_step(trace, "04_materialize_span_choices", step)
         self._ensure_open(db, outcome.pin_id)
         stage = perf_counter()
-        edges = (
-            self._edges(db, generation, fused, ranks, max_hops=retrieval.max_graph_hops)
-            if "graph" in retrieval.lanes
-            else []
-        )
+        edges = []
+        if "graph" in retrieval.lanes:
+            try:
+                edges = self._edges(db, generation, fused, ranks, max_hops=retrieval.max_graph_hops)
+            except RetrievalError:
+                edges = []
+            except Exception:
+                edges = []
         if trace is not None and "graph" in retrieval.lanes:
             trace["graph_max_hops"] = retrieval.max_graph_hops
             trace["graph_edge_count"] = len(edges)
@@ -704,7 +709,6 @@ class AnswerService:
         named = _named_symbol_spans(db, generation, search_question)
         expanded = _expansion_symbol_spans(db, generation, search_question)
         behavior = _behavior_symbol_spans(db, generation, search_question)
-        overview_q = overview_question(search_question) or overview_question(question)
         is_overview = overview_q or retrieval.intent in {
             "architecture_question",
             "conceptual_search",

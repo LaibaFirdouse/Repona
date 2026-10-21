@@ -1315,7 +1315,14 @@
       if (m.includes("indexing failed") || m.includes("ingestion failed")) return "Indexing failed";
       if (m.includes("already running")) return "Index already running";
       if (m.includes("session")) return "Session error";
-      if (message && message.length < 40) return message;
+      if (m.includes("evidence does not fit") || m.includes("model context")) return "Context too large";
+      if (m.includes("neo4j is not configured")) return "Graph DB not configured";
+      if (m.includes("embedding provider")) return "Embed service offline";
+      if (m.includes("stream ended early")) return "Answer stream interrupted";
+      if (m.includes("did not complete")) return "Answer did not complete";
+      if (m.includes("generation is stale") || m.includes("cannot be searched")) return "Re-index this repo";
+      if (message && message.length <= 120) return message;
+      if (message) return message.slice(0, 117) + "…";
       return "Failed";
     }
 

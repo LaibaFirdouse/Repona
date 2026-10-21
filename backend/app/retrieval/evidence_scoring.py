@@ -103,15 +103,16 @@ def retrieval_prefers_implementation(
     preview_mostly_non_body: bool,
     code_first: bool,
     substantive: bool,
+    overview_question: bool = False,
 ) -> bool:
     """When to run implementation boosts, sibling expansion, and thin-pack reload."""
     if code_first or substantive:
         return True
     if not retrieval.needs_source_bodies:
         return False
+    if overview_question:
+        return False
     if retrieval.intent in {"execution_trace", "debugging"}:
-        return True
-    if retrieval.intent == "architecture_question":
         return True
     if preview_mostly_non_body:
         return True
