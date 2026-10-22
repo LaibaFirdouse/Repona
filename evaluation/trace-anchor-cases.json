@@ -1,0 +1,20 @@
+[
+  {
+    "id": "repona_ask_pipeline",
+    "repo_url": "https://github.com/LaibaFirdouse/Repona",
+    "question": "How does a user question reach AnswerService.answer end to end?",
+    "expect_paths_any": [
+      "backend/app/retrieval/answer.py",
+      "backend/app/services/refresh_service.py"
+    ],
+    "expect_trace_anchors": true
+  },
+  {
+    "id": "studyplanner_main_entry",
+    "repo_url": "https://github.com/LaibaFirdouse/StudyPlanner",
+    "question": "How does the main entry point work?",
+    "expect_paths_any": ["app/layout.tsx", "app/page.tsx", "app/providers.tsx"],
+    "expect_trace_anchors": true,
+    "optional": true
+  }
+]

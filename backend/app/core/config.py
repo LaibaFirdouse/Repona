@@ -113,6 +113,7 @@ class Settings:
     answer_impl_reload_on_thin: bool = _get_bool_env("ANSWER_IMPL_RELOAD_ON_THIN", True)
     answer_min_substantive_chunk_bytes: int = _get_int_env("ANSWER_MIN_SUBSTANTIVE_CHUNK_BYTES", 350)
     answer_overview_when_pack_thin: bool = _get_bool_env("ANSWER_OVERVIEW_WHEN_PACK_THIN", True)
+    trace_anchor_boost_enabled: bool = _get_bool_env("TRACE_ANCHOR_BOOST_ENABLED", True)
     debug: bool = _get_bool_env("DEBUG", True)
     rate_limit_enabled: bool = _get_bool_env("RATE_LIMIT_ENABLED", True)
     rate_limit_trust_proxy: bool = _get_bool_env("RATE_LIMIT_TRUST_PROXY", False)

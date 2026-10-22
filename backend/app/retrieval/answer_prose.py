@@ -22,6 +22,23 @@ _META_SNIPPETS = (
     re.compile(r"\bnot (?:present|included) in (?:these |the )?(?:excerpts|spans|fragments)\b[^.!?]*[.!?]?", re.I),
     re.compile(r"\b(?:do not|does not) appear in (?:these |the )?(?:supplied )?(?:source )?(?:spans|fragments)\b[^.!?]*[.!?]?", re.I),
     re.compile(r"\bwhich are not (?:included|shown) in\b[^.!?]*[.!?]?", re.I),
+    re.compile(r"\b(?:cannot|can't) be (?:faithfully )?stated from\b[^.!?]*[.!?]?", re.I),
+    re.compile(r"\bgiven only truncated\b[^.!?]*[.!?]?", re.I),
+    re.compile(r"\bwould need to be available\b[^.!?]*[.!?]?", re.I),
+    re.compile(r"\brepository material provided\b[^.!?]*[.!?]?", re.I),
+    re.compile(r"\bcurrent retrieval\b[^.!?]*[.!?]?", re.I),
+    re.compile(r"\bhow (?:evidence|retrieval) (?:was|is) chosen\b[^.!?]*[.!?]?", re.I),
+)
+
+_RETRIEVAL_AUDIT_PHRASE = re.compile(
+    r"\b("
+    r"cannot be stated|can't be stated|not present in the retrieved|"
+    r"retrieved lines|retrieved spans|retrieved material|"
+    r"truncated export|incomplete default export|"
+    r"faithful .{0,40}walkthrough|"
+    r"would need to be available|repository material provided"
+    r")\b",
+    re.I,
 )
 
 PROSE_STYLE_SUFFIX = (
@@ -30,6 +47,38 @@ PROSE_STYLE_SUFFIX = (
     "Do not enumerate every import, export, or function name in a row; describe behavior and structure in plain language. "
     "evidence_ids still cite all supporting excerpts in JSON."
 )
+
+
+def prose_is_retrieval_audit(text: str) -> bool:
+    """True when user-visible text reads like a retrieval gap analysis, not an answer."""
+    if not text or not text.strip():
+        return False
+    lowered = text.lower()
+    audit_hits = len(_RETRIEVAL_AUDIT_PHRASE.findall(text))
+    excerpt_hits = lowered.count("excerpt") + lowered.count("retrieved")
+    if audit_hits >= 2:
+        return True
+    if audit_hits >= 1 and excerpt_hits >= 2:
+        return True
+    if audit_hits >= 1 and len(text) > 400 and "cannot" in lowered:
+        return True
+    return False
+
+
+def filter_audit_claims(claims: list[dict]) -> list[dict]:
+    """Drop or trim claims that only describe missing retrieval; sanitize the rest."""
+    kept: list[dict] = []
+    for claim in claims:
+        raw = str(claim.get("text") or "").strip()
+        if not raw:
+            continue
+        if prose_is_retrieval_audit(raw):
+            continue
+        cleaned = sanitize_answer_prose(raw)
+        if not cleaned or prose_is_retrieval_audit(cleaned):
+            continue
+        kept.append({**claim, "text": cleaned})
+    return kept
 
 
 def sanitize_answer_prose(text: str) -> str:

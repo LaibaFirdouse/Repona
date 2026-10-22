@@ -20,5 +20,10 @@
     "id": "path_lookup",
     "question": "What does scripts/benchmark.py measure for repository latency?",
     "expect_paths_any": ["scripts/benchmark.py"]
+  },
+  {
+    "id": "main_entry_conceptual",
+    "question": "How does the main entry point work for serving API requests?",
+    "expect_paths_any": ["backend/app/main.py", "backend/app/__init__.py", "backend/app/retrieval/answer.py"]
   }
 ]

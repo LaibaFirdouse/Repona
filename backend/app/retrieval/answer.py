@@ -97,7 +97,12 @@ from app.retrieval.answer_turn import (
     MORE_EVIDENCE_SUFFIX,
     collect_answer_turn,
 )
-from app.retrieval.answer_prose import META_ANSWER_SUFFIX, PROSE_STYLE_SUFFIX, meta_reasoning_question
+from app.retrieval.answer_prose import (
+    META_ANSWER_SUFFIX,
+    PROSE_STYLE_SUFFIX,
+    filter_audit_claims,
+    meta_reasoning_question,
+)
 from app.retrieval.chunk_selection import (
     chunk_byte_sizes,
     deprioritize_meta_config_spans,
@@ -147,6 +152,7 @@ from app.retrieval.workflow_boost import (
     workflow_lexical_queries,
 )
 from app.retrieval.catalog_context import catalog_path_filters, indexed_path_spans_for_question
+from app.retrieval.trace_anchors import catalog_trace_anchor_choices, question_wants_trace_anchors
 from app.retrieval.question_intent import PLANNER_SYSTEM, answer_suffix_for_intent
 from app.retrieval.query_router import (
     RetrievalRequest,
@@ -271,6 +277,7 @@ def compose_model_answer(
         return Answer([], [], [], False, INSUFFICIENT_EVIDENCE), []
     claims = resolve_evidence_aliases(turn.claims, aliases)
     kept, citations_valid = review_claims(claims, valid_ids)
+    kept = filter_audit_claims(kept)
     if not kept:
         return Answer([], [], [], False, NO_CITED_CLAIM), claims
     return Answer(kept, span_citations(spans, kept), [], citations_valid, "The active generation matches this commit."), claims
@@ -756,6 +763,16 @@ class AnswerService:
         if trace is not None:
             trace["retrieval_budget"] = {"span_limit": span_limit, "per_file_cap": per_file_cap}
         workflow_queries = list(dict.fromkeys(workflow_lexical_queries(question) + workflow_lexical_queries(search_question)))
+        if settings.trace_anchor_boost_enabled and question_wants_trace_anchors(
+            search_question, retrieval.intent
+        ):
+            anchor_choices = catalog_trace_anchor_choices(
+                db, generation, search_question, limit=min(8, span_limit)
+            )
+            if anchor_choices:
+                spans = _merge_chunk_choices(anchor_choices, spans, span_limit)
+                if trace is not None:
+                    trace["trace_anchor_chunks"] = len(anchor_choices)
         if code_first:
             boost = code_first_chunk_choices(db, generation, question=search_question, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
@@ -1036,6 +1053,10 @@ class AnswerService:
                 )
             claims = resolve_evidence_aliases(claims_payload, aliases)
             kept, citations_valid = review_claims(claims, valid_ids)
+            filtered = filter_audit_claims(kept)
+            if trace is not None and len(filtered) < len(kept):
+                trace["audit_claims_filtered"] = len(kept) - len(filtered)
+            kept = filtered
             model_claims = claims
             if not kept:
                 answered = Answer([], [], [], False, NO_CITED_CLAIM)

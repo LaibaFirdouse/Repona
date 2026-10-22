@@ -14,6 +14,13 @@
     "expect_lanes_any": ["lexical"]
   },
   {
+    "id": "main_entry_anchor",
+    "category": "conceptual_search",
+    "question": "How does the main entry point work for handling ask requests?",
+    "expect_paths_any": ["backend/app/main.py", "backend/app/services/refresh_service.py", "backend/app/retrieval/answer.py"],
+    "expect_lanes_any": ["symbol", "lexical"]
+  },
+  {
     "id": "cross_file_trace",
     "category": "execution_trace",
     "question": "Trace how ingest_commit writes graph edges from assemble_generation through write_graph.",
