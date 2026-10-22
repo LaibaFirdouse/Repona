@@ -770,13 +770,38 @@ class AnswerService:
         if settings.trace_anchor_boost_enabled and question_wants_trace_anchors(
             search_question, retrieval.intent
         ):
-            anchor_choices = catalog_trace_anchor_choices(
-                db, generation, search_question, limit=min(8, span_limit)
-            )
+            graph_session = None
+            graph_hops = 0
+            if (
+                settings.trace_anchor_graph_enabled
+                and "graph" in retrieval.lanes
+                and settings.trace_anchor_graph_hops > 0
+            ):
+                try:
+                    graph_session = self._graph_session()
+                    graph_hops = settings.trace_anchor_graph_hops
+                except Exception:
+                    graph_session = None
+            try:
+                anchor_choices = catalog_trace_anchor_choices(
+                    db,
+                    generation,
+                    search_question,
+                    limit=min(8, span_limit),
+                    graph_session=graph_session,
+                    graph_hops=graph_hops,
+                )
+            finally:
+                if graph_session is not None:
+                    close = getattr(graph_session, "close", None)
+                    if close is not None:
+                        close()
             if anchor_choices:
                 spans = _merge_chunk_choices(anchor_choices, spans, span_limit)
                 if trace is not None:
                     trace["trace_anchor_chunks"] = len(anchor_choices)
+                    if graph_hops:
+                        trace["trace_anchor_graph_hops"] = graph_hops
         if code_first:
             boost = code_first_chunk_choices(db, generation, question=search_question, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)

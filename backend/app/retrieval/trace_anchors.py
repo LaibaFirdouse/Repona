@@ -116,12 +116,26 @@ def _entry_catalog_files(
     return ordered
 
 
+def _symbol_not_in_test_file(db: Session, symbol_id: str) -> bool:
+    row = (
+        db.query(File.relative_path)
+        .join(Symbol, Symbol.file_id == File.id)
+        .filter(Symbol.id == symbol_id)
+        .first()
+    )
+    if row is None:
+        return False
+    return not is_test_path(str(row.relative_path))
+
+
 def catalog_trace_anchor_choices(
     db: Session,
     generation: IndexGeneration,
     question: str,
     *,
     limit: int = 8,
+    graph_session=None,
+    graph_hops: int = 0,
 ) -> list[ChunkChoice]:
     """Driver/main symbols and entry-shaped files from the indexed catalog only."""
     choices: list[ChunkChoice] = []
@@ -133,8 +147,26 @@ def catalog_trace_anchor_choices(
         seen.add(choice.chunk_id)
         choices.append(choice)
 
-    for symbol in _main_entry_symbols(db, generation, limit=4):
+    main_symbols = _main_entry_symbols(db, generation, limit=4)
+    seed_ids = [symbol.id for symbol in main_symbols]
+    for symbol in main_symbols:
         add(pick_best_symbol_chunk(db, generation.id, symbol.id))
+
+    if graph_session is not None and graph_hops > 0 and seed_ids:
+        from app.retrieval.graph_expand import graph_neighbor_symbol_ids
+
+        neighbor_ids = graph_neighbor_symbol_ids(
+            graph_session,
+            db,
+            generation.id,
+            seed_ids,
+            max_hops=graph_hops,
+            limit=min(16, limit * 2),
+        )
+        for symbol_id in neighbor_ids:
+            if not _symbol_not_in_test_file(db, symbol_id):
+                continue
+            add(pick_best_symbol_chunk(db, generation.id, symbol_id))
 
     files = _entry_catalog_files(db, generation.id, question, limit=6)
     if files:

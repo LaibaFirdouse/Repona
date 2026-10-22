@@ -7,7 +7,8 @@
       "backend/app/retrieval/answer.py",
       "backend/app/services/refresh_service.py"
     ],
-    "expect_trace_anchors": true
+    "expect_trace_anchors": true,
+    "min_substantive_spans": 1
   },
   {
     "id": "studyplanner_main_entry",
@@ -15,6 +16,7 @@
     "question": "How does the main entry point work?",
     "expect_paths_any": ["app/layout.tsx", "app/page.tsx", "app/providers.tsx"],
     "expect_trace_anchors": true,
+    "min_substantive_spans": 1,
     "optional": true
   }
 ]

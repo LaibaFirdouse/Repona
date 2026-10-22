@@ -115,6 +115,8 @@ class Settings:
     answer_overview_when_pack_thin: bool = _get_bool_env("ANSWER_OVERVIEW_WHEN_PACK_THIN", True)
     trace_anchor_boost_enabled: bool = _get_bool_env("TRACE_ANCHOR_BOOST_ENABLED", True)
     answer_retry_on_audit_only: bool = _get_bool_env("ANSWER_RETRY_ON_AUDIT_ONLY", True)
+    trace_anchor_graph_enabled: bool = _get_bool_env("TRACE_ANCHOR_GRAPH_ENABLED", True)
+    trace_anchor_graph_hops: int = _get_int_env("TRACE_ANCHOR_GRAPH_HOPS", 2)
     debug: bool = _get_bool_env("DEBUG", True)
     rate_limit_enabled: bool = _get_bool_env("RATE_LIMIT_ENABLED", True)
     rate_limit_trust_proxy: bool = _get_bool_env("RATE_LIMIT_TRUST_PROXY", False)

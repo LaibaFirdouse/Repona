@@ -51,13 +51,22 @@ def main() -> int:
         )
         paths = evidence_paths(probe)
         recall = paths_recall(paths, case.get("expect_paths_any") or [])
+        min_substantive = int(case.get("min_substantive_spans") or 0)
+        substantive = int(probe.get("substantive_span_count") or 0)
+        substantive_ok = substantive >= min_substantive if min_substantive else True
         row = {
             "id": case["id"],
             "repo_url": case["repo_url"],
             "question": case["question"],
-            "ok": probe.get("ok") and recall.get("hit"),
+            "ok": probe.get("ok") and recall.get("hit") and substantive_ok,
             "probe_ok": probe.get("ok"),
             "path_recall": recall,
+            "substantive_span_count": substantive,
+            "min_substantive_spans": min_substantive,
+            "substantive_ok": substantive_ok,
+            "trace_anchor_chunks": probe.get("trace_anchor_chunks"),
+            "trace_anchor_graph_hops": probe.get("trace_anchor_graph_hops"),
+            "span_byte_samples": probe.get("span_byte_samples") or [],
             "retrieved_paths": paths[:16],
             "elapsed_ms": probe.get("elapsed_ms"),
             "error": probe.get("error") or probe.get("harness_error"),

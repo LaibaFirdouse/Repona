@@ -81,11 +81,24 @@ retrieved_paths = [
     span.get("relative_path") or ""
     for span in (trace.get("spans_before_budget") or [])
 ]
-for span in trace.get("packet_spans") or []:
+packet_spans = trace.get("packet_spans") or []
+for span in packet_spans:
     path = span.get("relative_path") or ""
     if path and path not in retrieved_paths:
         retrieved_paths.append(path)
 lane_exec = (trace.get("lane_trace") or {{}}).get("lanes_executed") or {{}}
+min_substantive_bytes = 350
+substantive_span_count = 0
+span_byte_samples = []
+for span in packet_spans:
+    if not isinstance(span, dict):
+        continue
+    kind = str(span.get("chunk_kind") or "")
+    text = str(span.get("text") or "")
+    raw = int(span.get("raw_bytes") or 0) or len(text.encode("utf-8"))
+    span_byte_samples.append({{"kind": kind, "raw_bytes": raw, "path": span.get("relative_path") or ""}})
+    if kind == "symbol_body" and raw >= min_substantive_bytes:
+        substantive_span_count += 1
 
 result = {{
     "ok": error is None,
@@ -99,7 +112,11 @@ result = {{
     "lanes_executed": lane_exec,
     "lane_hit_counts": lane_trace.get("lane_hit_counts"),
     "evidence_fallback": trace.get("evidence_fallback"),
-    "packet_spans": trace.get("packet_spans") or [],
+    "packet_spans": packet_spans,
+    "substantive_span_count": substantive_span_count,
+    "span_byte_samples": span_byte_samples[:16],
+    "trace_anchor_chunks": trace.get("trace_anchor_chunks"),
+    "trace_anchor_graph_hops": trace.get("trace_anchor_graph_hops"),
     "vector_lane_expanded": router.get("vector_lane_expanded"),
     "lazy_query_embed": lazy,
     "retrieved_paths": retrieved_paths[:24],
