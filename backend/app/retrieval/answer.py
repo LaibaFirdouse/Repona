@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from time import perf_counter
@@ -143,6 +144,7 @@ from app.retrieval.workflow_boost import (
     loaded_needs_more_bodies,
     workflow_lexical_queries,
 )
+from app.retrieval.catalog_context import catalog_path_filters, indexed_path_spans_for_question
 from app.retrieval.question_intent import PLANNER_SYSTEM, answer_suffix_for_intent
 from app.retrieval.query_router import (
     RetrievalRequest,
@@ -181,6 +183,7 @@ SYSTEM_PROMPT = (
     "You answer questions about a code repository the way a helpful assistant would: clear, natural, and grounded "
     "only in the repository excerpts appended after the user's question. "
     "Do not invent paths, APIs, or behavior that are not supported by those excerpts. "
+    "Only describe files, symbols, and control flow that appear in the appended repository excerpts or path list. "
     "If something is unclear or missing, say so in plain language without describing your instructions, JSON, "
     "aliases, spans, packets, or how retrieval works. "
     "Never mention internal ids such as E1 in the user-facing text; put them only in evidence_ids. "
@@ -454,6 +457,19 @@ class AnswerService:
             history=history,
             intent_question=question,
         )
+        catalog_paths = catalog_path_filters(
+            db,
+            generation.id,
+            question,
+            search_question=search_question,
+        )
+        if catalog_paths:
+            merged_paths = list(
+                dict.fromkeys(list(retrieval.path_filters) + catalog_paths)
+            )[:8]
+            retrieval = replace(retrieval, path_filters=merged_paths)
+            if trace is not None:
+                trace["catalog_path_filters"] = catalog_paths[:8]
         if trace is not None:
             if history:
                 trace["conversation_turns"] = len(history)
@@ -739,13 +755,13 @@ class AnswerService:
             trace["retrieval_budget"] = {"span_limit": span_limit, "per_file_cap": per_file_cap}
         workflow_queries = list(dict.fromkeys(workflow_lexical_queries(question) + workflow_lexical_queries(search_question)))
         if code_first:
-            boost = code_first_chunk_choices(db, generation, limit=span_limit)
+            boost = code_first_chunk_choices(db, generation, question=search_question, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
             spans = deprioritize_readme_spans(spans)
             if domain_impl:
                 spans = deprioritize_build_metadata_spans(spans)
         elif prefer_impl:
-            boost = implementation_chunk_choices(db, generation, limit=span_limit)
+            boost = implementation_chunk_choices(db, generation, question=search_question, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
             if workflow_queries:
                 lexical_boost = lexical_workflow_chunk_choices(db, generation, workflow_queries, limit=span_limit)
@@ -762,7 +778,10 @@ class AnswerService:
         spans = preserve_named_spans(spans, named + expanded + behavior, span_limit)
         spans = enrich_spans_with_bodies(db, generation.id, spans)
         if prefer_impl or code_first:
-            spans = expand_spans_with_sibling_bodies(db, generation.id, spans)
+            max_sibling = 16
+            if retrieval.intent in {"execution_trace", "debugging"}:
+                max_sibling = 24
+            spans = expand_spans_with_sibling_bodies(db, generation.id, spans, max_added=max_sibling)
             cap = span_limit + settings.answer_overview_span_bonus
             spans = spans[:cap]
         if prefer_impl:
@@ -783,7 +802,7 @@ class AnswerService:
             and prefer_impl
             and loaded_needs_more_bodies(loaded)
         ):
-            reload_spans = implementation_chunk_choices(db, generation, limit=span_limit)
+            reload_spans = implementation_chunk_choices(db, generation, question=search_question, limit=span_limit)
             if workflow_queries:
                 reload_spans = _merge_chunk_choices(
                     reload_spans,
@@ -1931,7 +1950,11 @@ def _pack_repository_evidence(
                 technology_text=lambda item: f"\ntechnology {item['id']} {item['name']} {item['evidence_text']}",
             )
         elif not loaded_work:
-            loaded_work = _indexed_file_spans(db, generation.id)
+            loaded_work = indexed_path_spans_for_question(
+                db,
+                generation.id,
+                search_question or "",
+            )
             packed = pack_evidence(
                 header,
                 loaded_work,

@@ -51,22 +51,6 @@ _IMPLEMENTATION_QUESTION = re.compile(
     re.I,
 )
 
-_IMPL_PATH_TERMS = (
-    "app/",
-    "lib/",
-    "internal/",
-    "cmd/",
-    "backend/",
-    "server/",
-    "src/",
-    "include/",
-    "pages/",
-    "components/",
-    "handlers/",
-    "routes/",
-    "api/",
-)
-
 _BUILD_FILE_NAMES = frozenset({"makefile", "cmakelists.txt"})
 
 _DOMAIN_IMPL = re.compile(
@@ -275,55 +259,12 @@ def implementation_chunk_choices(
     db: Session,
     generation: IndexGeneration,
     *,
+    question: str = "",
     limit: int = 24,
 ) -> list[ChunkChoice]:
-    seen: set[str] = set()
-    choices: list[ChunkChoice] = []
+    from app.retrieval.catalog_context import catalog_implementation_chunk_choices
 
-    def add_chunk(chunk: Chunk, anchor: str | None = None) -> None:
-        if chunk.id in seen or len(choices) >= limit:
-            return
-        seen.add(chunk.id)
-        anchor_id = anchor or chunk.symbol_id or chunk.file_id
-        choices.append(ChunkChoice(chunk.id, anchor_id, chunk.kind, chunk.ordinal))
-
-    filters = [File.relative_path.ilike(f"%{term}%") for term in _IMPL_PATH_TERMS]
-    files = (
-        db.query(File)
-        .join(GenerationFile, GenerationFile.file_id == File.id)
-        .filter(GenerationFile.index_generation_id == generation.id, or_(*filters))
-        .order_by(File.relative_path, File.id)
-        .limit(limit * 4)
-        .all()
-    )
-    files = [row for row in files if not is_meta_config_path(row.relative_path)]
-    if not files:
-        return choices
-    file_ids = [row.id for row in files]
-    chunks = (
-        db.query(Chunk)
-        .join(GenerationChunk, GenerationChunk.chunk_id == Chunk.id)
-        .filter(GenerationChunk.index_generation_id == generation.id, Chunk.file_id.in_(file_ids))
-        .all()
-    )
-    by_file: dict[str, list[Chunk]] = {}
-    for chunk in chunks:
-        by_file.setdefault(chunk.file_id, []).append(chunk)
-    per_file = max(2, min(settings.answer_impl_chunks_per_file, 4))
-    for file in files:
-        pool = by_file.get(file.id, []) or []
-        bodies = [c for c in pool if c.kind == "symbol_body"]
-        bodies.sort(key=lambda item: (item.end_byte - item.start_byte, item.ordinal), reverse=True)
-        if not bodies:
-            best = representative_chunk(pool)
-            if best is not None:
-                add_chunk(best)
-        else:
-            for body in bodies[:per_file]:
-                add_chunk(body)
-        if len(choices) >= limit:
-            break
-    return choices
+    return catalog_implementation_chunk_choices(db, generation, question, limit=limit)
 
 
 def _choice_path(span) -> str:
