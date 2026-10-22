@@ -51,19 +51,13 @@ _IMPLEMENTATION_QUESTION = re.compile(
     re.I,
 )
 
-_IMPL_PATH_TERMS = (
-    "app/",
-    "lib/",
-    "internal/",
-    "cmd/",
-    "backend/",
-    "server/",
-    "src/",
-    "pages/",
-    "components/",
-    "handlers/",
-    "routes/",
-    "api/",
+_BUILD_FILE_NAMES = frozenset({"makefile", "cmakelists.txt"})
+
+_DOMAIN_IMPL = re.compile(
+    r"\b("
+    r"queue|ring|enqueue|dequeue|spsc|mpsc|mpmc|lock[- ]?free|mutex|channel|buffer"
+    r")\b",
+    re.I,
 )
 
 
@@ -87,6 +81,28 @@ def wants_code_trace(question: str, history: list[QaTurn]) -> bool:
     if _CODE_TRACE.search(question.strip()):
         return True
     return any(_CODE_TRACE.search(turn.question) for turn in history[-4:])
+
+
+def wants_domain_implementation(question: str, history: list[QaTurn]) -> bool:
+    """Data-structure / algorithm questions that should prefer headers and lib code over harness files."""
+    if _DOMAIN_IMPL.search(question.strip()):
+        return True
+    return any(_DOMAIN_IMPL.search(turn.question) for turn in history[-4:])
+
+
+def _is_build_metadata_path(relative_path: str) -> bool:
+    path = relative_path.replace("\\", "/").lower()
+    name = path.rsplit("/", 1)[-1]
+    if is_meta_config_path(relative_path):
+        return True
+    return name in _BUILD_FILE_NAMES
+
+
+def deprioritize_build_metadata_spans(spans: list) -> list:
+    """Push README/Makefile/CMake-style paths behind implementation sources when boosting code bodies."""
+    front = [span for span in spans if not _is_build_metadata_path(_choice_path(span))]
+    back = [span for span in spans if _is_build_metadata_path(_choice_path(span))]
+    return front + back if front else spans
 
 
 def representative_chunk(chunks: list[Chunk]) -> Chunk | None:
@@ -243,55 +259,12 @@ def implementation_chunk_choices(
     db: Session,
     generation: IndexGeneration,
     *,
+    question: str = "",
     limit: int = 24,
 ) -> list[ChunkChoice]:
-    seen: set[str] = set()
-    choices: list[ChunkChoice] = []
+    from app.retrieval.catalog_context import catalog_implementation_chunk_choices
 
-    def add_chunk(chunk: Chunk, anchor: str | None = None) -> None:
-        if chunk.id in seen or len(choices) >= limit:
-            return
-        seen.add(chunk.id)
-        anchor_id = anchor or chunk.symbol_id or chunk.file_id
-        choices.append(ChunkChoice(chunk.id, anchor_id, chunk.kind, chunk.ordinal))
-
-    filters = [File.relative_path.ilike(f"%{term}%") for term in _IMPL_PATH_TERMS]
-    files = (
-        db.query(File)
-        .join(GenerationFile, GenerationFile.file_id == File.id)
-        .filter(GenerationFile.index_generation_id == generation.id, or_(*filters))
-        .order_by(File.relative_path, File.id)
-        .limit(limit * 4)
-        .all()
-    )
-    files = [row for row in files if not is_meta_config_path(row.relative_path)]
-    if not files:
-        return choices
-    file_ids = [row.id for row in files]
-    chunks = (
-        db.query(Chunk)
-        .join(GenerationChunk, GenerationChunk.chunk_id == Chunk.id)
-        .filter(GenerationChunk.index_generation_id == generation.id, Chunk.file_id.in_(file_ids))
-        .all()
-    )
-    by_file: dict[str, list[Chunk]] = {}
-    for chunk in chunks:
-        by_file.setdefault(chunk.file_id, []).append(chunk)
-    per_file = max(2, min(settings.answer_impl_chunks_per_file, 4))
-    for file in files:
-        pool = by_file.get(file.id, []) or []
-        bodies = [c for c in pool if c.kind == "symbol_body"]
-        bodies.sort(key=lambda item: (item.end_byte - item.start_byte, item.ordinal), reverse=True)
-        if not bodies:
-            best = representative_chunk(pool)
-            if best is not None:
-                add_chunk(best)
-        else:
-            for body in bodies[:per_file]:
-                add_chunk(body)
-        if len(choices) >= limit:
-            break
-    return choices
+    return catalog_implementation_chunk_choices(db, generation, question, limit=limit)
 
 
 def _choice_path(span) -> str:

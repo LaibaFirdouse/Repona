@@ -48,7 +48,7 @@ def fetch_more_evidence_choices(
         )
         choices = _merge_choices(
             choices,
-            implementation_chunk_choices(db, generation, limit=limit),
+            implementation_chunk_choices(db, generation, question=question, limit=limit),
             limit,
         )
     if paths:
@@ -93,7 +93,7 @@ def empty_pack_fallback_choices(
         hits = lexical_workflow_chunk_choices(db, generation, queries, limit=limit)
         if hits:
             return hits
-        impl = implementation_chunk_choices(db, generation, limit=limit)
+        impl = implementation_chunk_choices(db, generation, question=question, limit=limit)
         if impl:
             return impl
     if allow_overview:

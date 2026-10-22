@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from time import perf_counter
@@ -102,14 +103,18 @@ from app.retrieval.chunk_selection import (
     deprioritize_meta_config_spans,
     enrich_spans_with_bodies,
     expand_spans_with_sibling_bodies,
+    deprioritize_build_metadata_spans,
     implementation_chunk_choices,
     limit_spans_per_file,
     pick_best_symbol_chunk,
     pick_file_chunk,
+    wants_code_trace,
+    wants_domain_implementation,
     wants_substantive_implementation,
 )
 from app.retrieval.code_first import (
     CODE_FIRST_SUFFIX,
+    CODE_TRACE_SUFFIX,
     code_first_chunk_choices,
     deprioritize_readme_spans,
     wants_implementation_evidence,
@@ -139,8 +144,9 @@ from app.retrieval.workflow_boost import (
     loaded_needs_more_bodies,
     workflow_lexical_queries,
 )
+from app.retrieval.catalog_context import catalog_path_filters, indexed_path_spans_for_question
+from app.retrieval.question_intent import PLANNER_SYSTEM, answer_suffix_for_intent
 from app.retrieval.query_router import (
-    PLANNER_SYSTEM,
     RetrievalRequest,
     parse_planner_json,
     route_question,
@@ -177,6 +183,7 @@ SYSTEM_PROMPT = (
     "You answer questions about a code repository the way a helpful assistant would: clear, natural, and grounded "
     "only in the repository excerpts appended after the user's question. "
     "Do not invent paths, APIs, or behavior that are not supported by those excerpts. "
+    "Only describe files, symbols, and control flow that appear in the appended repository excerpts or path list. "
     "If something is unclear or missing, say so in plain language without describing your instructions, JSON, "
     "aliases, spans, packets, or how retrieval works. "
     "Never mention internal ids such as E1 in the user-facing text; put them only in evidence_ids. "
@@ -191,7 +198,11 @@ SYSTEM_PROMPT = (
     "An observed claim states a fact shown in the excerpts. "
     "An inference is a careful conclusion from those facts. "
     "A suggestion is advice, not a verified fact. "
-    "When the question asks how code works, walk through the implementation excerpt: inputs, calls, and returns. "
+    "When the question asks how code works, walk through the implementation excerpt in execution order: inputs, "
+    "branches, calls, and returns—use observed claims for lines that appear in excerpts and inference only when "
+    "the next step follows clearly from those lines. "
+    "Match answer shape to the question: precise location for lookups, ordered steps for traces, overview for "
+    "architecture asks, failure-focused for debugging. "
     "Cite tests only when the question is about tests. "
     "When a conversation block appears above the current question, use it to interpret follow-ups (e.g. \"that function\", "
     "\"what about tests\"). Answer the current question in that context; do not recap or meta-analyze earlier assistant replies. "
@@ -426,6 +437,8 @@ class AnswerService:
         overview_q = overview_question(search_question) or overview_question(question)
         code_first = wants_implementation_evidence(question, history)
         substantive = wants_substantive_implementation(question, history)
+        code_trace = wants_code_trace(question, history)
+        domain_impl = wants_domain_implementation(question, history)
         prefer_impl = False
         if outcome.pin_id is None or outcome.generation_id is None:
             raise RetrievalError(409, "the question has no pinned generation")
@@ -438,7 +451,25 @@ class AnswerService:
         step = _trace_step(trace, "01_load_generation_and_pin", step)
         yield {"type": "phase", "phase": "fetching"}
         planner = lambda _normalized: self._plan_question(question, history=history)
-        retrieval = route_question(search_question, planner=planner)
+        retrieval = route_question(
+            search_question,
+            planner=planner,
+            history=history,
+            intent_question=question,
+        )
+        catalog_paths = catalog_path_filters(
+            db,
+            generation.id,
+            question,
+            search_question=search_question,
+        )
+        if catalog_paths:
+            merged_paths = list(
+                dict.fromkeys(list(retrieval.path_filters) + catalog_paths)
+            )[:8]
+            retrieval = replace(retrieval, path_filters=merged_paths)
+            if trace is not None:
+                trace["catalog_path_filters"] = catalog_paths[:8]
         if trace is not None:
             if history:
                 trace["conversation_turns"] = len(history)
@@ -724,11 +755,13 @@ class AnswerService:
             trace["retrieval_budget"] = {"span_limit": span_limit, "per_file_cap": per_file_cap}
         workflow_queries = list(dict.fromkeys(workflow_lexical_queries(question) + workflow_lexical_queries(search_question)))
         if code_first:
-            boost = code_first_chunk_choices(db, generation, limit=span_limit)
+            boost = code_first_chunk_choices(db, generation, question=search_question, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
             spans = deprioritize_readme_spans(spans)
+            if domain_impl:
+                spans = deprioritize_build_metadata_spans(spans)
         elif prefer_impl:
-            boost = implementation_chunk_choices(db, generation, limit=span_limit)
+            boost = implementation_chunk_choices(db, generation, question=search_question, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
             if workflow_queries:
                 lexical_boost = lexical_workflow_chunk_choices(db, generation, workflow_queries, limit=span_limit)
@@ -737,13 +770,18 @@ class AnswerService:
                 doc_boost = overview_chunk_choices(db, generation, limit=8)
                 spans = _merge_chunk_choices(spans, doc_boost, span_limit)
             spans = deprioritize_meta_config_spans(spans)
+            if domain_impl:
+                spans = deprioritize_build_metadata_spans(spans)
         elif is_overview:
             boost = overview_chunk_choices(db, generation, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
         spans = preserve_named_spans(spans, named + expanded + behavior, span_limit)
         spans = enrich_spans_with_bodies(db, generation.id, spans)
         if prefer_impl or code_first:
-            spans = expand_spans_with_sibling_bodies(db, generation.id, spans)
+            max_sibling = 16
+            if retrieval.intent in {"execution_trace", "debugging"}:
+                max_sibling = 24
+            spans = expand_spans_with_sibling_bodies(db, generation.id, spans, max_added=max_sibling)
             cap = span_limit + settings.answer_overview_span_bonus
             spans = spans[:cap]
         if prefer_impl:
@@ -764,7 +802,7 @@ class AnswerService:
             and prefer_impl
             and loaded_needs_more_bodies(loaded)
         ):
-            reload_spans = implementation_chunk_choices(db, generation, limit=span_limit)
+            reload_spans = implementation_chunk_choices(db, generation, question=search_question, limit=span_limit)
             if workflow_queries:
                 reload_spans = _merge_chunk_choices(
                     reload_spans,
@@ -859,6 +897,9 @@ class AnswerService:
                 suffix += META_ANSWER_SUFFIX
             if code_first or substantive or prefer_impl:
                 suffix += CODE_FIRST_SUFFIX
+            if code_trace:
+                suffix += CODE_TRACE_SUFFIX
+            suffix += answer_suffix_for_intent(retrieval.intent)
             user_block = _dialog_user_block(question, dialog_notes, history_prefix=history_prefix)
             header = SYSTEM_PROMPT + suffix + "\n" + user_block
             packed, loaded_for_answer = _pack_repository_evidence(
@@ -1909,7 +1950,11 @@ def _pack_repository_evidence(
                 technology_text=lambda item: f"\ntechnology {item['id']} {item['name']} {item['evidence_text']}",
             )
         elif not loaded_work:
-            loaded_work = _indexed_file_spans(db, generation.id)
+            loaded_work = indexed_path_spans_for_question(
+                db,
+                generation.id,
+                search_question or "",
+            )
             packed = pack_evidence(
                 header,
                 loaded_work,

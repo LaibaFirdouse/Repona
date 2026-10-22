@@ -52,9 +52,14 @@ def retrieval_question_text(question: str, history: list[QaTurn]) -> str:
 
 def format_planner_user(question: str, history: list[QaTurn]) -> str:
     lines = [
-        "Return JSON for QueryPlanV1 fields only.",
+        "Return JSON for QueryPlanV1 fields only (schema_version=1).",
         "Resolve pronouns and references from the conversation when planning retrieval.",
-        "For workflow or how-it-works questions, set path_filters and lexical_queries toward handlers (app/api, lib, src, internal) not only README.",
+        "Classify intent precisely: exact_lookup, execution_trace, architecture_question, debugging, or conceptual_search.",
+        "Set path_filters and lexical_queries from the user's nouns, symbols, and any paths they mention—never invent "
+        "fixed directory names that do not appear in the question unless you infer a standard module name they named "
+        "(e.g. a class or file stem).",
+        "For tell-me-everything or purpose questions: architecture_question; README may appear in lexical_queries.",
+        "For how-it-works without a trace ask: conceptual_search with needs_source_bodies true.",
     ]
     if history:
         lines.append("")

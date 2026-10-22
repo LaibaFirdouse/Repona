@@ -9,6 +9,11 @@ from time import perf_counter
 from typing import Callable
 
 from app.core.config import settings
+from app.retrieval.question_intent import (
+    PLANNER_SYSTEM,
+    apply_heuristic_fallback,
+    merge_plan_with_heuristics,
+)
 from app.retrieval.query_plan import PLAN_SCHEMA_VERSION, QueryPlanV1, RetrievalLane
 from app.retrieval.query_terms import build_lexical_queries, extract_search_terms, normalize_question
 
@@ -64,9 +69,12 @@ def route_question(
     question: str,
     *,
     planner: Callable[[str], QueryPlanV1 | None] | None = None,
+    history: list | None = None,
+    intent_question: str | None = None,
 ) -> RetrievalRequest:
     started = perf_counter()
     normalized = normalize_question(question)
+    intent_source = (intent_question or question).strip()
     terms = extract_search_terms(normalized)
     paths = [token for token in terms if "/" in token or _PATH_HINT.search(token)]
     identifiers = [token for token in terms if token not in paths]
@@ -83,6 +91,7 @@ def route_question(
         plan = planner(normalized)
         if plan is not None and plan.schema_version == PLAN_SCHEMA_VERSION:
             used_planner = True
+            plan = merge_plan_with_heuristics(plan, intent_source, history)
             intent = plan.intent
             identifiers = plan.identifiers or identifiers
             paths = plan.path_filters or paths
@@ -97,6 +106,16 @@ def route_question(
         fallback_reason = "planner_not_provided"
     else:
         fallback_reason = "query_planner_disabled"
+
+    if not used_planner:
+        intent, lanes, max_hops, needs_bodies, paths, lexical = apply_heuristic_fallback(
+            question=intent_source,
+            history=history,
+            identifiers=identifiers,
+            path_filters=paths,
+            lexical_queries=lexical,
+            semantic_query=semantic,
+        )
 
     elapsed = (perf_counter() - started) * 1000
     return RetrievalRequest(
@@ -117,6 +136,7 @@ def route_question(
             "lanes": lanes,
             "used_llm_planner": used_planner,
             "planner_fallback_reason": fallback_reason,
+            "heuristic_intent": intent,
         },
     )
 
@@ -127,11 +147,3 @@ def parse_planner_json(raw: str) -> QueryPlanV1 | None:
         return QueryPlanV1.model_validate(payload)
     except (json.JSONDecodeError, ValueError):
         return None
-
-
-PLANNER_SYSTEM = (
-    "You plan repository code retrieval. Return JSON only matching QueryPlanV1. "
-    "When conversation history is present, treat the current message as a follow-up: "
-    "expand semantic_query and lexical_queries so they stand alone without the prior turns. "
-    "Do not answer the user. Do not emit SQL or Cypher."
-)
