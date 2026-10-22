@@ -1,0 +1,590 @@
+{
+  "repos": [
+    {
+      "tier": "small",
+      "url": "https://github.com/pallets/itsdangerous",
+      "questions": [],
+      "catalog": {
+        "files": 31,
+        "chunks": 125,
+        "symbol_chunks": 29
+      },
+      "runs": [
+        {
+          "question": "How does the library make sure a signed message was not tampered with?",
+          "phase": "cold",
+          "ok": true,
+          "latency_ms": 42511.38,
+          "retrieval": {
+            "intent": "execution_trace",
+            "paths_in_pack": [
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/encoding.py",
+              "src/itsdangerous/serializer.py",
+              "docs/make.bat",
+              ".github/workflows/lock.yaml"
+            ],
+            "implementation_paths": [
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/encoding.py",
+              "src/itsdangerous/serializer.py",
+              "docs/make.bat",
+              ".devcontainer/on-create-command.sh"
+            ],
+            "prefer_implementation": true,
+            "vectors_ready": 41,
+            "lexical_hits": 0,
+            "cold_retrieval_ms": 40013.94
+          },
+          "score": {
+            "citation_paths": [
+              "src/itsdangerous/timed.py"
+            ],
+            "implementation_paths": [
+              "src/itsdangerous/timed.py"
+            ],
+            "documentation_paths": [],
+            "packet_paths": [
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/encoding.py",
+              "src/itsdangerous/serializer.py",
+              "docs/make.bat",
+              ".github/workflows/lock.yaml"
+            ],
+            "intent": "execution_trace",
+            "catalog_path_filters": [
+              "docs/Makefile",
+              "docs/make.bat"
+            ],
+            "answer_word_count": 5,
+            "clarity": "thin",
+            "accuracy_heuristic": "code_sourced",
+            "citations_valid": null
+          },
+          "answer_preview": "Eval stub for sourcing check."
+        },
+        {
+          "question": "How does the library make sure a signed message was not tampered with?",
+          "phase": "warm",
+          "ok": true,
+          "latency_ms": 22589.19,
+          "retrieval": {
+            "intent": "execution_trace",
+            "paths_in_pack": [
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/encoding.py",
+              "src/itsdangerous/serializer.py",
+              "docs/make.bat",
+              ".github/workflows/lock.yaml"
+            ],
+            "implementation_paths": [
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/encoding.py",
+              "src/itsdangerous/serializer.py",
+              "docs/make.bat",
+              ".devcontainer/on-create-command.sh"
+            ],
+            "prefer_implementation": true,
+            "vectors_ready": 41,
+            "lexical_hits": 0,
+            "cold_retrieval_ms": 19874.71
+          },
+          "score": {
+            "citation_paths": [
+              "src/itsdangerous/timed.py"
+            ],
+            "implementation_paths": [
+              "src/itsdangerous/timed.py"
+            ],
+            "documentation_paths": [],
+            "packet_paths": [
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/encoding.py",
+              "src/itsdangerous/serializer.py",
+              "docs/make.bat",
+              ".github/workflows/lock.yaml"
+            ],
+            "intent": "execution_trace",
+            "catalog_path_filters": [
+              "docs/Makefile",
+              "docs/make.bat"
+            ],
+            "answer_word_count": 5,
+            "clarity": "thin",
+            "accuracy_heuristic": "code_sourced",
+            "citations_valid": null
+          },
+          "answer_preview": "Eval stub for sourcing check."
+        },
+        {
+          "question": "What happens when a time-limited signature is no longer valid?",
+          "phase": "cold",
+          "ok": true,
+          "latency_ms": 29657.72,
+          "retrieval": {
+            "intent": "execution_trace",
+            "paths_in_pack": [
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/encoding.py",
+              "README.md"
+            ],
+            "implementation_paths": [
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/encoding.py"
+            ],
+            "prefer_implementation": true,
+            "vectors_ready": 41,
+            "lexical_hits": 0,
+            "cold_retrieval_ms": 27115.89
+          },
+          "score": {
+            "citation_paths": [
+              "src/itsdangerous/timed.py"
+            ],
+            "implementation_paths": [
+              "src/itsdangerous/timed.py"
+            ],
+            "documentation_paths": [],
+            "packet_paths": [
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/encoding.py",
+              "README.md"
+            ],
+            "intent": "execution_trace",
+            "catalog_path_filters": [
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py"
+            ],
+            "answer_word_count": 5,
+            "clarity": "thin",
+            "accuracy_heuristic": "code_sourced",
+            "citations_valid": null
+          },
+          "answer_preview": "Eval stub for sourcing check."
+        },
+        {
+          "question": "What happens when a time-limited signature is no longer valid?",
+          "phase": "warm",
+          "ok": true,
+          "latency_ms": 28607.79,
+          "retrieval": {
+            "intent": "execution_trace",
+            "paths_in_pack": [
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/encoding.py",
+              "README.md"
+            ],
+            "implementation_paths": [
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/encoding.py"
+            ],
+            "prefer_implementation": true,
+            "vectors_ready": 41,
+            "lexical_hits": 0,
+            "cold_retrieval_ms": 26122.22
+          },
+          "score": {
+            "citation_paths": [
+              "src/itsdangerous/timed.py"
+            ],
+            "implementation_paths": [
+              "src/itsdangerous/timed.py"
+            ],
+            "documentation_paths": [],
+            "packet_paths": [
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "tests/test_itsdangerous/test_timed.py",
+              "src/itsdangerous/encoding.py",
+              "README.md"
+            ],
+            "intent": "execution_trace",
+            "catalog_path_filters": [
+              "src/itsdangerous/timed.py",
+              "tests/test_itsdangerous/test_timed.py"
+            ],
+            "answer_word_count": 5,
+            "clarity": "thin",
+            "accuracy_heuristic": "code_sourced",
+            "citations_valid": null
+          },
+          "answer_preview": "Eval stub for sourcing check."
+        }
+      ]
+    },
+    {
+      "tier": "medium",
+      "url": "https://github.com/pallets/flask",
+      "questions": [],
+      "catalog": {
+        "files": 132,
+        "chunks": 947,
+        "symbol_chunks": 19
+      },
+      "runs": [
+        {
+          "question": "When a client sends an HTTP request, how does the application pick which code runs?",
+          "phase": "cold",
+          "ok": true,
+          "latency_ms": 25582.17,
+          "retrieval": {
+            "intent": "conceptual_search",
+            "paths_in_pack": [
+              "src/flask/templating.py",
+              "src/flask/app.py",
+              "src/flask/app.py",
+              "tests/test_request.py",
+              "tests/test_request.py",
+              "src/flask/ctx.py",
+              "examples/tutorial/tests/conftest.py",
+              "examples/javascript/tests/conftest.py",
+              "tests/conftest.py",
+              "README.md",
+              "examples/celery/README.md"
+            ],
+            "implementation_paths": [
+              "src/flask/templating.py",
+              "src/flask/app.py",
+              "src/flask/app.py",
+              "tests/test_request.py",
+              "tests/test_request.py",
+              "src/flask/ctx.py",
+              "examples/tutorial/tests/conftest.py",
+              "examples/javascript/tests/conftest.py",
+              "tests/conftest.py"
+            ],
+            "prefer_implementation": false,
+            "vectors_ready": 27,
+            "lexical_hits": 0,
+            "cold_retrieval_ms": 22801.78
+          },
+          "score": {
+            "citation_paths": [
+              "src/flask/templating.py"
+            ],
+            "implementation_paths": [
+              "src/flask/templating.py"
+            ],
+            "documentation_paths": [],
+            "packet_paths": [
+              "src/flask/templating.py",
+              "src/flask/app.py",
+              "src/flask/app.py",
+              "tests/test_request.py",
+              "tests/test_request.py",
+              "src/flask/ctx.py",
+              "examples/tutorial/tests/conftest.py",
+              "examples/javascript/tests/conftest.py",
+              "tests/conftest.py",
+              "README.md",
+              "examples/celery/README.md"
+            ],
+            "intent": "conceptual_search",
+            "catalog_path_filters": [
+              ".github/ISSUE_TEMPLATE/feature-request.md",
+              ".github/pull_request_template.md",
+              "tests/test_request.py"
+            ],
+            "answer_word_count": 5,
+            "clarity": "thin",
+            "accuracy_heuristic": "code_sourced",
+            "citations_valid": null
+          },
+          "answer_preview": "Eval stub for sourcing check."
+        },
+        {
+          "question": "When a client sends an HTTP request, how does the application pick which code runs?",
+          "phase": "warm",
+          "ok": true,
+          "latency_ms": 26316.09,
+          "retrieval": {
+            "intent": "conceptual_search",
+            "paths_in_pack": [
+              "src/flask/templating.py",
+              "src/flask/app.py",
+              "src/flask/app.py",
+              "tests/test_request.py",
+              "tests/test_request.py",
+              "src/flask/ctx.py",
+              "examples/tutorial/tests/conftest.py",
+              "examples/javascript/tests/conftest.py",
+              "tests/conftest.py",
+              "README.md",
+              "examples/celery/README.md"
+            ],
+            "implementation_paths": [
+              "src/flask/templating.py",
+              "src/flask/app.py",
+              "src/flask/app.py",
+              "tests/test_request.py",
+              "tests/test_request.py",
+              "src/flask/ctx.py",
+              "examples/tutorial/tests/conftest.py",
+              "examples/javascript/tests/conftest.py",
+              "tests/conftest.py"
+            ],
+            "prefer_implementation": false,
+            "vectors_ready": 27,
+            "lexical_hits": 0,
+            "cold_retrieval_ms": 22841.94
+          },
+          "score": {
+            "citation_paths": [
+              "src/flask/templating.py"
+            ],
+            "implementation_paths": [
+              "src/flask/templating.py"
+            ],
+            "documentation_paths": [],
+            "packet_paths": [
+              "src/flask/templating.py",
+              "src/flask/app.py",
+              "src/flask/app.py",
+              "tests/test_request.py",
+              "tests/test_request.py",
+              "src/flask/ctx.py",
+              "examples/tutorial/tests/conftest.py",
+              "examples/javascript/tests/conftest.py",
+              "tests/conftest.py",
+              "README.md",
+              "examples/celery/README.md"
+            ],
+            "intent": "conceptual_search",
+            "catalog_path_filters": [
+              ".github/ISSUE_TEMPLATE/feature-request.md",
+              ".github/pull_request_template.md",
+              "tests/test_request.py"
+            ],
+            "answer_word_count": 5,
+            "clarity": "thin",
+            "accuracy_heuristic": "code_sourced",
+            "citations_valid": null
+          },
+          "answer_preview": "Eval stub for sourcing check."
+        },
+        {
+          "question": "How are errors during request handling surfaced back to the caller?",
+          "phase": "cold",
+          "ok": true,
+          "latency_ms": 26078.31,
+          "retrieval": {
+            "intent": "conceptual_search",
+            "paths_in_pack": [
+              "src/flask/app.py",
+              "src/flask/app.py",
+              "tests/test_request.py",
+              "tests/test_request.py",
+              "src/flask/templating.py",
+              "src/flask/ctx.py",
+              "tests/test_basic.py",
+              "examples/celery/README.md",
+              "examples/javascript/pyproject.toml",
+              "README.md",
+              "examples/celery/pyproject.toml"
+            ],
+            "implementation_paths": [
+              "src/flask/app.py",
+              "src/flask/app.py",
+              "tests/test_request.py",
+              "tests/test_request.py",
+              "src/flask/templating.py",
+              "src/flask/ctx.py",
+              "tests/test_basic.py",
+              "examples/javascript/pyproject.toml",
+              "examples/celery/pyproject.toml"
+            ],
+            "prefer_implementation": false,
+            "vectors_ready": 27,
+            "lexical_hits": 0,
+            "cold_retrieval_ms": 23272.97
+          },
+          "score": {
+            "citation_paths": [
+              "src/flask/app.py"
+            ],
+            "implementation_paths": [
+              "src/flask/app.py"
+            ],
+            "documentation_paths": [],
+            "packet_paths": [
+              "src/flask/app.py",
+              "src/flask/app.py",
+              "tests/test_request.py",
+              "tests/test_request.py",
+              "src/flask/templating.py",
+              "src/flask/ctx.py",
+              "tests/test_basic.py",
+              "examples/celery/README.md",
+              "examples/javascript/pyproject.toml",
+              "README.md",
+              "examples/celery/pyproject.toml"
+            ],
+            "intent": "conceptual_search",
+            "catalog_path_filters": [
+              ".github/ISSUE_TEMPLATE/feature-request.md",
+              ".github/pull_request_template.md",
+              "tests/test_request.py"
+            ],
+            "answer_word_count": 5,
+            "clarity": "thin",
+            "accuracy_heuristic": "code_sourced",
+            "citations_valid": null
+          },
+          "answer_preview": "Eval stub for sourcing check."
+        },
+        {
+          "question": "How are errors during request handling surfaced back to the caller?",
+          "phase": "warm",
+          "ok": true,
+          "latency_ms": 33212.21,
+          "retrieval": {
+            "intent": "conceptual_search",
+            "paths_in_pack": [
+              "src/flask/app.py",
+              "src/flask/app.py",
+              "tests/test_request.py",
+              "tests/test_request.py",
+              "src/flask/templating.py",
+              "src/flask/ctx.py",
+              "tests/test_basic.py",
+              "examples/celery/README.md",
+              "examples/javascript/pyproject.toml",
+              "README.md",
+              "examples/celery/pyproject.toml"
+            ],
+            "implementation_paths": [
+              "src/flask/app.py",
+              "src/flask/app.py",
+              "tests/test_request.py",
+              "tests/test_request.py",
+              "src/flask/templating.py",
+              "src/flask/ctx.py",
+              "tests/test_basic.py",
+              "examples/javascript/pyproject.toml",
+              "examples/celery/pyproject.toml"
+            ],
+            "prefer_implementation": false,
+            "vectors_ready": 27,
+            "lexical_hits": 0,
+            "cold_retrieval_ms": 30415.1
+          },
+          "score": {
+            "citation_paths": [
+              "src/flask/app.py"
+            ],
+            "implementation_paths": [
+              "src/flask/app.py"
+            ],
+            "documentation_paths": [],
+            "packet_paths": [
+              "src/flask/app.py",
+              "src/flask/app.py",
+              "tests/test_request.py",
+              "tests/test_request.py",
+              "src/flask/templating.py",
+              "src/flask/ctx.py",
+              "tests/test_basic.py",
+              "examples/celery/README.md",
+              "examples/javascript/pyproject.toml",
+              "README.md",
+              "examples/celery/pyproject.toml"
+            ],
+            "intent": "conceptual_search",
+            "catalog_path_filters": [
+              ".github/ISSUE_TEMPLATE/feature-request.md",
+              ".github/pull_request_template.md",
+              "tests/test_request.py"
+            ],
+            "answer_word_count": 5,
+            "clarity": "thin",
+            "accuracy_heuristic": "code_sourced",
+            "citations_valid": null
+          },
+          "answer_preview": "Eval stub for sourcing check."
+        }
+      ]
+    }
+  ]
+}

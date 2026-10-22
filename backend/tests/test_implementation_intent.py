@@ -48,7 +48,7 @@ class ImplementationIntentTests(unittest.TestCase):
                 self.relative_path = path
 
         spans = [_Span("Makefile"), _Span("include/ring.hpp"), _Span("benchmark/run_benchmark.cpp")]
-        ordered = deprioritize_harness_spans(spans)
+        ordered = deprioritize_build_metadata_spans(spans)
         self.assertEqual(ordered[0].relative_path, "include/ring.hpp")
 
     def test_planner_execution_trace(self) -> None:

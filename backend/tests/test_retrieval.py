@@ -272,7 +272,7 @@ class PacketTests(unittest.TestCase):
 
     def test_the_prompt_asks_for_natural_grounded_answers(self) -> None:
         self.assertIn("Never mention internal ids such as E1", SYSTEM_PROMPT)
-        self.assertIn("inputs, calls, and returns", SYSTEM_PROMPT)
+        self.assertIn("inputs, branches, calls, and returns", SYSTEM_PROMPT)
         self.assertIn("Cite tests only when the question is about tests", SYSTEM_PROMPT)
         self.assertIn("the way a helpful assistant would", SYSTEM_PROMPT)
         self.assertNotIn("evidence packet", SYSTEM_PROMPT)
