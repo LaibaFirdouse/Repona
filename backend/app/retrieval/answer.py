@@ -48,7 +48,11 @@ from app.retrieval.expansion import (
 )
 from app.retrieval.implementation import direct_implementation_claims, implementation_claims_for_spans
 from app.retrieval.structure import defer_structural_abstain, route_explanation, structure_decision
-from app.retrieval.more_evidence import empty_pack_fallback_choices, fetch_more_evidence_choices
+from app.retrieval.more_evidence import (
+    empty_pack_fallback_choices,
+    fetch_audit_recovery_choices,
+    fetch_more_evidence_choices,
+)
 from app.retrieval.graph_expand import (
     _EDGE_QUERY,
     next_symbol_frontier,
@@ -1053,13 +1057,51 @@ class AnswerService:
                 )
             claims = resolve_evidence_aliases(claims_payload, aliases)
             kept, citations_valid = review_claims(claims, valid_ids)
+            claims_before_audit = len(kept)
             filtered = filter_audit_claims(kept)
-            if trace is not None and len(filtered) < len(kept):
-                trace["audit_claims_filtered"] = len(kept) - len(filtered)
+            if trace is not None and len(filtered) < claims_before_audit:
+                trace["audit_claims_filtered"] = claims_before_audit - len(filtered)
             kept = filtered
             model_claims = claims
+            audit_only_response = claims_before_audit > 0 and not kept
+            pack_thin = loaded_needs_more_bodies(loaded_for_answer, min_bodies=2)
+            if (
+                not kept
+                and audit_only_response
+                and pack_thin
+                and allow_more
+                and settings.answer_retry_on_audit_only
+            ):
+                if trace is not None:
+                    trace["audit_triggered_more_evidence"] = True
+                recovery_choices = fetch_audit_recovery_choices(
+                    db,
+                    generation,
+                    question=search_question,
+                    loaded=loaded_for_answer,
+                    prefer_implementation=prefer_impl,
+                    allow_overview=pack_for_overview,
+                    limit=span_limit + settings.answer_overview_span_bonus,
+                    intent=retrieval.intent,
+                )
+                if recovery_choices:
+                    recovery_choices = expand_spans_with_sibling_bodies(
+                        db, generation.id, recovery_choices, max_added=16
+                    )
+                    recovery_loaded = _load_span_text(db, generation.id, revision, recovery_choices, blobs)
+                    loaded_for_answer = _merge_loaded_spans(recovery_loaded, loaded_for_answer)
+                    loaded_for_answer = deprioritize_thin_spans(loaded_for_answer)
+                    dialog_notes.append(
+                        "The first draft only described missing context; retrying with fuller excerpts."
+                    )
+                    continue
+                if trace is not None:
+                    trace["audit_recovery_no_chunks"] = True
             if not kept:
-                answered = Answer([], [], [], False, NO_CITED_CLAIM)
+                failure_message = (
+                    INSUFFICIENT_EVIDENCE if audit_only_response and pack_thin else NO_CITED_CLAIM
+                )
+                answered = Answer([], [], [], False, failure_message)
             else:
                 answered = Answer(
                     kept,

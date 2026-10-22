@@ -8,7 +8,8 @@ from app.models.catalog import IndexGeneration
 from app.retrieval.chunk_selection import implementation_chunk_choices
 from app.retrieval.fusion import ChunkChoice
 from app.retrieval.overview_boost import overview_chunk_choices
-from app.retrieval.query_terms import build_lexical_queries
+from app.retrieval.chunk_selection import is_meta_config_path
+from app.retrieval.query_terms import build_lexical_queries, extract_search_terms
 from app.retrieval.workflow_boost import lexical_workflow_chunk_choices
 
 
@@ -76,6 +77,80 @@ def fetch_more_evidence_choices(
             limit,
         )
     return choices
+
+
+def more_evidence_for_audit_recovery(question: str, loaded: list[dict]) -> dict:
+    """Synthetic need_evidence payload when the model only returned retrieval-meta prose."""
+    lexical = build_lexical_queries(question)[:4]
+    for term in extract_search_terms(question):
+        if term not in lexical and len(term) >= 3:
+            lexical.append(term)
+    path_contains: list[str] = []
+    seen_paths: set[str] = set()
+    for span in loaded:
+        raw = str(span.get("relative_path") or "").replace("\\", "/")
+        if not raw or is_meta_config_path(raw):
+            continue
+        if raw not in seen_paths:
+            seen_paths.add(raw)
+            path_contains.append(raw)
+        name = raw.rsplit("/", 1)[-1]
+        stem = name.rsplit(".", 1)[0] if "." in name else name
+        if stem and stem.lower() not in seen_paths and len(stem) >= 3:
+            seen_paths.add(stem.lower())
+            path_contains.append(stem)
+        if len(path_contains) >= 6:
+            break
+    return {
+        "note": "Replacing a retrieval-meta reply with fuller source excerpts for this question.",
+        "lexical_queries": lexical[:4],
+        "path_contains": path_contains[:6],
+    }
+
+
+def fetch_audit_recovery_choices(
+    db: Session,
+    generation: IndexGeneration,
+    *,
+    question: str,
+    loaded: list[dict],
+    prefer_implementation: bool,
+    allow_overview: bool,
+    limit: int,
+    intent: str = "conceptual_search",
+    trace_anchors_enabled: bool = True,
+) -> list[ChunkChoice]:
+    """Extra chunks after audit-only model output on a thin pack."""
+    more = more_evidence_for_audit_recovery(question, loaded)
+    choices = fetch_more_evidence_choices(
+        db,
+        generation,
+        question=question,
+        more_evidence=more,
+        prefer_implementation=prefer_implementation,
+        allow_overview=allow_overview,
+        limit=limit,
+    )
+    if trace_anchors_enabled:
+        from app.retrieval.trace_anchors import catalog_trace_anchor_choices, question_wants_trace_anchors
+
+        if question_wants_trace_anchors(question, intent):
+            anchors = catalog_trace_anchor_choices(db, generation, question, limit=min(8, limit))
+            choices = _merge_choices(anchors, choices, limit)
+    if len(choices) < max(4, limit // 3):
+        choices = _merge_choices(
+            choices,
+            empty_pack_fallback_choices(
+                db,
+                generation,
+                question=question,
+                prefer_implementation=prefer_implementation,
+                allow_overview=allow_overview,
+                limit=limit,
+            ),
+            limit,
+        )
+    return choices[:limit]
 
 
 def empty_pack_fallback_choices(
