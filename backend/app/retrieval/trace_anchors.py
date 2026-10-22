@@ -7,12 +7,13 @@ import re
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.models.catalog import File, GenerationFile, IndexGeneration, Symbol
+from app.models.catalog import Chunk, File, GenerationFile, IndexGeneration, Symbol
 from app.retrieval.catalog_context import (
     chunk_choices_for_files,
     generation_has_path,
     _files_matching_terms,
 )
+from app.core.config import settings
 from app.retrieval.chunk_selection import is_test_path, pick_best_symbol_chunk
 from app.retrieval.fusion import ChunkChoice
 from app.retrieval.query_plan import QueryIntent
@@ -167,6 +168,34 @@ def catalog_trace_anchor_choices(
             if not _symbol_not_in_test_file(db, symbol_id):
                 continue
             add(pick_best_symbol_chunk(db, generation.id, symbol_id))
+
+    if (
+        graph_session is not None
+        and settings.trace_anchor_out_degree_enabled
+        and len(choices) < limit
+    ):
+        from app.retrieval.graph_expand import graph_high_out_degree_symbol_ids
+
+        skip_ids = set(seed_ids)
+        for choice in choices:
+            chunk = db.get(Chunk, choice.chunk_id)
+            if chunk is not None and chunk.symbol_id:
+                skip_ids.add(chunk.symbol_id)
+        for symbol_id, path, _degree in graph_high_out_degree_symbol_ids(
+            graph_session,
+            generation.id,
+            limit=settings.trace_anchor_out_degree_limit,
+        ):
+            if symbol_id in skip_ids:
+                continue
+            if path and is_test_path(path):
+                continue
+            if not _symbol_not_in_test_file(db, symbol_id):
+                continue
+            skip_ids.add(symbol_id)
+            add(pick_best_symbol_chunk(db, generation.id, symbol_id))
+            if len(choices) >= limit:
+                break
 
     files = _entry_catalog_files(db, generation.id, question, limit=6)
     if files:

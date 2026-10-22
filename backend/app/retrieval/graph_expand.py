@@ -23,6 +23,19 @@ RETURN anchor.id AS anchor_id,
        startNode(rel).id = anchor.id AS outgoing
 """
 
+_OUT_DEGREE_QUERY = """
+MATCH (generation:IndexGeneration {id: $generation_id})
+MATCH (anchor)-[rel]->(other)
+WHERE rel.index_generation_id = generation.id
+  AND rel.writer_epoch = generation.graph_epoch
+  AND type(rel) IN ['CALLS', 'REFERENCES']
+RETURN anchor.id AS symbol_id,
+       coalesce(anchor.relative_path, '') AS relative_path,
+       count(rel) AS out_degree
+ORDER BY out_degree DESC, symbol_id
+LIMIT $fetch_limit
+"""
+
 
 def next_symbol_frontier(
     frontier: set[str],
@@ -108,3 +121,31 @@ def graph_neighbor_symbol_ids(
             if len(collected) >= limit:
                 return collected[:limit]
     return collected[:limit]
+
+
+def graph_high_out_degree_symbol_ids(
+    graph_session,
+    generation_id: str,
+    *,
+    limit: int = 4,
+    fetch_limit: int = 32,
+) -> list[tuple[str, str, int]]:
+    """Symbols with the most outgoing CALLS/REFERENCES edges in this generation."""
+    if limit < 1:
+        return []
+    records = graph_session.run(
+        _OUT_DEGREE_QUERY,
+        generation_id=generation_id,
+        fetch_limit=max(limit, fetch_limit),
+    )
+    ranked: list[tuple[str, str, int]] = []
+    for record in records:
+        symbol_id = str(record["symbol_id"])
+        path = str(record["relative_path"] or "")
+        degree = int(record["out_degree"] or 0)
+        if degree < 1:
+            continue
+        ranked.append((symbol_id, path, degree))
+        if len(ranked) >= fetch_limit:
+            break
+    return ranked[:limit]

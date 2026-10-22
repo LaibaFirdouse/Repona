@@ -772,16 +772,14 @@ class AnswerService:
         ):
             graph_session = None
             graph_hops = 0
-            if (
-                settings.trace_anchor_graph_enabled
-                and "graph" in retrieval.lanes
-                and settings.trace_anchor_graph_hops > 0
-            ):
-                try:
-                    graph_session = self._graph_session()
-                    graph_hops = settings.trace_anchor_graph_hops
-                except Exception:
-                    graph_session = None
+            if settings.trace_anchor_graph_enabled and "graph" in retrieval.lanes:
+                need_graph = settings.trace_anchor_graph_hops > 0 or settings.trace_anchor_out_degree_enabled
+                if need_graph:
+                    try:
+                        graph_session = self._graph_session()
+                        graph_hops = settings.trace_anchor_graph_hops
+                    except Exception:
+                        graph_session = None
             try:
                 anchor_choices = catalog_trace_anchor_choices(
                     db,
@@ -802,6 +800,8 @@ class AnswerService:
                     trace["trace_anchor_chunks"] = len(anchor_choices)
                     if graph_hops:
                         trace["trace_anchor_graph_hops"] = graph_hops
+                    if settings.trace_anchor_out_degree_enabled and graph_session is not None:
+                        trace["trace_anchor_out_degree"] = settings.trace_anchor_out_degree_limit
         if code_first:
             boost = code_first_chunk_choices(db, generation, question=search_question, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
