@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.catalog import Chunk, File, GenerationChunk, GenerationFile, IndexGeneration
 from app.retrieval.conversation_context import QaTurn
-from app.retrieval.chunk_selection import is_meta_config_path, representative_chunk
+from app.retrieval.chunk_selection import is_meta_config_path, representative_chunk, wants_code_trace
 from app.retrieval.fusion import ChunkChoice
 
 _CODE_FIRST = re.compile(
@@ -25,6 +25,7 @@ _CODE_FIRST = re.compile(
 
 _CODE_PATH_TERMS = (
     "include/",
+    "adapters/",
     "src/",
     "lib/",
     "internal/",
@@ -44,6 +45,8 @@ def code_first_question(question: str) -> bool:
 
 def wants_implementation_evidence(question: str, history: list[QaTurn]) -> bool:
     if code_first_question(question):
+        return True
+    if wants_code_trace(question, history):
         return True
     return any(code_first_question(turn.question) for turn in history[-4:])
 
@@ -120,4 +123,11 @@ CODE_FIRST_SUFFIX = (
     "Do not say \"the excerpts\", \"this packet\", or \"README alone\". "
     "Write in flowing paragraphs: do not put a file path, import list, or export name in every sentence. "
     "When the question covers several flows or features, explain each from the code excerpts provided—do not stop at imports."
+)
+
+CODE_TRACE_SUFFIX = (
+    "\nThe user wants a step-by-step walkthrough in the implementation excerpts: follow real control flow "
+    "(entry function → branches → calls → returns) in order. Name functions and key variables from the code. "
+    "Do not substitute Makefile/README/build docs when class or function bodies for the topic are present. "
+    "If only a benchmark driver is present, trace that driver line-by-line; do not claim internals that are not in the excerpts."
 )

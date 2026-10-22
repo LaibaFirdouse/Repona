@@ -59,11 +59,28 @@ _IMPL_PATH_TERMS = (
     "backend/",
     "server/",
     "src/",
+    "include/",
+    "adapters/",
     "pages/",
     "components/",
     "handlers/",
     "routes/",
     "api/",
+)
+
+_HARNESS_PATH_MARKERS = (
+    "benchmark/",
+    "cmake",
+    "makefile",
+    "_bench.",
+    "run_benchmark",
+)
+
+_DOMAIN_IMPL = re.compile(
+    r"\b("
+    r"queue|ring|enqueue|dequeue|spsc|mpsc|mpmc|lock[- ]?free|mutex|channel|buffer"
+    r")\b",
+    re.I,
 )
 
 
@@ -87,6 +104,30 @@ def wants_code_trace(question: str, history: list[QaTurn]) -> bool:
     if _CODE_TRACE.search(question.strip()):
         return True
     return any(_CODE_TRACE.search(turn.question) for turn in history[-4:])
+
+
+def wants_domain_implementation(question: str, history: list[QaTurn]) -> bool:
+    """Data-structure / algorithm questions that should prefer headers and lib code over harness files."""
+    if _DOMAIN_IMPL.search(question.strip()):
+        return True
+    return any(_DOMAIN_IMPL.search(turn.question) for turn in history[-4:])
+
+
+def _is_harness_path(relative_path: str) -> bool:
+    path = relative_path.replace("\\", "/").lower()
+    name = path.rsplit("/", 1)[-1]
+    if is_meta_config_path(relative_path):
+        return True
+    if name in {"makefile", "cmakelists.txt"}:
+        return True
+    return any(marker in path for marker in _HARNESS_PATH_MARKERS)
+
+
+def deprioritize_harness_spans(spans: list) -> list:
+    """Push benchmark drivers and build metadata behind implementation sources."""
+    front = [span for span in spans if not _is_harness_path(_choice_path(span))]
+    back = [span for span in spans if _is_harness_path(_choice_path(span))]
+    return front + back if front else spans
 
 
 def representative_chunk(chunks: list[Chunk]) -> Chunk | None:

@@ -10,8 +10,8 @@ class QueryRouterTests(unittest.TestCase):
         request = route_question("Where is authenticate_user defined?", planner=None)
         self.assertIn("symbol", request.lanes)
         self.assertIn("lexical", request.lanes)
-        self.assertIn("vector", request.lanes)
         self.assertFalse(request.used_llm_planner)
+        self.assertEqual(request.intent, "exact_lookup")
 
     def test_planner_overrides_lanes(self) -> None:
         def planner(_question: str) -> QueryPlanV1:

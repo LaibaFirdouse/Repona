@@ -102,14 +102,18 @@ from app.retrieval.chunk_selection import (
     deprioritize_meta_config_spans,
     enrich_spans_with_bodies,
     expand_spans_with_sibling_bodies,
+    deprioritize_harness_spans,
     implementation_chunk_choices,
     limit_spans_per_file,
     pick_best_symbol_chunk,
     pick_file_chunk,
+    wants_code_trace,
+    wants_domain_implementation,
     wants_substantive_implementation,
 )
 from app.retrieval.code_first import (
     CODE_FIRST_SUFFIX,
+    CODE_TRACE_SUFFIX,
     code_first_chunk_choices,
     deprioritize_readme_spans,
     wants_implementation_evidence,
@@ -139,8 +143,8 @@ from app.retrieval.workflow_boost import (
     loaded_needs_more_bodies,
     workflow_lexical_queries,
 )
+from app.retrieval.question_intent import PLANNER_SYSTEM, answer_suffix_for_intent
 from app.retrieval.query_router import (
-    PLANNER_SYSTEM,
     RetrievalRequest,
     parse_planner_json,
     route_question,
@@ -191,7 +195,11 @@ SYSTEM_PROMPT = (
     "An observed claim states a fact shown in the excerpts. "
     "An inference is a careful conclusion from those facts. "
     "A suggestion is advice, not a verified fact. "
-    "When the question asks how code works, walk through the implementation excerpt: inputs, calls, and returns. "
+    "When the question asks how code works, walk through the implementation excerpt in execution order: inputs, "
+    "branches, calls, and returns—use observed claims for lines that appear in excerpts and inference only when "
+    "the next step follows clearly from those lines. "
+    "Match answer shape to the question: precise location for lookups, ordered steps for traces, overview for "
+    "architecture asks, failure-focused for debugging. "
     "Cite tests only when the question is about tests. "
     "When a conversation block appears above the current question, use it to interpret follow-ups (e.g. \"that function\", "
     "\"what about tests\"). Answer the current question in that context; do not recap or meta-analyze earlier assistant replies. "
@@ -426,6 +434,8 @@ class AnswerService:
         overview_q = overview_question(search_question) or overview_question(question)
         code_first = wants_implementation_evidence(question, history)
         substantive = wants_substantive_implementation(question, history)
+        code_trace = wants_code_trace(question, history)
+        domain_impl = wants_domain_implementation(question, history)
         prefer_impl = False
         if outcome.pin_id is None or outcome.generation_id is None:
             raise RetrievalError(409, "the question has no pinned generation")
@@ -438,7 +448,12 @@ class AnswerService:
         step = _trace_step(trace, "01_load_generation_and_pin", step)
         yield {"type": "phase", "phase": "fetching"}
         planner = lambda _normalized: self._plan_question(question, history=history)
-        retrieval = route_question(search_question, planner=planner)
+        retrieval = route_question(
+            search_question,
+            planner=planner,
+            history=history,
+            intent_question=question,
+        )
         if trace is not None:
             if history:
                 trace["conversation_turns"] = len(history)
@@ -727,6 +742,8 @@ class AnswerService:
             boost = code_first_chunk_choices(db, generation, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
             spans = deprioritize_readme_spans(spans)
+            if domain_impl:
+                spans = deprioritize_harness_spans(spans)
         elif prefer_impl:
             boost = implementation_chunk_choices(db, generation, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
@@ -737,6 +754,8 @@ class AnswerService:
                 doc_boost = overview_chunk_choices(db, generation, limit=8)
                 spans = _merge_chunk_choices(spans, doc_boost, span_limit)
             spans = deprioritize_meta_config_spans(spans)
+            if domain_impl:
+                spans = deprioritize_harness_spans(spans)
         elif is_overview:
             boost = overview_chunk_choices(db, generation, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
@@ -859,6 +878,9 @@ class AnswerService:
                 suffix += META_ANSWER_SUFFIX
             if code_first or substantive or prefer_impl:
                 suffix += CODE_FIRST_SUFFIX
+            if code_trace:
+                suffix += CODE_TRACE_SUFFIX
+            suffix += answer_suffix_for_intent(retrieval.intent)
             user_block = _dialog_user_block(question, dialog_notes, history_prefix=history_prefix)
             header = SYSTEM_PROMPT + suffix + "\n" + user_block
             packed, loaded_for_answer = _pack_repository_evidence(
