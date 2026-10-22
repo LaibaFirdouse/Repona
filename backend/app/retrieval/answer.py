@@ -102,7 +102,7 @@ from app.retrieval.chunk_selection import (
     deprioritize_meta_config_spans,
     enrich_spans_with_bodies,
     expand_spans_with_sibling_bodies,
-    deprioritize_harness_spans,
+    deprioritize_build_metadata_spans,
     implementation_chunk_choices,
     limit_spans_per_file,
     pick_best_symbol_chunk,
@@ -743,7 +743,7 @@ class AnswerService:
             spans = _merge_chunk_choices(spans, boost, span_limit)
             spans = deprioritize_readme_spans(spans)
             if domain_impl:
-                spans = deprioritize_harness_spans(spans)
+                spans = deprioritize_build_metadata_spans(spans)
         elif prefer_impl:
             boost = implementation_chunk_choices(db, generation, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
@@ -755,7 +755,7 @@ class AnswerService:
                 spans = _merge_chunk_choices(spans, doc_boost, span_limit)
             spans = deprioritize_meta_config_spans(spans)
             if domain_impl:
-                spans = deprioritize_harness_spans(spans)
+                spans = deprioritize_build_metadata_spans(spans)
         elif is_overview:
             boost = overview_chunk_choices(db, generation, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)

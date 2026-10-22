@@ -25,7 +25,6 @@ _CODE_FIRST = re.compile(
 
 _CODE_PATH_TERMS = (
     "include/",
-    "adapters/",
     "src/",
     "lib/",
     "internal/",

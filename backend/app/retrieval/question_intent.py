@@ -47,22 +47,6 @@ _EXECUTION_TRACE = re.compile(
     re.I,
 )
 
-_HTTP_SERVICE = re.compile(
-    r"\b("
-    r"http|api route|route handler|endpoint|middleware|fastapi|flask|django|"
-    r"express|next\.?js|graphql|websocket|grpc|rest api|ask/stream|/api/"
-    r")\b",
-    re.I,
-)
-
-_NATIVE_BENCH = re.compile(
-    r"\b("
-    r"make run|cmake|benchmark|bench\b|throughput|latency|producer|consumer|"
-    r"queue|enqueue|dequeue|lock[- ]?free|spsc|mpmc|ring buffer"
-    r")\b",
-    re.I,
-)
-
 _CONCEPTUAL_HOW = re.compile(
     r"\b(how does|how do|what does|what do|explain how|explain what)\b",
     re.I,
@@ -120,7 +104,7 @@ def default_graph_hops(intent: QueryIntent) -> int:
 
 
 def heuristic_path_filters(question: str, history: list[QaTurn] | None = None) -> list[str]:
-    """Bias retrieval toward the part of the repo the question is about."""
+    """Path hints from the question text only—no repo-specific prefix lists."""
     text = _combined_text(question, history)
     hints: list[str] = []
     seen: set[str] = set()
@@ -132,17 +116,9 @@ def heuristic_path_filters(question: str, history: list[QaTurn] | None = None) -
         seen.add(token)
         hints.append(token)
 
-    if _HTTP_SERVICE.search(text):
-        for item in ("app/api", "routes", "handlers", "middleware", "backend/app", "pages/api"):
-            add(item)
-    if _NATIVE_BENCH.search(text) and not _HTTP_SERVICE.search(text):
-        for item in ("include/", "adapters/", "benchmark/", "src/", "lib/"):
-            add(item)
-    elif _NATIVE_BENCH.search(text):
-        for item in ("include/", "adapters/"):
-            add(item)
-
     for match in re.finditer(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+\.[A-Za-z0-9]+", text):
+        add(match.group(0))
+    for match in re.finditer(r"\b(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\b", text):
         add(match.group(0))
     return hints[:8]
 
@@ -254,15 +230,16 @@ PLANNER_SYSTEM = (
     "- debugging: errors, failures, unexpected behavior, regressions.\n"
     "- conceptual_search: what something does or means without requiring a full trace.\n\n"
     "Disambiguation:\n"
-    "- 'request flow' in a web/API repo → execution_trace, path_filters toward routes/handlers/api, needs_source_bodies true.\n"
-    "- 'request flow' / 'make run' / benchmark / queue in a C++/systems repo → execution_trace toward include/, adapters/, "
-    "benchmark/ (not only README/Makefile).\n"
-    "- 'how exactly' / 'trace' / 'step by step' → execution_trace with rich lexical_queries for the subject noun.\n"
+    "- 'request flow' / 'how does a request get handled' → execution_trace; path_filters and lexical_queries must name "
+    "concrete modules, routes, handlers, or entrypoints inferred from the question and repo kind—not README alone.\n"
+    "- 'how exactly' / 'trace' / 'step by step' → execution_trace; lexical_queries must include the subject "
+    "(class, function, or file stem the user named).\n"
     "- 'tell me everything' / 'overview' → architecture_question; vector+lexical lanes, moderate graph hops.\n\n"
     "Fields:\n"
     "- semantic_query: standalone English retrieval phrase (resolve follow-ups from conversation).\n"
     "- lexical_queries: 2–4 short Postgres tsquery phrases (symbols, paths, domain terms).\n"
-    "- path_filters: up to 8 path substrings (e.g. app/api/v1, include/, benchmark/run_benchmark.cpp).\n"
+    "- path_filters: up to 8 path substrings copied from the question or likely source paths for the subject "
+    "(use path segments that appear in the user's words when present).\n"
     "- identifiers: symbol or type names mentioned or implied.\n"
     "- retrieval_lanes: subset of symbol, lexical, vector, graph (exact_lookup often drops vector).\n"
     "- max_graph_hops: 0–3 (2 for trace/debugging).\n"

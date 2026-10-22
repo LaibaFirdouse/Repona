@@ -1,7 +1,7 @@
 import unittest
 
 from app.retrieval.chunk_selection import (
-    deprioritize_harness_spans,
+    deprioritize_build_metadata_spans,
     wants_code_trace,
     wants_domain_implementation,
     wants_substantive_implementation,

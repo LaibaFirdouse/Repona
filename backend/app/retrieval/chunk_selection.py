@@ -60,7 +60,6 @@ _IMPL_PATH_TERMS = (
     "server/",
     "src/",
     "include/",
-    "adapters/",
     "pages/",
     "components/",
     "handlers/",
@@ -68,13 +67,7 @@ _IMPL_PATH_TERMS = (
     "api/",
 )
 
-_HARNESS_PATH_MARKERS = (
-    "benchmark/",
-    "cmake",
-    "makefile",
-    "_bench.",
-    "run_benchmark",
-)
+_BUILD_FILE_NAMES = frozenset({"makefile", "cmakelists.txt"})
 
 _DOMAIN_IMPL = re.compile(
     r"\b("
@@ -113,20 +106,18 @@ def wants_domain_implementation(question: str, history: list[QaTurn]) -> bool:
     return any(_DOMAIN_IMPL.search(turn.question) for turn in history[-4:])
 
 
-def _is_harness_path(relative_path: str) -> bool:
+def _is_build_metadata_path(relative_path: str) -> bool:
     path = relative_path.replace("\\", "/").lower()
     name = path.rsplit("/", 1)[-1]
     if is_meta_config_path(relative_path):
         return True
-    if name in {"makefile", "cmakelists.txt"}:
-        return True
-    return any(marker in path for marker in _HARNESS_PATH_MARKERS)
+    return name in _BUILD_FILE_NAMES
 
 
-def deprioritize_harness_spans(spans: list) -> list:
-    """Push benchmark drivers and build metadata behind implementation sources."""
-    front = [span for span in spans if not _is_harness_path(_choice_path(span))]
-    back = [span for span in spans if _is_harness_path(_choice_path(span))]
+def deprioritize_build_metadata_spans(spans: list) -> list:
+    """Push README/Makefile/CMake-style paths behind implementation sources when boosting code bodies."""
+    front = [span for span in spans if not _is_build_metadata_path(_choice_path(span))]
+    back = [span for span in spans if _is_build_metadata_path(_choice_path(span))]
     return front + back if front else spans
 
 

@@ -25,13 +25,13 @@ class QuestionIntentTests(unittest.TestCase):
     def test_architecture_overview(self) -> None:
         self.assertEqual(classify_intent("Tell me everything about this repo"), "architecture_question")
 
-    def test_bench_repo_path_hints(self) -> None:
-        hints = heuristic_path_filters("how exactly this queue works")
-        self.assertTrue(any("include" in item for item in hints))
+    def test_path_hints_from_question_only(self) -> None:
+        hints = heuristic_path_filters("walk through include/ring.hpp enqueue logic")
+        self.assertIn("include/ring.hpp", hints)
 
-    def test_http_path_hints(self) -> None:
-        hints = heuristic_path_filters("Explain the HTTP request flow for POST /api/v1/ask")
-        self.assertTrue(any("api" in item or "routes" in item for item in hints))
+    def test_path_hints_no_invented_prefixes(self) -> None:
+        hints = heuristic_path_filters("how exactly this queue works")
+        self.assertEqual(hints, [])
 
     def test_heuristic_fallback_without_planner(self) -> None:
         request = route_question("Explain the core request flow", planner=None)
