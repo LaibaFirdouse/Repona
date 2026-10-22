@@ -13,6 +13,12 @@ class QuestionIntentTests(unittest.TestCase):
     def test_request_flow_is_execution_trace(self) -> None:
         self.assertEqual(classify_intent("Explain the core request flow"), "execution_trace")
 
+    def test_generic_how_it_works_is_conceptual_not_trace(self) -> None:
+        self.assertEqual(
+            classify_intent("How does the main entry point work?"),
+            "conceptual_search",
+        )
+
     def test_http_routing_question_is_execution_trace(self) -> None:
         self.assertEqual(
             classify_intent(

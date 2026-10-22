@@ -6,7 +6,8 @@ from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from app.models.catalog import Chunk, GenerationChunk, IndexGeneration
-from app.retrieval.chunk_selection import upgrade_chunk_choice
+from app.core.config import settings
+from app.retrieval.chunk_selection import loaded_span_is_substantive, upgrade_chunk_choice
 from app.retrieval.fusion import ChunkChoice
 from app.retrieval.query_terms import build_lexical_queries, extract_search_terms
 
@@ -76,21 +77,23 @@ def lexical_workflow_chunk_choices(
     return choices
 
 
-def loaded_needs_more_bodies(loaded: list[dict], *, min_bodies: int = 4, min_bytes: int = 350) -> bool:
+def loaded_needs_more_bodies(
+    loaded: list[dict],
+    *,
+    min_bodies: int = 4,
+    min_bytes: int | None = None,
+) -> bool:
     """True when the pack is mostly headers/imports or too few substantial bodies."""
     if not loaded:
         return True
-    substantial = [
-        span
-        for span in loaded
-        if span.get("chunk_kind") == "symbol_body" and int(span.get("raw_bytes") or 0) >= min_bytes
-    ]
+    floor = min_bytes if min_bytes is not None else settings.answer_min_substantive_chunk_bytes
+    substantial = [span for span in loaded if loaded_span_is_substantive(span, min_bytes=floor)]
     if len(substantial) < min_bodies:
         return True
-    importish = sum(
+    thin = sum(
         1
         for span in loaded
-        if span.get("chunk_kind") in {"import_block", "file_overview"}
-        or int(span.get("raw_bytes") or 0) < 120
+        if span.get("chunk_kind") in {"import_block", "file_overview", "symbol_part"}
+        or int(span.get("raw_bytes") or 0) < min(120, floor)
     )
-    return importish > len(loaded) // 2
+    return thin > len(loaded) // 2

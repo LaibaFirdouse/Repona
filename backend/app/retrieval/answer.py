@@ -104,6 +104,7 @@ from app.retrieval.chunk_selection import (
     enrich_spans_with_bodies,
     expand_spans_with_sibling_bodies,
     deprioritize_build_metadata_spans,
+    deprioritize_thin_spans,
     implementation_chunk_choices,
     limit_spans_per_file,
     omit_test_spans_unless_asked,
@@ -798,11 +799,7 @@ class AnswerService:
             search_question,
         )
         loaded = limit_spans_per_file(loaded, max_per_file=per_file_cap)
-        if (
-            settings.answer_impl_reload_on_thin
-            and prefer_impl
-            and loaded_needs_more_bodies(loaded)
-        ):
+        if settings.answer_impl_reload_on_thin and loaded_needs_more_bodies(loaded):
             reload_spans = implementation_chunk_choices(db, generation, question=search_question, limit=span_limit)
             if workflow_queries:
                 reload_spans = _merge_chunk_choices(
@@ -817,7 +814,24 @@ class AnswerService:
             if trace is not None:
                 trace["impl_evidence_reload"] = True
         loaded = omit_test_spans_unless_asked(loaded, search_question)
+        if (
+            settings.answer_overview_when_pack_thin
+            and loaded_needs_more_bodies(loaded, min_bodies=2)
+        ):
+            doc_choices = overview_chunk_choices(
+                db,
+                generation,
+                extra_lexical=extract_search_terms(search_question)[:8],
+                limit=4,
+            )
+            if doc_choices:
+                doc_choices = enrich_spans_with_bodies(db, generation.id, doc_choices)
+                doc_loaded = _load_span_text(db, generation.id, revision, doc_choices, blobs)
+                loaded = _merge_loaded_spans(doc_loaded, loaded)
+                if trace is not None:
+                    trace["overview_thin_pack_supplement"] = len(doc_loaded)
         step = _trace_step(trace, "08_snapshot_validate_and_load_span_text", step)
+        loaded = deprioritize_thin_spans(loaded)
         priority_ids = {item.chunk_id for item in named + expanded + behavior}
         score_terms = extract_search_terms(search_question)
         priority_loaded = sort_loaded_spans(

@@ -41,6 +41,20 @@ _CODE_TRACE = re.compile(
     re.I,
 )
 
+_GENERIC_HOW_IT_WORKS = re.compile(r"\bhow (?:is|does|are|do) .+ work\b", re.I)
+
+_IMPLEMENTATION_STRONG = re.compile(
+    r"\b("
+    r"workflow|workflows|end[- ]to[- ]end|request flow|"
+    r"how (?:is|does|are|do) .+ (?:stored|persist|implemented|make sure|ensure|guarantee|validate|verify|pick|choose|select|route|handle)|"
+    r"implemented in code|in code|data (?:is )?stored|persist(?:ed|ence)?|schema|api route|route handler|"
+    r"functions? implemented|list and explain|what (?:are|is) the different|"
+    r"implementation|source code|from code|not (?:the )?readme|"
+    r"http request|which code runs|pick which code|request handling|errors during request"
+    r")\b",
+    re.I,
+)
+
 _IMPLEMENTATION_QUESTION = re.compile(
     r"\b("
     r"workflow|workflows|end[- ]to[- ]end|request flow|how (?:is|does|are|do) .+ (?:work|stored|persist|implemented|make sure|ensure|guarantee|validate|verify|pick|choose|select|route|handle)|"
@@ -81,6 +95,44 @@ def wants_substantive_implementation(question: str, history: list[QaTurn]) -> bo
         _HOW_EXACTLY.search(turn.question) or _IMPLEMENTATION_QUESTION.search(turn.question)
         for turn in history[-4:]
     )
+
+
+def wants_trace_intent_substantive(question: str, history: list[QaTurn]) -> bool:
+    """Strong implementation cues for execution_trace intent—not bare 'how does X work' alone."""
+    text = question.strip()
+    if _HOW_EXACTLY.search(text) or _IMPLEMENTATION_STRONG.search(text):
+        return True
+    if _GENERIC_HOW_IT_WORKS.search(text):
+        return False
+    return any(
+        _HOW_EXACTLY.search(turn.question) or _IMPLEMENTATION_STRONG.search(turn.question)
+        for turn in history[-4:]
+    )
+
+
+def chunk_byte_length(chunk: Chunk) -> int:
+    return max(0, int(chunk.end_byte) - int(chunk.start_byte))
+
+
+def is_substantive_chunk_kind(kind: str, raw_bytes: int, *, min_bytes: int | None = None) -> bool:
+    floor = min_bytes if min_bytes is not None else settings.answer_min_substantive_chunk_bytes
+    if kind == "symbol_body" and raw_bytes >= floor:
+        return True
+    return False
+
+
+def loaded_span_is_substantive(span: dict, *, min_bytes: int | None = None) -> bool:
+    kind = str(span.get("chunk_kind") or "")
+    raw = int(span.get("raw_bytes") or 0)
+    return is_substantive_chunk_kind(kind, raw, min_bytes=min_bytes)
+
+
+def deprioritize_thin_spans(loaded: list[dict], *, min_bytes: int | None = None) -> list[dict]:
+    """Push stub symbol slices behind chunks large enough to explain behavior."""
+    floor = min_bytes if min_bytes is not None else settings.answer_min_substantive_chunk_bytes
+    front = [span for span in loaded if loaded_span_is_substantive(span, min_bytes=floor)]
+    back = [span for span in loaded if not loaded_span_is_substantive(span, min_bytes=floor)]
+    return front + back if front else loaded
 
 
 def wants_code_trace(question: str, history: list[QaTurn]) -> bool:
@@ -161,8 +213,11 @@ def pick_best_symbol_chunk(db: Session, generation_id: str, symbol_id: str) -> C
 
 
 def upgrade_chunk_choice(db: Session, generation_id: str, chunk: Chunk) -> Chunk:
-    """Prefer a symbol body from the same file when the hit is an import/overview slice."""
-    if chunk.kind not in {"import_block", "file_overview"}:
+    """Prefer a symbol body from the same file when the hit is a thin or header slice."""
+    min_bytes = settings.answer_min_substantive_chunk_bytes
+    if chunk.kind == "symbol_body" and chunk_byte_length(chunk) >= min_bytes:
+        return chunk
+    if chunk.kind not in {"import_block", "file_overview", "symbol_part", "non_code"}:
         return chunk
     bodies = (
         db.query(Chunk)
@@ -180,18 +235,18 @@ def upgrade_chunk_choice(db: Session, generation_id: str, chunk: Chunk) -> Chunk
 
 
 def enrich_spans_with_bodies(db: Session, generation_id: str, spans: list[ChunkChoice]) -> list[ChunkChoice]:
-    """Replace import-only span choices with the best symbol_body from the same file."""
+    """Replace thin/header span choices with the best symbol_body from the same file."""
     upgraded: list[ChunkChoice] = []
     for span in spans:
-        if span.kind not in {"import_block", "file_overview"}:
-            upgraded.append(span)
-            continue
         chunk = db.get(Chunk, span.chunk_id)
         if chunk is None:
             upgraded.append(span)
             continue
         best = upgrade_chunk_choice(db, generation_id, chunk)
-        upgraded.append(ChunkChoice(best.id, span.anchor_id, best.kind, best.ordinal))
+        if best.id == span.chunk_id:
+            upgraded.append(span)
+        else:
+            upgraded.append(ChunkChoice(best.id, span.anchor_id, best.kind, best.ordinal))
     return upgraded
 
 

@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.ingestion.chunk_materialize import materialize_symbol_chunks, missing_symbol_chunk_ids
 from app.ingestion.lazy_vectors import _file_scope_filters
 from app.models.catalog import Chunk, File, GenerationChunk, GenerationFile, IndexGeneration, Symbol
+from app.retrieval.chunk_selection import is_substantive_chunk_kind
 from app.retrieval.fusion import LaneHit
 from app.retrieval.query_router import RetrievalRequest
 
@@ -171,17 +172,23 @@ def hydrate_deferred_from_preview(
 
 
 def preview_hits_mostly_non_body(db: Session, generation_id: str, text_hits: list[LaneHit]) -> bool:
-    """True when lexical preview returned mostly import/overview chunks (progressive index)."""
+    """True when lexical preview returned mostly import/overview/thin chunks (progressive index)."""
     chunk_ids = [hit.chunk_id for hit in text_hits if hit.chunk_id][:12]
     if len(chunk_ids) < 2:
         return False
     rows = (
-        db.query(Chunk.kind)
+        db.query(Chunk.kind, Chunk.start_byte, Chunk.end_byte)
         .join(GenerationChunk, GenerationChunk.chunk_id == Chunk.id)
         .filter(GenerationChunk.index_generation_id == generation_id, Chunk.id.in_(chunk_ids))
         .all()
     )
     if not rows:
         return False
-    weak = sum(1 for row in rows if row[0] in {"import_block", "file_overview", "non_code"})
+    weak = 0
+    for kind, start_byte, end_byte in rows:
+        raw = max(0, int(end_byte) - int(start_byte))
+        if is_substantive_chunk_kind(str(kind), raw):
+            continue
+        if kind in {"import_block", "file_overview", "non_code", "symbol_part"}:
+            weak += 1
     return weak > len(rows) // 2

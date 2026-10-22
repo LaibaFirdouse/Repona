@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from app.retrieval.chunk_selection import wants_code_trace, wants_substantive_implementation
+from app.retrieval.chunk_selection import wants_code_trace, wants_trace_intent_substantive
 from app.retrieval.query_plan import QueryIntent, QueryPlanV1, RetrievalLane
 
 if TYPE_CHECKING:
@@ -77,7 +77,7 @@ def classify_intent(question: str, history: list[QaTurn] | None = None) -> Query
     if (
         _EXECUTION_TRACE.search(blob)
         or wants_code_trace(question, history or [])
-        or wants_substantive_implementation(question, history or [])
+        or wants_trace_intent_substantive(question, history or [])
     ):
         return "execution_trace"
     if _CONCEPTUAL_HOW.search(text) or _DEBUGGING.search(blob):

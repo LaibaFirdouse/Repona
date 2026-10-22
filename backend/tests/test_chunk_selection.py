@@ -2,10 +2,12 @@ import unittest
 from types import SimpleNamespace
 
 from app.retrieval.chunk_selection import (
+    deprioritize_thin_spans,
     is_meta_config_path,
     limit_spans_per_file,
     representative_chunk,
     wants_substantive_implementation,
+    wants_trace_intent_substantive,
 )
 from app.retrieval.conversation_context import QaTurn
 
@@ -31,6 +33,10 @@ class ChunkSelectionTests(unittest.TestCase):
         self.assertTrue(is_meta_config_path("README.md"))
         self.assertFalse(is_meta_config_path("app/api/plans/route.ts"))
 
+    def test_generic_how_work_is_substantive_but_not_trace_intent(self) -> None:
+        self.assertTrue(wants_substantive_implementation("How does the main entry point work?", []))
+        self.assertFalse(wants_trace_intent_substantive("How does the main entry point work?", []))
+
     def test_substantive_workflow_question(self) -> None:
         self.assertTrue(wants_substantive_implementation("tell me the end to end workflow", []))
         self.assertTrue(
@@ -45,6 +51,14 @@ class ChunkSelectionTests(unittest.TestCase):
                 [QaTurn("how is monitor implemented", "")],
             )
         )
+
+    def test_deprioritize_thin_spans(self) -> None:
+        loaded = [
+            {"chunk_kind": "symbol_part", "raw_bytes": 40, "chunk_id": "t"},
+            {"chunk_kind": "symbol_body", "raw_bytes": 900, "chunk_id": "b"},
+        ]
+        ordered = deprioritize_thin_spans(loaded, min_bytes=350)
+        self.assertEqual([span["chunk_id"] for span in ordered], ["b", "t"])
 
     def test_limit_spans_per_file(self) -> None:
         loaded = [
