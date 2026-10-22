@@ -236,6 +236,21 @@ class PacketTests(unittest.TestCase):
         kept, _valid = review_claims(resolved, {flask_id})
         self.assertEqual(kept, [])
 
+    def test_non_test_questions_drop_test_file_spans(self) -> None:
+        from app.retrieval.chunk_selection import omit_test_spans_unless_asked
+
+        loaded = [
+            {"relative_path": "tests/test_basic.py", "chunk_id": "t1"},
+            {"relative_path": "src/flask/app.py", "chunk_id": "a"},
+            {"relative_path": "tests/test_views.py", "chunk_id": "t2"},
+        ]
+        kept = omit_test_spans_unless_asked(loaded, "How does HTTP routing work?")
+        self.assertEqual([span["chunk_id"] for span in kept], ["a"])
+        self.assertEqual(
+            [span["chunk_id"] for span in omit_test_spans_unless_asked(loaded, "What do the unit tests cover?")],
+            ["t1", "a", "t2"],
+        )
+
     def test_implementation_spans_stay_ahead_of_tests(self) -> None:
         spans = [
             {"relative_path": "tests/test_views.py", "chunk_id": "t"},

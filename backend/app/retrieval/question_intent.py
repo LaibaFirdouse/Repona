@@ -42,7 +42,9 @@ _EXECUTION_TRACE = re.compile(
     r"request flow|execution flow|call flow|data flow|control flow|"
     r"end[- ]to[- ]end|from .+ to .+|walk through|step by step|"
     r"trace|call sequence|what happens when|what runs when|"
-    r"how exactly|line by line|follow the code"
+    r"how exactly|line by line|follow the code|"
+    r"http request|incoming request|web request|sends (?:an? )?request|"
+    r"request handling|which code runs|pick which code|route(?:s|d)? to|dispatch"
     r")\b",
     re.I,
 )

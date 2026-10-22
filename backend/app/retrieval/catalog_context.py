@@ -11,6 +11,35 @@ from app.retrieval.chunk_selection import is_meta_config_path, representative_ch
 from app.retrieval.fusion import ChunkChoice
 from app.retrieval.query_terms import extract_search_terms, question_paths
 
+_PATH_TERM_STOP = frozenset(
+    {
+        "make",
+        "sure",
+        "when",
+        "what",
+        "how",
+        "does",
+        "this",
+        "that",
+        "with",
+        "from",
+        "into",
+        "about",
+        "your",
+        "their",
+        "code",
+        "file",
+        "library",
+        "application",
+        "system",
+        "repository",
+        "message",
+        "client",
+        "server",
+        "user",
+    }
+)
+
 
 def _dedupe_paths(paths: list[str], limit: int) -> list[str]:
     seen: set[str] = set()
@@ -67,14 +96,18 @@ def catalog_path_filters(
             hints.append(path)
     terms = extract_search_terms(search_question or question)
     for term in terms:
-        if len(term) < 3 or "/" in term:
+        token = term.strip().replace("%", "")
+        # Short tokens and path segments like "make" match Makefile; require length or a path slash.
+        if "/" in token:
+            pass
+        elif len(token) < 4 or token.lower() in _PATH_TERM_STOP:
             continue
         rows = (
             db.query(File.relative_path)
             .join(GenerationFile, GenerationFile.file_id == File.id)
             .filter(
                 GenerationFile.index_generation_id == generation_id,
-                File.relative_path.ilike(f"%{term.replace('%', '')}%"),
+                File.relative_path.ilike(f"%{token}%"),
             )
             .order_by(File.relative_path, File.id)
             .limit(4)

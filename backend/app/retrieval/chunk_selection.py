@@ -43,11 +43,17 @@ _CODE_TRACE = re.compile(
 
 _IMPLEMENTATION_QUESTION = re.compile(
     r"\b("
-    r"workflow|workflows|end[- ]to[- ]end|request flow|how (?:is|does|are|do) .+ (?:work|stored|persist|implemented)|"
+    r"workflow|workflows|end[- ]to[- ]end|request flow|how (?:is|does|are|do) .+ (?:work|stored|persist|implemented|make sure|ensure|guarantee|validate|verify|pick|choose|select|route|handle)|"
     r"implemented in code|in code|data (?:is )?stored|persist(?:ed|ence)?|schema|api route|route handler|"
     r"functions? implemented|list and explain|what (?:are|is) the different|"
-    r"implementation|source code|from code|not (?:the )?readme"
+    r"implementation|source code|from code|not (?:the )?readme|"
+    r"http request|which code runs|pick which code|request handling|errors during request"
     r")\b",
+    re.I,
+)
+
+_QUESTION_ABOUT_TESTS = re.compile(
+    r"\b(tests?|unit tests?|pytest|unittest|test suite|test coverage|what about tests)\b",
     re.I,
 )
 
@@ -239,6 +245,24 @@ def expand_spans_with_sibling_bodies(
         if len(extra) >= max_added:
             break
     return list(spans) + extra
+
+
+def is_test_path(relative_path: str) -> bool:
+    path = relative_path.replace("\\", "/")
+    name = path.rsplit("/", 1)[-1]
+    return "/tests/" in f"/{path}" or name.startswith("test_")
+
+
+def question_about_tests(question: str) -> bool:
+    return bool(_QUESTION_ABOUT_TESTS.search(question.strip()))
+
+
+def omit_test_spans_unless_asked(loaded: list[dict], question: str) -> list[dict]:
+    """Drop test-file chunks for implementation questions; keep pack if only tests matched."""
+    if question_about_tests(question):
+        return loaded
+    kept = [span for span in loaded if not is_test_path(str(span.get("relative_path") or ""))]
+    return kept if kept else loaded
 
 
 def limit_spans_per_file(loaded: list[dict], *, max_per_file: int = 2) -> list[dict]:

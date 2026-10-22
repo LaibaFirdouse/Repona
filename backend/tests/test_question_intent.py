@@ -13,6 +13,14 @@ class QuestionIntentTests(unittest.TestCase):
     def test_request_flow_is_execution_trace(self) -> None:
         self.assertEqual(classify_intent("Explain the core request flow"), "execution_trace")
 
+    def test_http_routing_question_is_execution_trace(self) -> None:
+        self.assertEqual(
+            classify_intent(
+                "When a client sends an HTTP request, how does the application pick which code runs?"
+            ),
+            "execution_trace",
+        )
+
     def test_queue_trace_question(self) -> None:
         self.assertEqual(
             classify_intent("how exactly this queue works step by step by tracing through the code"),
@@ -42,7 +50,7 @@ class QuestionIntentTests(unittest.TestCase):
         plan = QueryPlanV1(intent="conceptual_search", path_filters=[])
         merged = merge_plan_with_heuristics(plan, "how exactly this queue works step by step", None)
         self.assertEqual(merged.intent, "execution_trace")
-        self.assertTrue(any("include" in p for p in merged.path_filters))
+        self.assertIn("graph", merged.retrieval_lanes)
 
 
 if __name__ == "__main__":

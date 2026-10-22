@@ -106,6 +106,7 @@ from app.retrieval.chunk_selection import (
     deprioritize_build_metadata_spans,
     implementation_chunk_choices,
     limit_spans_per_file,
+    omit_test_spans_unless_asked,
     pick_best_symbol_chunk,
     pick_file_chunk,
     wants_code_trace,
@@ -815,6 +816,7 @@ class AnswerService:
             loaded = limit_spans_per_file(loaded, max_per_file=per_file_cap)
             if trace is not None:
                 trace["impl_evidence_reload"] = True
+        loaded = omit_test_spans_unless_asked(loaded, search_question)
         step = _trace_step(trace, "08_snapshot_validate_and_load_span_text", step)
         priority_ids = {item.chunk_id for item in named + expanded + behavior}
         score_terms = extract_search_terms(search_question)
@@ -844,14 +846,6 @@ class AnswerService:
                 "search_lane_* are concurrent wall times inside step 02; "
                 "post_search_graph and snapshot_load are separate later steps."
             )
-            trace["spans_before_budget"] = [
-                {
-                    "chunk_id": span["chunk_id"],
-                    "relative_path": span["relative_path"],
-                    "qualified_name": span["qualified_name"],
-                }
-                for span in loaded
-            ]
         if specific_technology_question(search_question, technologies):
             names = [str(item["name"]) for item in technologies]
             choices = _chunks_mentioning(db, generation, names)
@@ -864,7 +858,17 @@ class AnswerService:
             else:
                 loaded = [span for span in loaded if _mentions_any(str(span.get("text") or ""), names)]
             edges = [edge for edge in edges if _mentions_any(edge.mentioned_name, names)]
+        loaded = omit_test_spans_unless_asked(loaded, search_question)
         step = _trace_step(trace, "10_technology_specific_filter", step)
+        if trace is not None:
+            trace["spans_before_budget"] = [
+                {
+                    "chunk_id": span["chunk_id"],
+                    "relative_path": span["relative_path"],
+                    "qualified_name": span["qualified_name"],
+                }
+                for span in loaded
+            ]
         selected = (provider or settings.llm_provider or "openai").strip().lower()
         if selected == "ollama":
             context_tokens = settings.ollama_num_ctx
