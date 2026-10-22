@@ -117,6 +117,7 @@ result = {{
     "span_byte_samples": span_byte_samples[:16],
     "trace_anchor_chunks": trace.get("trace_anchor_chunks"),
     "trace_anchor_graph_hops": trace.get("trace_anchor_graph_hops"),
+    "trace_anchor_out_degree_added": trace.get("trace_anchor_out_degree_added"),
     "vector_lane_expanded": router.get("vector_lane_expanded"),
     "lazy_query_embed": lazy,
     "retrieved_paths": retrieved_paths[:24],

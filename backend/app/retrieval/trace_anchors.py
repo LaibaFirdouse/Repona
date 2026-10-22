@@ -137,6 +137,7 @@ def catalog_trace_anchor_choices(
     limit: int = 8,
     graph_session=None,
     graph_hops: int = 0,
+    anchor_stats: dict[str, int] | None = None,
 ) -> list[ChunkChoice]:
     """Driver/main symbols and entry-shaped files from the indexed catalog only."""
     choices: list[ChunkChoice] = []
@@ -169,6 +170,7 @@ def catalog_trace_anchor_choices(
                 continue
             add(pick_best_symbol_chunk(db, generation.id, symbol_id))
 
+    out_degree_added = 0
     if (
         graph_session is not None
         and settings.trace_anchor_out_degree_enabled
@@ -193,9 +195,15 @@ def catalog_trace_anchor_choices(
             if not _symbol_not_in_test_file(db, symbol_id):
                 continue
             skip_ids.add(symbol_id)
+            before = len(choices)
             add(pick_best_symbol_chunk(db, generation.id, symbol_id))
+            if len(choices) > before:
+                out_degree_added += 1
             if len(choices) >= limit:
                 break
+
+    if anchor_stats is not None:
+        anchor_stats["out_degree_added"] = out_degree_added
 
     files = _entry_catalog_files(db, generation.id, question, limit=6)
     if files:

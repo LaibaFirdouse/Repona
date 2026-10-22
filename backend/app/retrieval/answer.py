@@ -770,16 +770,8 @@ class AnswerService:
         if settings.trace_anchor_boost_enabled and question_wants_trace_anchors(
             search_question, retrieval.intent
         ):
-            graph_session = None
-            graph_hops = 0
-            if settings.trace_anchor_graph_enabled and "graph" in retrieval.lanes:
-                need_graph = settings.trace_anchor_graph_hops > 0 or settings.trace_anchor_out_degree_enabled
-                if need_graph:
-                    try:
-                        graph_session = self._graph_session()
-                        graph_hops = settings.trace_anchor_graph_hops
-                    except Exception:
-                        graph_session = None
+            graph_session, graph_hops = self._open_trace_anchor_graph(retrieval)
+            anchor_stats: dict[str, int] = {}
             try:
                 anchor_choices = catalog_trace_anchor_choices(
                     db,
@@ -788,20 +780,18 @@ class AnswerService:
                     limit=min(8, span_limit),
                     graph_session=graph_session,
                     graph_hops=graph_hops,
+                    anchor_stats=anchor_stats,
                 )
             finally:
-                if graph_session is not None:
-                    close = getattr(graph_session, "close", None)
-                    if close is not None:
-                        close()
+                self._close_trace_anchor_graph(graph_session)
             if anchor_choices:
                 spans = _merge_chunk_choices(anchor_choices, spans, span_limit)
-                if trace is not None:
-                    trace["trace_anchor_chunks"] = len(anchor_choices)
-                    if graph_hops:
-                        trace["trace_anchor_graph_hops"] = graph_hops
-                    if settings.trace_anchor_out_degree_enabled and graph_session is not None:
-                        trace["trace_anchor_out_degree"] = settings.trace_anchor_out_degree_limit
+                self._record_trace_anchor_fields(
+                    trace,
+                    anchor_count=len(anchor_choices),
+                    graph_hops=graph_hops,
+                    anchor_stats=anchor_stats,
+                )
         if code_first:
             boost = code_first_chunk_choices(db, generation, question=search_question, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
@@ -1099,16 +1089,22 @@ class AnswerService:
             ):
                 if trace is not None:
                     trace["audit_triggered_more_evidence"] = True
-                recovery_choices = fetch_audit_recovery_choices(
-                    db,
-                    generation,
-                    question=search_question,
-                    loaded=loaded_for_answer,
-                    prefer_implementation=prefer_impl,
-                    allow_overview=pack_for_overview,
-                    limit=span_limit + settings.answer_overview_span_bonus,
-                    intent=retrieval.intent,
-                )
+                recovery_graph, recovery_hops = self._open_trace_anchor_graph(retrieval)
+                try:
+                    recovery_choices = fetch_audit_recovery_choices(
+                        db,
+                        generation,
+                        question=search_question,
+                        loaded=loaded_for_answer,
+                        prefer_implementation=prefer_impl,
+                        allow_overview=pack_for_overview,
+                        limit=span_limit + settings.answer_overview_span_bonus,
+                        intent=retrieval.intent,
+                        graph_session=recovery_graph,
+                        graph_hops=recovery_hops,
+                    )
+                finally:
+                    self._close_trace_anchor_graph(recovery_graph)
                 if recovery_choices:
                     recovery_choices = expand_spans_with_sibling_bodies(
                         db, generation.id, recovery_choices, max_added=16
@@ -1403,6 +1399,45 @@ class AnswerService:
                 auth=(settings.neo4j_user, settings.neo4j_password),
             )
         return self._neo4j_driver.session()
+
+    def _open_trace_anchor_graph(self, retrieval) -> tuple[object | None, int]:
+        if "graph" not in retrieval.lanes:
+            return None, 0
+        want_hops = settings.trace_anchor_graph_enabled and settings.trace_anchor_graph_hops > 0
+        want_out_degree = settings.trace_anchor_out_degree_enabled
+        if not (want_hops or want_out_degree):
+            return None, 0
+        try:
+            session = self._graph_session()
+        except Exception:
+            return None, 0
+        hops = settings.trace_anchor_graph_hops if want_hops else 0
+        return session, hops
+
+    @staticmethod
+    def _close_trace_anchor_graph(graph_session) -> None:
+        if graph_session is None:
+            return
+        close = getattr(graph_session, "close", None)
+        if close is not None:
+            close()
+
+    @staticmethod
+    def _record_trace_anchor_fields(
+        trace: dict | None,
+        *,
+        anchor_count: int,
+        graph_hops: int,
+        anchor_stats: dict[str, int],
+    ) -> None:
+        if trace is None:
+            return
+        trace["trace_anchor_chunks"] = anchor_count
+        if graph_hops:
+            trace["trace_anchor_graph_hops"] = graph_hops
+        out_added = int(anchor_stats.get("out_degree_added") or 0)
+        if out_added:
+            trace["trace_anchor_out_degree_added"] = out_added
 
     def _ensure_open(self, db: Session, pin_id: str) -> None:
         now = datetime.utcnow()

@@ -54,11 +54,14 @@ def main() -> int:
         min_substantive = int(case.get("min_substantive_spans") or 0)
         substantive = int(probe.get("substantive_span_count") or 0)
         substantive_ok = substantive >= min_substantive if min_substantive else True
+        trace_chunks = int(probe.get("trace_anchor_chunks") or 0)
+        expect_trace = case.get("expect_trace_anchors")
+        trace_ok = trace_chunks >= 1 if expect_trace else True
         row = {
             "id": case["id"],
             "repo_url": case["repo_url"],
             "question": case["question"],
-            "ok": probe.get("ok") and recall.get("hit") and substantive_ok,
+            "ok": probe.get("ok") and recall.get("hit") and substantive_ok and trace_ok,
             "probe_ok": probe.get("ok"),
             "path_recall": recall,
             "substantive_span_count": substantive,
@@ -66,6 +69,8 @@ def main() -> int:
             "substantive_ok": substantive_ok,
             "trace_anchor_chunks": probe.get("trace_anchor_chunks"),
             "trace_anchor_graph_hops": probe.get("trace_anchor_graph_hops"),
+            "trace_anchor_out_degree_added": probe.get("trace_anchor_out_degree_added"),
+            "trace_anchors_ok": trace_ok,
             "span_byte_samples": probe.get("span_byte_samples") or [],
             "retrieved_paths": paths[:16],
             "elapsed_ms": probe.get("elapsed_ms"),

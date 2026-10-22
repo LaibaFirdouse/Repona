@@ -119,6 +119,8 @@ def fetch_audit_recovery_choices(
     limit: int,
     intent: str = "conceptual_search",
     trace_anchors_enabled: bool = True,
+    graph_session=None,
+    graph_hops: int = 0,
 ) -> list[ChunkChoice]:
     """Extra chunks after audit-only model output on a thin pack."""
     more = more_evidence_for_audit_recovery(question, loaded)
@@ -135,7 +137,14 @@ def fetch_audit_recovery_choices(
         from app.retrieval.trace_anchors import catalog_trace_anchor_choices, question_wants_trace_anchors
 
         if question_wants_trace_anchors(question, intent):
-            anchors = catalog_trace_anchor_choices(db, generation, question, limit=min(8, limit))
+            anchors = catalog_trace_anchor_choices(
+                db,
+                generation,
+                question,
+                limit=min(8, limit),
+                graph_session=graph_session,
+                graph_hops=graph_hops,
+            )
             choices = _merge_choices(anchors, choices, limit)
     if len(choices) < max(4, limit // 3):
         choices = _merge_choices(
