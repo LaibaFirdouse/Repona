@@ -1,8 +1,9 @@
 import unittest
+from unittest.mock import patch
 
 from app.retrieval.fusion import LaneHit
 from app.retrieval.query_router import RetrievalRequest
-from app.retrieval.vector_lane import should_retry_vector_lane
+from app.retrieval.vector_lane import should_retry_vector_lane, should_skip_vector_lane
 
 
 def _request(**kwargs) -> RetrievalRequest:
@@ -22,6 +23,16 @@ def _request(**kwargs) -> RetrievalRequest:
 
 
 class VectorLaneTests(unittest.TestCase):
+    def test_skip_vector_lane_when_no_ready_vectors(self) -> None:
+        class _Session:
+            pass
+
+        with patch("app.retrieval.vector_lane.count_vector_ready", return_value=0):
+            self.assertTrue(should_skip_vector_lane(_Session(), "gen"))
+
+        with patch("app.retrieval.vector_lane.count_vector_ready", return_value=3):
+            self.assertFalse(should_skip_vector_lane(_Session(), "gen"))
+
     def test_retry_when_vector_empty_and_lazy_on(self) -> None:
         self.assertTrue(
             should_retry_vector_lane(

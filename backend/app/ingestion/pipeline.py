@@ -354,6 +354,10 @@ def _finish_generation(
                 qdrant_points_upserted=catalog_stats.get("qdrant_points_upserted", 0),
             )
         elif indexed_chunks and not settings.embed_catalogue_before_activate:
+            if qdrant_url is not None and collection is not None:
+                t = perf_counter()
+                ensure_collection(qdrant_url, collection, vector_dimensions)
+                record_step("ingest.qdrant_ensure_collection", t, collection=collection)
             record_step(
                 "ingest.qdrant_catalog_embed_skipped",
                 perf_counter(),

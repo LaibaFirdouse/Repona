@@ -21,7 +21,7 @@ from app.ingestion.validation import (
     point_is_valid,
     validate_worktree_bytes,
 )
-from app.ingestion.vector_store import VectorStoreError, collection_config, search_points
+from app.ingestion.vector_store import VectorStoreError, collection_config, ensure_collection, search_points
 from app.retrieval.vector_filter import vector_query_filter
 from app.ingestion.versions import LEXICAL_INDEX_VERSION
 from app.models.catalog import (
@@ -1081,6 +1081,7 @@ class AnswerService:
         if not file_ids:
             return []
         try:
+            ensure_collection(self.qdrant_url, generation.qdrant_collection, generation.vector_dimensions)
             size, distance = self._cached_collection_config(generation.qdrant_collection)
         except VectorStoreError as error:
             raise RetrievalError(503, str(error)) from error

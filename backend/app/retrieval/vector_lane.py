@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.ingestion.lazy_vectors import count_vector_ready
 from app.models.catalog import IndexGeneration
 from app.retrieval.fusion import LaneHit
@@ -12,10 +11,8 @@ from app.retrieval.query_router import RetrievalRequest
 
 
 def should_skip_vector_lane(db: Session, generation_id: str) -> bool:
-    """Skip Qdrant only when no vectors are ready and query-time embed is disabled."""
-    if count_vector_ready(db, generation_id) > 0:
-        return False
-    return not settings.lazy_embed_on_query
+    """Skip Qdrant when the catalog has no ready vectors (lazy embed must run first)."""
+    return count_vector_ready(db, generation_id) == 0
 
 
 def should_retry_vector_lane(
