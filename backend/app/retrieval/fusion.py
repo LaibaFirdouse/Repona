@@ -87,11 +87,22 @@ def _span_bytes(choice: ChunkChoice, chunk_sizes: dict[str, int]) -> int:
     return chunk_sizes.get(choice.chunk_id, 0)
 
 
+def ordered_symbol_parts(choices: list[ChunkChoice]) -> list[ChunkChoice]:
+    """Return symbol_part chunks in source order (ordinal), preserving identity."""
+    parts = [chunk for chunk in choices if chunk.kind == "symbol_part"]
+    return sorted(parts, key=lambda chunk: (chunk.ordinal, chunk.chunk_id))
+
+
 def representative_chunk_choices(
     choices: list[ChunkChoice],
     chunk_sizes: dict[str, int] | None = None,
 ) -> list[ChunkChoice]:
-    """Pick the largest implementation chunk for an anchor (not the first ordinal slice)."""
+    """Prefer a full symbol_body; otherwise return ordered symbol_part constituents.
+
+    Oversized symbols are stored only as symbol_part chunks. Selecting a single
+    "largest" part and treating it as the whole symbol loses validation logic,
+    mid-body branches, and return paths. Return every part in source order.
+    """
     if not choices:
         return []
     sizes = chunk_sizes or {}
@@ -99,10 +110,9 @@ def representative_chunk_choices(
     if bodies:
         pick = max(bodies, key=lambda chunk: (_span_bytes(chunk, sizes), chunk.ordinal))
         return [pick]
-    parts = [chunk for chunk in choices if chunk.kind == "symbol_part"]
+    parts = ordered_symbol_parts(choices)
     if parts:
-        pick = max(parts, key=lambda chunk: (_span_bytes(chunk, sizes), chunk.ordinal))
-        return [pick]
+        return parts
     avoid = {chunk for chunk in choices if chunk.kind in {"import_block", "file_overview"}}
     pool = [chunk for chunk in choices if chunk not in avoid] or list(choices)
     pick = max(pool, key=lambda chunk: (_span_bytes(chunk, sizes), chunk.ordinal))
@@ -170,8 +180,15 @@ def neighbor_chunk(
     chunks: list[ChunkChoice],
     chunk_sizes: dict[str, int] | None = None,
 ) -> ChunkChoice | None:
+    """Seed chunk for a graph neighbor: prefer body, else the first part in source order."""
     picked = representative_chunk_choices(chunks, chunk_sizes)
-    return picked[0] if picked else None
+    if not picked:
+        return None
+    # For multi-part symbols, seed with the earliest ordinal so sibling expansion
+    # can walk forward in source order rather than jumping to the largest middle slice.
+    if len(picked) > 1 and all(item.kind == "symbol_part" for item in picked):
+        return picked[0]
+    return picked[0]
 
 
 def allow_edge(relationship: str, outgoing: bool, anchor_role: str, other_role: str) -> bool:

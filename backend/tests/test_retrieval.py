@@ -62,14 +62,14 @@ class FusionTests(unittest.TestCase):
             1 / 61,
         )
 
-    def test_name_only_symbol_picks_largest_part(self) -> None:
+    def test_name_only_symbol_keeps_ordered_parts(self) -> None:
         parts = [
             ChunkChoice("part-small", "authenticate_user", "symbol_part", 0),
             ChunkChoice("part-large", "authenticate_user", "symbol_part", 1),
         ]
         sizes = {"part-small": 100, "part-large": 9000}
         chosen = materialize_anchors(["authenticate_user"], {}, {}, {"authenticate_user": parts}, sizes)
-        self.assertEqual([item.chunk_id for item in chosen], ["part-large"])
+        self.assertEqual([item.chunk_id for item in chosen], ["part-small", "part-large"])
 
     def test_chunk_hits_are_kept_and_ordered_by_anchor_rank(self) -> None:
         body = ChunkChoice("small", "small_fn", "symbol_body", 0)
@@ -82,7 +82,7 @@ class FusionTests(unittest.TestCase):
         )
         self.assertEqual([item.chunk_id for item in chosen], ["large-part", "small"])
 
-    def test_neighbor_without_a_body_uses_the_largest_part(self) -> None:
+    def test_neighbor_without_a_body_seeds_the_first_part(self) -> None:
         chosen = neighbor_chunk(
             [
                 ChunkChoice("later", "verify_password", "symbol_part", 2),
@@ -90,7 +90,7 @@ class FusionTests(unittest.TestCase):
             ],
             {"later": 5000, "first": 200},
         )
-        self.assertEqual(chosen.chunk_id, "later")
+        self.assertEqual(chosen.chunk_id, "first")
 
     def test_edge_direction_and_cap_are_deterministic(self) -> None:
         self.assertTrue(allow_edge("CALLS", False, "symbol", "symbol"))
@@ -331,6 +331,28 @@ class PacketTests(unittest.TestCase):
             technology_text=lambda item: "",
         )
         self.assertEqual([span["id"] for span in packed.spans], ["a"])
+        self.assertTrue(any(item.get("reason") == "source_byte_cap" for item in packed.excluded))
+
+    def test_later_smaller_span_is_kept_after_oversized_candidate(self) -> None:
+        spans = [
+            {"id": "huge", "raw": 100, "text": "x" * 100},
+            {"id": "small", "raw": 4, "text": "abcd"},
+        ]
+        packed = pack_evidence(
+            "q",
+            spans,
+            [],
+            [],
+            source_byte_cap=20,
+            input_byte_cap=10_000,
+            context_tokens=10_000,
+            output_tokens=1,
+            span_text=lambda span: (span["raw"], span["text"]),
+            edge_text=lambda edge: "",
+            technology_text=lambda item: "",
+        )
+        self.assertEqual([span["id"] for span in packed.spans], ["small"])
+        self.assertEqual(packed.excluded[0]["chunk_id"], "huge")
 
     def test_margin_drops_the_next_span_before_the_window_is_full(self) -> None:
         spans = [{"id": "a", "raw": 1, "text": "abcd"}, {"id": "b", "raw": 1, "text": "efgh"}]

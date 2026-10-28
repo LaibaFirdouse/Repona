@@ -93,7 +93,11 @@ def loaded_needs_more_bodies(
     thin = sum(
         1
         for span in loaded
-        if span.get("chunk_kind") in {"import_block", "file_overview", "symbol_part"}
+        if span.get("chunk_kind") in {"import_block", "file_overview"}
+        or (
+            span.get("chunk_kind") == "symbol_part"
+            and int(span.get("raw_bytes") or 0) < floor
+        )
         or int(span.get("raw_bytes") or 0) < min(120, floor)
     )
     return thin > len(loaded) // 2

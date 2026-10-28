@@ -19,6 +19,40 @@ class Packed:
     edges: list
     technologies: list
     raw_source_bytes: int
+    excluded: tuple = ()
+
+
+def _span_identity(span) -> tuple:
+    if isinstance(span, dict):
+        chunk_id = span.get("chunk_id") if span.get("chunk_id") is not None else span.get("id")
+        return (
+            chunk_id,
+            span.get("relative_path"),
+            span.get("start_line"),
+            span.get("end_line"),
+            span.get("source_start_byte"),
+            span.get("source_end_byte"),
+        )
+    return (getattr(span, "chunk_id", None), None, None, None, None, None)
+
+
+def _spans_overlap(left, right) -> bool:
+    """True when two loaded spans cover the same or overlapping source range."""
+    if not isinstance(left, dict) or not isinstance(right, dict):
+        return False
+    if left.get("chunk_id") and left.get("chunk_id") == right.get("chunk_id"):
+        return True
+    if left.get("relative_path") != right.get("relative_path"):
+        return False
+    ls, le = left.get("source_start_byte"), left.get("source_end_byte")
+    rs, re = right.get("source_start_byte"), right.get("source_end_byte")
+    if ls is None or le is None or rs is None or re is None:
+        l_start, l_end = left.get("start_line"), left.get("end_line")
+        r_start, r_end = right.get("start_line"), right.get("end_line")
+        if None in (l_start, l_end, r_start, r_end):
+            return False
+        return not (l_end < r_start or r_end < l_start)
+    return not (le <= rs or re <= ls)
 
 
 def pack_evidence(
@@ -37,17 +71,32 @@ def pack_evidence(
     edge_text,
     technology_text,
 ) -> Packed:
-    """Add higher-priority evidence first. `span_text` returns `(raw_bytes, utf8_piece)`."""
+    """Add higher-priority evidence first. `span_text` returns `(raw_bytes, utf8_piece)`.
+
+    A span that does not fit is skipped so later, smaller candidates can still enter.
+    Exclusion reasons are recorded on Packed.excluded (chunk id + reason).
+    """
     counter = count_tokens or estimate_tokens
     kept_spans = []
     kept_edges = []
     kept_technologies = []
+    excluded: list[dict] = []
     raw_bytes = 0
     body = header
+    seen_ids: set = set()
     for span in spans:
+        identity = _span_identity(span)
+        chunk_id = identity[0]
+        if chunk_id is not None and chunk_id in seen_ids:
+            excluded.append({"chunk_id": chunk_id, "reason": "duplicate_chunk_id"})
+            continue
+        if any(_spans_overlap(span, kept) for kept in kept_spans):
+            excluded.append({"chunk_id": chunk_id, "reason": "overlapping_span"})
+            continue
         span_raw, piece = span_text(span)
         if raw_bytes + span_raw > source_byte_cap:
-            break
+            excluded.append({"chunk_id": chunk_id, "reason": "source_byte_cap", "raw_bytes": span_raw})
+            continue
         if not _fits(
             body + piece,
             raw_bytes + span_raw,
@@ -58,23 +107,28 @@ def pack_evidence(
             margin_tokens,
             counter,
         ):
-            break
+            excluded.append({"chunk_id": chunk_id, "reason": "context_budget", "raw_bytes": span_raw})
+            continue
         body += piece
         raw_bytes += span_raw
         kept_spans.append(span)
+        if chunk_id is not None:
+            seen_ids.add(chunk_id)
     for edge in edges:
         piece = edge_text(edge)
         if not _fits(body + piece, raw_bytes, source_byte_cap, input_byte_cap, context_tokens, output_tokens, margin_tokens, counter):
-            break
+            excluded.append({"edge_id": getattr(edge, "edge_id", None), "reason": "context_budget"})
+            continue
         body += piece
         kept_edges.append(edge)
     for technology in technologies:
         piece = technology_text(technology)
         if not _fits(body + piece, raw_bytes, source_byte_cap, input_byte_cap, context_tokens, output_tokens, margin_tokens, counter):
-            break
+            excluded.append({"technology_id": technology.get("id") if isinstance(technology, dict) else None, "reason": "context_budget"})
+            continue
         body += piece
         kept_technologies.append(technology)
-    return Packed(kept_spans, kept_edges, kept_technologies, raw_bytes)
+    return Packed(kept_spans, kept_edges, kept_technologies, raw_bytes, tuple(excluded))
 
 
 def estimate_tokens(text: str) -> int:
@@ -243,6 +297,52 @@ def review_claims(claims: list[dict], valid_ids: set[str]) -> tuple[list[dict], 
         kept.append({"kind": kind, "text": str(claim.get("text") or ""), "evidence_ids": good})
     citations_valid = bool(kept) and not saw_invalid
     return kept, citations_valid
+
+
+def _weak_evidence_kinds() -> frozenset[str]:
+    return frozenset({"import_block", "file_overview", "non_code"})
+
+
+def is_weak_implementation_span(span: dict) -> bool:
+    """Import/overview/readme metadata is weak support for how-it-works claims."""
+    kind = str(span.get("chunk_kind") or "")
+    path = str(span.get("relative_path") or "").replace("\\", "/").lower()
+    if kind in _weak_evidence_kinds():
+        return True
+    name = path.rsplit("/", 1)[-1]
+    if name.startswith("readme") or name in {"package.json", "pyproject.toml"}:
+        return True
+    return False
+
+
+def review_implementation_support(
+    claims: list[dict],
+    spans: list[dict],
+    *,
+    require_implementation: bool,
+) -> tuple[list[dict], bool]:
+    """When implementation evidence is in the pack, reject claims citing only weak spans.
+
+    Citation id validity is separate from semantic support: a README id can be a
+    valid packet id and still fail as sole support for an implementation claim.
+    """
+    if not require_implementation or not claims:
+        return claims, True
+    by_id = {str(span.get("chunk_id")): span for span in spans if span.get("chunk_id")}
+    substantive_ids = {
+        chunk_id for chunk_id, span in by_id.items() if not is_weak_implementation_span(span)
+    }
+    if not substantive_ids:
+        # No implementation evidence reached the prompt—caller should abstain.
+        return [], False
+    kept: list[dict] = []
+    for claim in claims:
+        ids = [str(item) for item in claim.get("evidence_ids") or []]
+        strong = [item for item in ids if item in substantive_ids]
+        if not strong:
+            continue
+        kept.append({**claim, "evidence_ids": strong})
+    return kept, bool(kept)
 
 
 def _fits(

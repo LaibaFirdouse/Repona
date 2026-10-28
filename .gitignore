@@ -3,3 +3,5 @@
 **/__pycache__/**
 .neon
 node_modules/
+# Local index snapshots, git mirrors, and parse caches (not release artifacts).
+/data/

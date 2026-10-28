@@ -43,6 +43,16 @@ def deprioritize_readme_spans(spans: list) -> list:
     return front + back
 
 
+def filter_readme_when_code_first(loaded: list) -> list:
+    """Drop README spans when enough non-README evidence is already present.
+
+    Does not globally ban documentation—only removes it when implementation
+    excerpts can answer an implementation / code-first question on their own.
+    """
+    impl = [span for span in loaded if not is_readme_path(_span_path(span))]
+    return impl if len(impl) >= 2 else loaded
+
+
 def code_first_chunk_choices(
     db: Session,
     generation: IndexGeneration,

@@ -60,6 +60,14 @@ class ChunkSelectionTests(unittest.TestCase):
         ordered = deprioritize_thin_spans(loaded, min_bytes=350)
         self.assertEqual([span["chunk_id"] for span in ordered], ["b", "t"])
 
+    def test_large_symbol_part_is_substantive(self) -> None:
+        loaded = [
+            {"chunk_kind": "import_block", "raw_bytes": 40, "chunk_id": "i"},
+            {"chunk_kind": "symbol_part", "raw_bytes": 900, "chunk_id": "p"},
+        ]
+        ordered = deprioritize_thin_spans(loaded, min_bytes=350)
+        self.assertEqual([span["chunk_id"] for span in ordered], ["p", "i"])
+
     def test_limit_spans_per_file(self) -> None:
         loaded = [
             {"relative_path": "main.go", "chunk_id": "1"},
@@ -69,6 +77,16 @@ class ChunkSelectionTests(unittest.TestCase):
         ]
         kept = limit_spans_per_file(loaded, max_per_file=2)
         self.assertEqual(len(kept), 3)
+
+    def test_limit_spans_keeps_same_symbol_parts(self) -> None:
+        loaded = [
+            {"relative_path": "main.go", "chunk_id": "1", "symbol_id": "s", "chunk_kind": "symbol_part"},
+            {"relative_path": "main.go", "chunk_id": "2", "symbol_id": "s", "chunk_kind": "symbol_part"},
+            {"relative_path": "main.go", "chunk_id": "3", "symbol_id": "other", "chunk_kind": "symbol_body"},
+            {"relative_path": "api.go", "chunk_id": "4"},
+        ]
+        kept = limit_spans_per_file(loaded, max_per_file=1)
+        self.assertEqual([span["chunk_id"] for span in kept], ["1", "2", "4"])
 
 
 if __name__ == "__main__":

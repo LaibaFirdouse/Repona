@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from sqlalchemy import or_
@@ -14,6 +15,9 @@ from app.models.catalog import Chunk, File, GenerationChunk, GenerationFile, Ind
 from app.retrieval.chunk_selection import is_substantive_chunk_kind
 from app.retrieval.fusion import LaneHit
 from app.retrieval.query_router import RetrievalRequest
+
+_SNAKE_NAME = re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b")
+_PASCAL_NAME = re.compile(r"\b[A-Z][A-Za-z0-9]+\b")
 
 
 def file_ids_for_chunk_hits(db: Session, generation_id: str, hits: list[LaneHit]) -> list[str]:
@@ -88,8 +92,46 @@ def collect_hydrate_symbol_ids(
     name_hits: list[LaneHit],
     text_hits: list[LaneHit],
 ) -> list[str]:
-    """Symbols to materialize from preview hits and planner path scope (#2 + #6)."""
+    """Symbols to materialize from preview hits and planner path scope (#2 + #6).
+
+    Name-lane symbol anchors and planner identifiers lead the list so a cold
+    progressive index materializes question-named bodies (fuse_anchors, …)
+    before file-scoped peers consume the lazy_embed_max_chunks budget.
+    """
     budget = settings.lazy_embed_max_chunks
+    prioritized: list[str] = []
+    for hit in name_hits:
+        # Symbol-lane hits often have chunk_id=None until bodies are materialized.
+        if hit.chunk_id is None and hit.anchor_id:
+            prioritized.append(hit.anchor_id)
+        elif hit.anchor_id:
+            prioritized.append(hit.anchor_id)
+    question_names = list(
+        dict.fromkeys(
+            [
+                *list(retrieval.identifiers or []),
+                *_SNAKE_NAME.findall(retrieval.question or ""),
+                *_PASCAL_NAME.findall(retrieval.question or ""),
+            ]
+        )
+    )
+    if question_names:
+        named_rows = (
+            db.query(Symbol.id)
+            .join(GenerationFile, GenerationFile.file_id == Symbol.file_id)
+            .filter(
+                GenerationFile.index_generation_id == generation.id,
+                Symbol.parser_version == generation.parser_version,
+                or_(
+                    Symbol.name.in_(question_names),
+                    Symbol.qualified_name.in_(question_names),
+                ),
+            )
+            .order_by(Symbol.qualified_name, Symbol.id)
+            .limit(budget)
+            .all()
+        )
+        prioritized.extend(row[0] for row in named_rows)
     file_ids = file_ids_for_chunk_hits(db, generation.id, text_hits + name_hits)
     file_ids.extend(
         _scoped_file_ids(
@@ -101,17 +143,14 @@ def collect_hydrate_symbol_ids(
         )
     )
     file_ids = list(dict.fromkeys(file_ids))
-    symbol_ids = symbol_ids_for_files(
+    peer_ids = symbol_ids_for_files(
         db,
         repository_id=repository_id,
         parser_version=generation.parser_version,
         file_ids=file_ids,
         limit=budget * 4,
     )
-    for hit in name_hits:
-        if hit.chunk_id is None and hit.anchor_id not in symbol_ids:
-            symbol_ids.append(hit.anchor_id)
-    return list(dict.fromkeys(symbol_ids))[: budget * 4]
+    return list(dict.fromkeys([*prioritized, *peer_ids]))[: budget * 4]
 
 
 def hydrate_deferred_from_preview(

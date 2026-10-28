@@ -90,7 +90,15 @@ from app.retrieval.packet import (
     render_answer,
     resolve_evidence_aliases,
     review_claims,
+    review_implementation_support,
     span_citations,
+)
+from app.retrieval.evidence_debug import (
+    evidence_debug_enabled,
+    record_operation,
+    record_stage,
+    summarize_choices,
+    summarize_loaded,
 )
 from app.ingestion.chunk_materialize import materialize_symbol_chunks, missing_symbol_chunk_ids
 from app.ingestion.lazy_vectors import count_vector_ready, warm_lazy_vectors_before_search
@@ -119,6 +127,7 @@ from app.retrieval.chunk_selection import (
     omit_test_spans_unless_asked,
     pick_best_symbol_chunk,
     pick_file_chunk,
+    pick_symbol_implementation_chunks,
     wants_code_trace,
     wants_domain_implementation,
     wants_substantive_implementation,
@@ -145,6 +154,7 @@ from app.retrieval.hydrate import (
 )
 from app.retrieval.evidence_scoring import (
     pack_overview_mode,
+    prioritize_question_targets,
     resolve_span_limit,
     retrieval_prefers_implementation,
     sort_loaded_spans,
@@ -690,6 +700,20 @@ class AnswerService:
             _chunks_by_symbol(choices),
             chunk_sizes,
         )
+        if evidence_debug_enabled(trace):
+            record_stage(
+                trace,
+                "04_materialize",
+                {
+                    "fused_anchors": list(fused)[:32],
+                    "choices": summarize_choices(spans),
+                    "lane_hit_counts": {
+                        "name": len(name_hits),
+                        "text": len(text_hits),
+                        "vector": len(vector_hits),
+                    },
+                },
+            )
         step = _trace_step(trace, "04_materialize_span_choices", step)
         self._ensure_open(db, outcome.pin_id)
         stage = perf_counter()
@@ -813,19 +837,54 @@ class AnswerService:
         elif is_overview:
             boost = overview_chunk_choices(db, generation, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
+        before_named = list(spans)
         spans = preserve_named_spans(spans, named + expanded + behavior, span_limit)
+        if evidence_debug_enabled(trace) and spans != before_named:
+            record_operation(
+                trace,
+                operation="preserve_named_spans",
+                before={"count": len(before_named)},
+                after={"count": len(spans), "named": summarize_choices(named + expanded + behavior)},
+                reason="keep question-named symbol chunks ahead of fusion order",
+            )
+        before_enrich = list(spans)
         spans = enrich_spans_with_bodies(db, generation.id, spans)
-        if prefer_impl or code_first:
-            max_sibling = 16
+        if evidence_debug_enabled(trace):
+            for left, right in zip(before_enrich, spans):
+                if left.chunk_id != right.chunk_id:
+                    record_operation(
+                        trace,
+                        operation="enrich_spans_with_bodies",
+                        before=left,
+                        after=right,
+                        reason="upgrade thin/header hit within same symbol or file-level body",
+                    )
+        wants_symbol_expand = prefer_impl or code_first or bool(named or expanded or behavior)
+        if wants_symbol_expand:
+            max_sibling = 12 if not (prefer_impl or code_first) else 16
             if retrieval.intent in {"execution_trace", "debugging"}:
                 max_sibling = 24
+            before_expand = list(spans)
             spans = expand_spans_with_sibling_bodies(db, generation.id, spans, max_added=max_sibling)
-            cap = span_limit + settings.answer_overview_span_bonus
-            spans = spans[:cap]
+            if evidence_debug_enabled(trace):
+                added = [item for item in spans if item.chunk_id not in {s.chunk_id for s in before_expand}]
+                record_stage(
+                    trace,
+                    "07_sibling_expand",
+                    {
+                        "added": summarize_choices(added),
+                        "max_sibling": max_sibling,
+                        "reason": "same-symbol ordered parts first; file peers secondary",
+                    },
+                )
+            cap = span_limit + (settings.answer_overview_span_bonus if prefer_impl or code_first else 0)
+            spans = spans[: max(cap, span_limit)]
         if prefer_impl:
             spans = deprioritize_meta_config_spans(spans)
         if trace is not None and workflow_queries:
             trace["workflow_lexical_queries"] = workflow_queries[:8]
+        if evidence_debug_enabled(trace):
+            record_stage(trace, "07_candidates_after_enrich", {"choices": summarize_choices(spans)})
         step = _trace_step(trace, "07_named_expansion_behavior_spans", step)
         self._ensure_open(db, outcome.pin_id)
         stage = perf_counter()
@@ -881,6 +940,21 @@ class AnswerService:
             terms=score_terms,
         )
         loaded = priority_loaded + rest_loaded
+        loaded = prioritize_question_targets(
+            loaded,
+            search_question,
+            prefer_implementation=prefer_impl or code_first or substantive,
+        )
+        if evidence_debug_enabled(trace):
+            record_stage(
+                trace,
+                "08_loaded_spans",
+                {
+                    "spans": summarize_loaded(loaded),
+                    "prefer_implementation": prefer_impl or code_first or substantive,
+                    "intent": retrieval.intent,
+                },
+            )
         load_seconds = perf_counter() - stage
         technologies = _technologies(db, generation.id, search_question)
         step = _trace_step(trace, "09_technology_rows", step)
@@ -983,6 +1057,18 @@ class AnswerService:
                     }
                     for span in loaded_for_answer
                 ]
+            if evidence_debug_enabled(trace) and packed is not None:
+                record_stage(
+                    trace,
+                    "11_pack",
+                    {
+                        "kept": summarize_loaded(
+                            [span for span in packed.spans if isinstance(span, dict)]
+                        ),
+                        "excluded": list(getattr(packed, "excluded", ()) or ())[:48],
+                        "raw_source_bytes": packed.raw_source_bytes,
+                    },
+                )
             source_ids = [_span_chunk_id(span) for span in packed.spans]
             source_ids.extend(edge.edge_id for edge in packed.edges)
             source_ids.extend(item["id"] for item in packed.technologies)
@@ -1068,10 +1154,36 @@ class AnswerService:
                     settings.openai_max_output_tokens,
                     complete_fn,
                     renew=lambda: self._require_pin(db, outcome.pin_id),
-                    failure=failure,
+                    record=failure,
                 )
             claims = resolve_evidence_aliases(claims_payload, aliases)
             kept, citations_valid = review_claims(claims, valid_ids)
+            require_impl_support = prefer_impl or code_first or substantive
+            kept, impl_supported = review_implementation_support(
+                kept,
+                [span for span in packed.spans if isinstance(span, dict)],
+                require_implementation=require_impl_support,
+            )
+            if require_impl_support and not impl_supported:
+                citations_valid = False
+            if evidence_debug_enabled(trace):
+                record_stage(
+                    trace,
+                    "13_citations",
+                    {
+                        "valid_ids": sorted(valid_ids)[:64],
+                        "claims": [
+                            {
+                                "kind": claim.get("kind"),
+                                "evidence_ids": list(claim.get("evidence_ids") or []),
+                                "text_preview": str(claim.get("text") or "")[:160],
+                            }
+                            for claim in kept[:16]
+                        ],
+                        "citations_valid": citations_valid,
+                        "implementation_support": impl_supported,
+                    },
+                )
             claims_before_audit = len(kept)
             filtered = filter_audit_claims(kept)
             if trace is not None and len(filtered) < claims_before_audit:
@@ -1463,18 +1575,18 @@ class AnswerService:
 
 
 def _behavior_symbol_spans(db: Session, generation: IndexGeneration, question: str) -> list[ChunkChoice]:
-    """Body spans for symbols found from behavioral concepts. This does not rescore fusion."""
+    """Implementation spans for symbols found from behavioral concepts (all ordered parts)."""
     if not behavior_concepts(question):
         return []
     catalog = _behavior_catalog(db, generation)
     chosen: list[ChunkChoice] = []
     seen: set[str] = set()
     for item in choose_behavior_symbols(question, catalog):
-        body = pick_best_symbol_chunk(db, generation.id, item["id"])
-        if body is None or body.chunk_id in seen:
-            continue
-        seen.add(body.chunk_id)
-        chosen.append(body)
+        for body in pick_symbol_implementation_chunks(db, generation.id, item["id"]):
+            if body.chunk_id in seen:
+                continue
+            seen.add(body.chunk_id)
+            chosen.append(body)
     return chosen
 
 
@@ -1491,7 +1603,8 @@ def _behavior_claims(db: Session, generation: IndexGeneration, question: str, sp
             (
                 span
                 for span in spans
-                if span.get("qualified_name") == leader["qualified_name"] and span.get("chunk_kind") == "symbol_body"
+                if span.get("qualified_name") == leader["qualified_name"]
+                and span.get("chunk_kind") in {"symbol_body", "symbol_part"}
             ),
             None,
         )
@@ -1519,7 +1632,7 @@ def _behavior_catalog(db: Session, generation: IndexGeneration) -> list[dict]:
 
 
 def _expansion_symbol_spans(db: Session, generation: IndexGeneration, question: str) -> list[ChunkChoice]:
-    """Body spans for symbols whose names are spelled by consecutive question words."""
+    """Implementation spans for symbols whose names are spelled by consecutive question words."""
     names = expansion_names(question)
     if not names:
         return []
@@ -1541,18 +1654,58 @@ def _expansion_symbol_spans(db: Session, generation: IndexGeneration, question: 
     chosen: list[ChunkChoice] = []
     seen: set[str] = set()
     for item in choose_expansion_symbols(question, catalog):
-        body = pick_best_symbol_chunk(db, generation.id, item["id"])
-        if body is None or body.chunk_id in seen:
-            continue
-        seen.add(body.chunk_id)
-        chosen.append(body)
+        for body in pick_symbol_implementation_chunks(db, generation.id, item["id"]):
+            if body.chunk_id in seen:
+                continue
+            seen.add(body.chunk_id)
+            chosen.append(body)
     return chosen
 
 
+def _literal_identifier_names(question: str) -> list[str]:
+    """Snake/camel identifiers written in the question (fuse_anchors, pack_evidence, …)."""
+    found: list[str] = []
+    for token in extract_search_terms(question):
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token):
+            continue
+        if "_" not in token and not (token[:1].isupper() and any(ch.islower() for ch in token[1:])):
+            # Skip plain words; keep snake_case and CamelCase / PascalCase tokens.
+            continue
+        if token not in found:
+            found.append(token)
+    return found
+
+
 def _named_symbol_spans(db: Session, generation: IndexGeneration, question: str) -> list[ChunkChoice]:
-    """Body spans for symbols whose qualified name is written in the question."""
-    names = question_qualified_names(question)
-    if not names:
+    """Implementation spans for symbols the question names (qualified or bare identifiers).
+
+    When a class/type token is named (e.g. AnswerService) but the asked method is stored
+    under a child symbol (AnswerService._answer_events), include those members too—
+    class-level chunks alone are not a substitute for the method body.
+    """
+    qualified = question_qualified_names(question)
+    bare = _literal_identifier_names(question)
+    if not qualified and not bare:
+        return []
+    filters = []
+    snake_named = [name for name in bare if "_" in name]
+    type_named = [name for name in bare if name[:1].isupper() and "_" not in name]
+    if qualified:
+        filters.append(Symbol.qualified_name.in_(qualified))
+    if snake_named:
+        # Prefer exact function/method identifiers; do not also pull the parent class shell
+        # (its multi-megabyte symbol_part sequence crowds small callees out of the pack).
+        filters.append(Symbol.name.in_(snake_named))
+        filters.append(Symbol.qualified_name.in_(snake_named))
+    elif type_named:
+        filters.append(Symbol.name.in_(type_named))
+        filters.append(Symbol.qualified_name.in_(type_named))
+        for name in type_named:
+            filters.append(Symbol.qualified_name.like(f"{name}.%"))
+    elif bare:
+        filters.append(Symbol.name.in_(bare))
+        filters.append(Symbol.qualified_name.in_(bare))
+    if not filters:
         return []
     rows = (
         db.query(Symbol)
@@ -1560,19 +1713,53 @@ def _named_symbol_spans(db: Session, generation: IndexGeneration, question: str)
         .filter(
             GenerationFile.index_generation_id == generation.id,
             Symbol.parser_version == generation.parser_version,
-            Symbol.qualified_name.in_(names),
+            or_(*filters),
         )
         .order_by(Symbol.qualified_name, Symbol.id)
         .all()
     )
+    # Prefer concrete members with chunks over empty class/method shells.
+    rows_with_chunks: list[Symbol] = []
+    empty_shells: list[Symbol] = []
+    for row in rows:
+        chunks = pick_symbol_implementation_chunks(db, generation.id, row.id)
+        if chunks:
+            rows_with_chunks.append(row)
+        else:
+            empty_shells.append(row)
+    # When the question names a type (AnswerService) and member bodies exist, drop the
+    # bare class shell—its multipart sequence crowds methods out of the pack budget.
+    if type_named and not snake_named:
+        member_prefixes = tuple(f"{name}." for name in type_named)
+        has_member_bodies = any(
+            any(row.qualified_name.startswith(prefix) for prefix in member_prefixes)
+            for row in rows_with_chunks
+        )
+        if has_member_bodies:
+            bare = {name for name in type_named}
+            rows_with_chunks = [
+                row
+                for row in rows_with_chunks
+                if not (row.qualified_name in bare and "." not in row.qualified_name)
+            ]
+            empty_shells = [
+                row
+                for row in empty_shells
+                if not (row.qualified_name in bare and "." not in row.qualified_name)
+            ]
+    # Members before any remaining type shells (qualified_name sort puts Class before Class.m).
+    rows_with_chunks.sort(
+        key=lambda row: (0 if "." in (row.qualified_name or "") else 1, row.qualified_name, row.id)
+    )
+    ordered_rows = rows_with_chunks + empty_shells
     chosen: list[ChunkChoice] = []
     seen: set[str] = set()
-    for row in rows:
-        body = pick_best_symbol_chunk(db, generation.id, row.id)
-        if body is None or body.chunk_id in seen:
-            continue
-        seen.add(body.chunk_id)
-        chosen.append(body)
+    for row in ordered_rows:
+        for body in pick_symbol_implementation_chunks(db, generation.id, row.id):
+            if body.chunk_id in seen:
+                continue
+            seen.add(body.chunk_id)
+            chosen.append(body)
     return chosen
 
 

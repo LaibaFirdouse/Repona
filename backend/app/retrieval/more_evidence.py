@@ -5,12 +5,29 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.models.catalog import IndexGeneration
-from app.retrieval.chunk_selection import implementation_chunk_choices
+from app.retrieval.chunk_selection import (
+    implementation_chunk_choices,
+    is_meta_config_path,
+    loaded_span_is_substantive,
+)
 from app.retrieval.fusion import ChunkChoice
 from app.retrieval.overview_boost import overview_chunk_choices
-from app.retrieval.chunk_selection import is_meta_config_path
 from app.retrieval.query_terms import build_lexical_queries, extract_search_terms
 from app.retrieval.workflow_boost import lexical_workflow_chunk_choices
+
+_TOOLING_CONFIG_PREFIXES = (
+    "jest.config",
+    "vitest.config",
+    "webpack.config",
+    "rollup.config",
+    "vite.config",
+    "babel.config",
+)
+
+
+def _is_tooling_config_path(relative_path: str) -> bool:
+    name = relative_path.replace("\\", "/").rsplit("/", 1)[-1].lower()
+    return any(name.startswith(prefix) for prefix in _TOOLING_CONFIG_PREFIXES)
 
 
 def _merge_choices(primary: list[ChunkChoice], extra: list[ChunkChoice], limit: int) -> list[ChunkChoice]:
@@ -87,20 +104,30 @@ def more_evidence_for_audit_recovery(question: str, loaded: list[dict]) -> dict:
             lexical.append(term)
     path_contains: list[str] = []
     seen_paths: set[str] = set()
-    for span in loaded:
-        raw = str(span.get("relative_path") or "").replace("\\", "/")
-        if not raw or is_meta_config_path(raw):
-            continue
-        if raw not in seen_paths:
-            seen_paths.add(raw)
-            path_contains.append(raw)
-        name = raw.rsplit("/", 1)[-1]
-        stem = name.rsplit(".", 1)[0] if "." in name else name
-        if stem and stem.lower() not in seen_paths and len(stem) >= 3:
-            seen_paths.add(stem.lower())
-            path_contains.append(stem)
-        if len(path_contains) >= 6:
-            break
+
+    def add_from(spans: list[dict], *, allow_tooling: bool) -> None:
+        for span in spans:
+            if len(path_contains) >= 6:
+                return
+            raw = str(span.get("relative_path") or "").replace("\\", "/")
+            if not raw or is_meta_config_path(raw):
+                continue
+            if not allow_tooling and _is_tooling_config_path(raw):
+                continue
+            if raw not in seen_paths:
+                seen_paths.add(raw)
+                path_contains.append(raw)
+            name = raw.rsplit("/", 1)[-1]
+            stem = name.rsplit(".", 1)[0] if "." in name else name
+            if stem and stem.lower() not in seen_paths and len(stem) >= 3:
+                seen_paths.add(stem.lower())
+                path_contains.append(stem)
+
+    substantive = [span for span in loaded if loaded_span_is_substantive(span)]
+    add_from(substantive or loaded, allow_tooling=False)
+    # Only fall back to tooling-config paths when nothing else was available.
+    if not path_contains:
+        add_from(loaded, allow_tooling=True)
     return {
         "note": "Replacing a retrieval-meta reply with fuller source excerpts for this question.",
         "lexical_queries": lexical[:4],
