@@ -16,7 +16,7 @@ from app.retrieval.chunk_selection import is_substantive_chunk_kind
 from app.retrieval.fusion import LaneHit
 from app.retrieval.query_router import RetrievalRequest
 
-_SNAKE_NAME = re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b")
+_SNAKE_NAME = re.compile(r"\b_?[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b")
 _PASCAL_NAME = re.compile(r"\b[A-Z][A-Za-z0-9]+\b")
 
 

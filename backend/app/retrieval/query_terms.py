@@ -85,7 +85,7 @@ _STOPWORDS = frozenset(
 
 _QUOTED = re.compile(r"""['"]([^'"]{2,120})['"]""")
 _CAMEL = re.compile(r"[a-z][a-z0-9]*(?:[A-Z][a-z0-9]+)+")
-_SNAKE = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)+")
+_SNAKE = re.compile(r"_?[a-z][a-z0-9]*(?:_[a-z0-9]+)+")
 _ERROR = re.compile(r"[A-Z][a-zA-Z0-9_]*Error|[A-Z][a-zA-Z0-9_]*Exception")
 
 

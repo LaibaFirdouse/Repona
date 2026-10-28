@@ -1,8 +1,8 @@
 # Evidence integrity validation
 
-Generated: `2026-10-28T19:11:22.134517+00:00`
+Generated: `2026-10-28T20:41:04.931225+00:00`
 Repo: `https://github.com/LaibaFirdouse/Repona`
-HEAD: `30180e5681836adf5955aa90f26e9fa8475438a8` (dirty=True)
+HEAD: `0e4db559adebec971912fc97a4eb02b0ad4eecd6` (dirty=True)
 
 ## Commands
 
@@ -16,42 +16,52 @@ DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5433/repona QDRANT
 
 ## Suite: existing_or_initial_generation
 
-- generation_id: `5deb5528-d838-51bf-8553-1ca0497df130`
-- commit: `30180e5681836adf5955aa90f26e9fa8475438a8`
-- files/chunks/vectors: 214/1663/290
+- generation_id: `1f44e321-de97-5834-97df-6f13673b08db`
+- commit: `0e4db559adebec971912fc97a4eb02b0ad4eecd6`
+- files/chunks/vectors: 219/1894/321
 - summary: **7/7** passed
 
-| Case | Pass | Failed checks | Intent |
-|------|------|---------------|--------|
-| `exact_method` | PASS | — | conceptual_search |
-| `large_multipart` | PASS | — | execution_trace |
-| `readme_name_collision` | PASS | — | execution_trace |
-| `imports_false_positive` | PASS | — | execution_trace |
-| `cross_file_trace` | PASS | — | execution_trace |
-| `explicit_path_symbol` | PASS | — | execution_trace |
-| `unavailable_evidence` | PASS | — | exact_lookup |
+| Case | Pass | Failed checks | Not evaluated | Intent |
+|------|------|---------------|---------------|--------|
+| `exact_method` | PASS* | — | citation_ids_in_final_prompt, citation_path_line_mapping | conceptual_search |
+| `large_multipart` | PASS | — | — | execution_trace |
+| `readme_name_collision` | PASS | — | — | execution_trace |
+| `imports_false_positive` | PASS | — | — | execution_trace |
+| `cross_file_trace` | PASS | — | — | execution_trace |
+| `explicit_path_symbol` | PASS | — | — | execution_trace |
+| `unavailable_evidence` | PASS | — | — | exact_lookup |
 
-- `_answer_events` inventory: 5 chunk(s) kinds=['symbol_part', 'symbol_part', 'symbol_part', 'symbol_part', 'symbol_part']
+\* PASS with unevaluated claim/citation checks (no kept claims).
+
+- `_answer_events` inventory: 6 chunk(s) kinds=['symbol_part', 'symbol_part', 'symbol_part', 'symbol_part', 'symbol_part', 'symbol_part']
 
 ## Suite: fresh_lazy_generation
 
-- generation_id: `620b1e4f-07b3-547e-90b5-32c9fdbed277`
-- commit: `30180e5681836adf5955aa90f26e9fa8475438a8`
-- files/chunks/vectors: 214/1524/0
+- generation_id: `209b6367-b917-54ce-8076-1ba24790af91`
+- commit: `0e4db559adebec971912fc97a4eb02b0ad4eecd6`
+- files/chunks/vectors: 219/1723/0
 - summary: **7/7** passed
 
-| Case | Pass | Failed checks | Intent |
-|------|------|---------------|--------|
-| `exact_method` | PASS | — | conceptual_search |
-| `large_multipart` | PASS | — | execution_trace |
-| `readme_name_collision` | PASS | — | execution_trace |
-| `imports_false_positive` | PASS | — | execution_trace |
-| `cross_file_trace` | PASS | — | execution_trace |
-| `explicit_path_symbol` | PASS | — | execution_trace |
-| `unavailable_evidence` | PASS | — | exact_lookup |
+| Case | Pass | Failed checks | Not evaluated | Intent |
+|------|------|---------------|---------------|--------|
+| `exact_method` | PASS* | — | citation_ids_in_final_prompt, citation_path_line_mapping | conceptual_search |
+| `large_multipart` | PASS | — | — | execution_trace |
+| `readme_name_collision` | PASS | — | — | execution_trace |
+| `imports_false_positive` | PASS | — | — | execution_trace |
+| `cross_file_trace` | PASS | — | — | execution_trace |
+| `explicit_path_symbol` | PASS | — | — | execution_trace |
+| `unavailable_evidence` | PASS | — | — | exact_lookup |
+
+\* PASS with unevaluated claim/citation checks (no kept claims).
 
 - `_answer_events` inventory: 0 chunk(s) kinds=[]
 
+## Layers
+
+- Evidence-packet all passed: `True`
+- Claim/citation all passed (evaluated only): `True`
+- Real-model prose validated: `False` (Deterministic mock harness only. Real-model prose quality was not validated.)
+
 ## Recommendation
 
-Evidence-integrity suite passed on the live Repona index for both generations tested. Suitable for a release-candidate tag after normal CI (unit suites already green) and a human spot-check of answer prose.
+Evidence-packet integrity passed on the live Repona index for both generations tested. Claim/citation mapping was evaluated only when the deterministic harness produced kept claims. Real-model prose quality remains an outstanding human/LLM spot-check before a stable release tag.

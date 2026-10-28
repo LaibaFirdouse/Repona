@@ -148,10 +148,28 @@ def content_terms(question: str) -> list[str]:
     return terms
 
 
+def _term_stem_variants(word: str) -> list[str]:
+    """Light English stemming so 'assembles generation' can spell assemble_generation."""
+    variants = [word]
+    if len(word) > 4 and word.endswith("ies"):
+        variants.append(word[:-3] + "y")
+    elif len(word) > 4 and word.endswith("ses"):
+        variants.append(word[:-2])
+    elif len(word) > 3 and word.endswith("s") and not word.endswith("ss"):
+        variants.append(word[:-1])
+    # Preserve order, drop duplicates.
+    found: list[str] = []
+    for item in variants:
+        if item and item not in found:
+            found.append(item)
+    return found
+
+
 def expansion_names(question: str) -> list[str]:
     """Join consecutive question words into symbol-shaped names.
 
     Snake case covers dispatch_request. A lowercased camel form covers getSignature.
+    Trailing -s/-es stems cover phrasing such as \"assembles a generation\".
     The caller still keeps only a few real symbols and does not rescore fusion.
     """
     terms = content_terms(question)
@@ -159,11 +177,17 @@ def expansion_names(question: str) -> list[str]:
     for size in (2, 3):
         for index in range(len(terms) - size + 1):
             window = terms[index : index + size]
-            snake = "_".join(window)
-            camel = window[0] + "".join(part.capitalize() for part in window[1:])
-            for name in (snake, camel.lower()):
-                if name not in names:
-                    names.append(name)
+            variant_lists = [_term_stem_variants(part) for part in window]
+            # Cartesian product of stem variants for the window (small: ≤2^size).
+            combos: list[list[str]] = [[]]
+            for options in variant_lists:
+                combos = [prefix + [option] for prefix in combos for option in options]
+            for combo in combos:
+                snake = "_".join(combo)
+                camel = combo[0] + "".join(part.capitalize() for part in combo[1:])
+                for name in (snake, camel.lower()):
+                    if name not in names:
+                        names.append(name)
     return names
 
 

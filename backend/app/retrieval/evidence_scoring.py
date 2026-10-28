@@ -27,6 +27,13 @@ _DOC_QUESTION = re.compile(
     r"\b(readme|documentation|docs?\b|getting started|install(?:ation)?|setup guide)\b",
     re.I,
 )
+# Leading underscore is significant (_answer_events); bare [a-z]… misses those names.
+_SNAKE_IDENTIFIER = re.compile(r"\b_?[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b")
+
+
+def question_snake_identifiers(question: str) -> set[str]:
+    """Snake_case identifiers from the question, including leading-underscore names."""
+    return set(_SNAKE_IDENTIFIER.findall(question or ""))
 
 
 def is_documentation_path(relative_path: str) -> bool:
@@ -115,11 +122,12 @@ def prioritize_question_targets(
 
     Does not drop README/imports globally—only sinks them for implementation
     questions when stronger code evidence is present.
+    Explicit question-target spans (tagged during named-symbol load) always lead.
     """
     if not spans:
         return []
     named = set(question_qualified_names(question))
-    snake_tokens = set(re.findall(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b", question))
+    snake_tokens = question_snake_identifiers(question)
     type_prefixes: tuple[str, ...] = tuple(
         f"{token}." for token in named if "." not in token and token[:1].isupper()
     )
@@ -148,7 +156,7 @@ def prioritize_question_targets(
         )
         member_hit = bool(qname) and any(qname.startswith(prefix) for prefix in type_prefixes)
         bare_type_hit = bool(qname) and "." not in qname and qname in named
-        if snake_or_qualified:
+        if span.get("question_target") or snake_or_qualified:
             named_hit = 0
         elif member_hit:
             named_hit = 1

@@ -759,11 +759,19 @@ class AnswerService:
                         snapshot_root=Path(revision.snapshot_path),
                         generation=generation,
                         qdrant_url=self.qdrant_url,
-                        embed=self.embed,
+                        embed=self.embed if settings.lazy_embed_on_query else None,
                     )
                 except Exception as exc:
                     if trace is not None:
                         trace.setdefault("graph_expand", {})["materialize_error"] = str(exc)
+                else:
+                    # Bodies exist only after materialize; re-pick so deferred neighbours enter spans.
+                    for symbol_id in missing_neighbors:
+                        extra = pick_best_symbol_chunk(db, generation.id, symbol_id)
+                        if extra is not None and all(item.chunk_id != extra.chunk_id for item in spans):
+                            spans.append(extra)
+                    if trace is not None:
+                        trace.setdefault("graph_expand", {})["materialized_symbols"] = list(missing_neighbors)
         graph_seconds = perf_counter() - stage
         step = _trace_step(trace, "05_neo4j_edges_and_neighbor_chunks", step)
         path_chunks = {chunk_id for _, chunk_id in _path_file_hits(db, generation, search_question)}
@@ -774,6 +782,32 @@ class AnswerService:
         step = _trace_step(trace, "06_path_chunk_reorder", step)
         if trace is not None:
             trace["candidate_chunk_ids"] = [span.chunk_id for span in spans]
+        if retrieval.needs_source_bodies and revision.snapshot_path:
+            named_missing = _named_symbol_ids_missing_bodies(db, generation, search_question)
+            if named_missing:
+                lazy_named: dict = {}
+                try:
+                    materialize_symbol_chunks(
+                        db,
+                        repository_id=repository.id,
+                        generation_id=generation.id,
+                        fingerprint=generation.embedding_config_fingerprint,
+                        parser_version=generation.parser_version,
+                        symbol_ids=named_missing,
+                        snapshot_root=Path(revision.snapshot_path),
+                        generation=generation,
+                        qdrant_url=self.qdrant_url,
+                        embed=self.embed if settings.lazy_embed_on_query else None,
+                        vector_stats=lazy_named,
+                    )
+                except Exception as exc:
+                    if trace is not None:
+                        trace.setdefault("named_materialize", {})["error"] = str(exc)
+                else:
+                    if trace is not None:
+                        trace.setdefault("named_materialize", {}).update(
+                            {"materialized_symbols": list(named_missing), **lazy_named}
+                        )
         named = _named_symbol_spans(db, generation, search_question)
         expanded = _expansion_symbol_spans(db, generation, search_question)
         behavior = _behavior_symbol_spans(db, generation, search_question)
@@ -878,7 +912,15 @@ class AnswerService:
                     },
                 )
             cap = span_limit + (settings.answer_overview_span_bonus if prefer_impl or code_first else 0)
-            spans = spans[: max(cap, span_limit)]
+            # Never drop explicitly named symbol parts when trimming to the span cap.
+            named_anchors = {item.anchor_id for item in named if item.anchor_id}
+            if named_anchors and len(spans) > max(cap, span_limit):
+                essential = [item for item in spans if item.anchor_id in named_anchors]
+                rest = [item for item in spans if item.anchor_id not in named_anchors]
+                room = max(0, max(cap, span_limit) - len(essential))
+                spans = essential + rest[:room]
+            else:
+                spans = spans[: max(cap, span_limit)]
         if prefer_impl:
             spans = deprioritize_meta_config_spans(spans)
         if trace is not None and workflow_queries:
@@ -928,6 +970,14 @@ class AnswerService:
         step = _trace_step(trace, "08_snapshot_validate_and_load_span_text", step)
         loaded = deprioritize_thin_spans(loaded)
         priority_ids = {item.chunk_id for item in named + expanded + behavior}
+        # Named identifiers and expansion-spelled symbols are first-class question targets.
+        required_symbol_ids = {
+            item.anchor_id for item in named + expanded if item.anchor_id
+        }
+        for span in loaded:
+            sid = str(span.get("symbol_id") or "")
+            if sid and sid in required_symbol_ids:
+                span["question_target"] = True
         score_terms = extract_search_terms(search_question)
         priority_loaded = sort_loaded_spans(
             [span for span in loaded if span["chunk_id"] in priority_ids],
@@ -1046,6 +1096,7 @@ class AnswerService:
                 search_question=search_question,
                 prefer_implementation=prefer_impl,
                 allow_overview=pack_for_overview,
+                required_symbol_ids=required_symbol_ids,
             )
             step = _trace_step(trace, "11_pack_evidence_to_context_budget", step)
             if trace is not None:
@@ -1057,6 +1108,9 @@ class AnswerService:
                     }
                     for span in loaded_for_answer
                 ]
+                incomplete = getattr(packed, "incomplete_targets", ()) or ()
+                if incomplete:
+                    trace["incomplete_targets"] = list(incomplete)
             if evidence_debug_enabled(trace) and packed is not None:
                 record_stage(
                     trace,
@@ -1067,8 +1121,24 @@ class AnswerService:
                         ),
                         "excluded": list(getattr(packed, "excluded", ()) or ())[:48],
                         "raw_source_bytes": packed.raw_source_bytes,
+                        "incomplete_targets": list(getattr(packed, "incomplete_targets", ()) or ()),
                     },
                 )
+            incomplete_targets = getattr(packed, "incomplete_targets", ()) or ()
+            if incomplete_targets:
+                names = ", ".join(
+                    str(item.get("qualified_name") or item.get("symbol_id") or "symbol")
+                    for item in incomplete_targets
+                )
+                note = (
+                    f"Only partial source coverage for {names} "
+                    f"(kept {[item.get('kept_parts') for item in incomplete_targets]} of "
+                    f"{[item.get('total_parts') for item in incomplete_targets]} parts); "
+                    "answer only what the excerpts support—do not imply the full implementation was retrieved."
+                )
+                if note not in dialog_notes:
+                    dialog_notes.append(note)
+                user_block = _dialog_user_block(question, dialog_notes, history_prefix=history_prefix)
             source_ids = [_span_chunk_id(span) for span in packed.spans]
             source_ids.extend(edge.edge_id for edge in packed.edges)
             source_ids.extend(item["id"] for item in packed.technologies)
@@ -1676,17 +1746,12 @@ def _literal_identifier_names(question: str) -> list[str]:
     return found
 
 
-def _named_symbol_spans(db: Session, generation: IndexGeneration, question: str) -> list[ChunkChoice]:
-    """Implementation spans for symbols the question names (qualified or bare identifiers).
-
-    When a class/type token is named (e.g. AnswerService) but the asked method is stored
-    under a child symbol (AnswerService._answer_events), include those members too—
-    class-level chunks alone are not a substitute for the method body.
-    """
+def _named_symbol_filters(question: str) -> tuple[list, list[str], list[str]]:
+    """SQLAlchemy filters + snake/type name lists for question-named catalogue symbols."""
     qualified = question_qualified_names(question)
     bare = _literal_identifier_names(question)
     if not qualified and not bare:
-        return []
+        return [], [], []
     filters = []
     snake_named = [name for name in bare if "_" in name]
     type_named = [name for name in bare if name[:1].isupper() and "_" not in name]
@@ -1705,6 +1770,45 @@ def _named_symbol_spans(db: Session, generation: IndexGeneration, question: str)
     elif bare:
         filters.append(Symbol.name.in_(bare))
         filters.append(Symbol.qualified_name.in_(bare))
+    return filters, snake_named, type_named
+
+
+def _named_symbol_ids_missing_bodies(
+    db: Session, generation: IndexGeneration, question: str
+) -> list[str]:
+    """Catalogue symbols the question names/expands that still lack materialised body chunks."""
+    filters, _snake, _type = _named_symbol_filters(question)
+    expansion = expansion_names(question)
+    if expansion:
+        filters = list(filters) + [Symbol.name.in_(expansion), Symbol.qualified_name.in_(expansion)]
+    if not filters:
+        return []
+    rows = (
+        db.query(Symbol)
+        .join(GenerationFile, GenerationFile.file_id == Symbol.file_id)
+        .filter(
+            GenerationFile.index_generation_id == generation.id,
+            Symbol.parser_version == generation.parser_version,
+            or_(*filters),
+        )
+        .order_by(Symbol.qualified_name, Symbol.id)
+        .all()
+    )
+    missing: list[str] = []
+    for row in rows:
+        if not pick_symbol_implementation_chunks(db, generation.id, row.id):
+            missing.append(row.id)
+    return missing_symbol_chunk_ids(db, generation.id, missing) if missing else []
+
+
+def _named_symbol_spans(db: Session, generation: IndexGeneration, question: str) -> list[ChunkChoice]:
+    """Implementation spans for symbols the question names (qualified or bare identifiers).
+
+    When a class/type token is named (e.g. AnswerService) but the asked method is stored
+    under a child symbol (AnswerService._answer_events), include those members too—
+    class-level chunks alone are not a substitute for the method body.
+    """
+    filters, snake_named, type_named = _named_symbol_filters(question)
     if not filters:
         return []
     rows = (
@@ -2238,8 +2342,10 @@ def _pack_repository_evidence(
     search_question: str = "",
     prefer_implementation: bool = False,
     allow_overview: bool = True,
+    required_symbol_ids: set[str] | None = None,
 ):
     loaded_work = list(loaded)
+    required_ids = required_symbol_ids or set()
     packed = pack_evidence(
         header,
         loaded_work,
@@ -2252,6 +2358,7 @@ def _pack_repository_evidence(
         span_text=lambda span: (span["raw_bytes"], _span_piece(span)),
         edge_text=lambda edge: _edge_piece(edge, edge_db),
         technology_text=lambda item: f"\ntechnology {item['id']} {item['name']} {item['evidence_text']}",
+        required_symbol_ids=required_ids,
     )
     if not packed.spans and not packed.edges:
         boost = empty_pack_fallback_choices(
@@ -2276,6 +2383,7 @@ def _pack_repository_evidence(
                 span_text=lambda span: (span["raw_bytes"], _span_piece(span)),
                 edge_text=lambda edge: _edge_piece(edge, edge_db),
                 technology_text=lambda item: f"\ntechnology {item['id']} {item['name']} {item['evidence_text']}",
+                required_symbol_ids=required_ids,
             )
         elif not loaded_work:
             loaded_work = indexed_path_spans_for_question(
@@ -2295,6 +2403,7 @@ def _pack_repository_evidence(
                 span_text=lambda span: (span["raw_bytes"], _span_piece(span)),
                 edge_text=lambda edge: _edge_piece(edge, edge_db),
                 technology_text=lambda item: f"\ntechnology {item['id']} {item['name']} {item['evidence_text']}",
+                required_symbol_ids=required_ids,
             )
     return packed, loaded_work
 

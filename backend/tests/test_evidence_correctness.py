@@ -554,5 +554,169 @@ class DocsAndImportsPrimaryWhenAskedTests(unittest.TestCase):
         self.assertEqual(ordered[0]["chunk_id"], "readme")
 
 
+class ExplicitMultipartTargetPackingTests(unittest.TestCase):
+    """BUG 1: named multipart function must survive pack ahead of graph neighbours."""
+
+    def _six_parts(self) -> list[dict]:
+        parts = []
+        cursor = 0
+        bodies = [
+            "def _answer_events(self):\n    fused = fuse_anchors(lanes)\n",
+            "    ranks = {a: i for i, a in enumerate(fused)}\n    edges = self._edges()\n",
+            "    spans = materialize_anchors(fused, choices)\n",
+            "    named = _named_symbol_spans(db, generation, question)\n",
+            "    loaded = _load_span_text(db, generation.id, revision, spans, blobs)\n",
+            "    packed = pack_evidence(header, loaded, edges, techs)\n    return packed\n",
+        ]
+        for index, text in enumerate(bodies):
+            raw = text.encode("utf-8")
+            parts.append(
+                _loaded(
+                    chunk_id=f"ae-{index}",
+                    path="backend/app/retrieval/answer.py",
+                    qname="AnswerService._answer_events",
+                    kind="symbol_part",
+                    start_line=10 + index * 10,
+                    end_line=19 + index * 10,
+                    text=text,
+                    raw_bytes=len(raw),
+                    symbol_id="sym.answer_events",
+                    start_byte=cursor,
+                    end_byte=cursor + len(raw),
+                )
+            )
+            parts[-1]["question_target"] = True
+            cursor += len(raw)
+        return parts
+
+    def test_leading_underscore_snake_outranks_graph_neighbours(self) -> None:
+        from app.retrieval.evidence_scoring import question_snake_identifiers
+
+        self.assertIn("_answer_events", question_snake_identifiers("How does _answer_events work?"))
+        target = self._six_parts()
+        competitors = [
+            _loaded(
+                chunk_id=f"graph-{index}",
+                path="backend/app/ingestion/graph_store.py",
+                qname=name,
+                kind="symbol_body",
+                text=("def " + name + "():\n" + ("    x = 1\n" * 80)),
+                raw_bytes=4000,
+                symbol_id=f"sym.{name}",
+                start_byte=index * 5000,
+                end_byte=index * 5000 + 4000,
+            )
+            for index, name in enumerate(
+                ("write_graph", "upsert_nodes", "link_edges", "flush_batch", "rebuild_index")
+            )
+        ]
+        # Competitors first (as if fusion ranked them ahead); prioritize must restore target.
+        ordered = prioritize_question_targets(
+            competitors + target,
+            "How does _answer_events work?",
+            prefer_implementation=True,
+        )
+        leading = [span["chunk_id"] for span in ordered[:6]]
+        self.assertEqual(leading, [f"ae-{i}" for i in range(6)])
+
+    def test_required_parts_fill_final_prompt_in_source_order(self) -> None:
+        target = self._six_parts()
+        competitors = [
+            _loaded(
+                chunk_id="graph-big",
+                path="backend/app/ingestion/graph_store.py",
+                qname="write_graph",
+                kind="symbol_body",
+                text="W" * 12_000,
+                raw_bytes=12_000,
+                symbol_id="sym.write_graph",
+                start_byte=0,
+                end_byte=12_000,
+            ),
+            _loaded(
+                chunk_id="readme",
+                path="README.md",
+                kind="non_code",
+                text="_answer_events is described in the docs.",
+                raw_bytes=40,
+            ),
+        ]
+        ordered = prioritize_question_targets(
+            competitors + target,
+            "How does _answer_events work?",
+            prefer_implementation=True,
+        )
+        packed = pack_evidence(
+            "How does _answer_events work?\n",
+            ordered,
+            [],
+            [],
+            source_byte_cap=50_000,
+            input_byte_cap=200_000,
+            context_tokens=200_000,
+            output_tokens=1,
+            span_text=lambda span: (span["raw_bytes"], span["text"]),
+            edge_text=lambda _e: "",
+            technology_text=lambda _t: "",
+            required_symbol_ids={"sym.answer_events"},
+        )
+        kept_ids = [span["chunk_id"] for span in packed.spans]
+        self.assertEqual(kept_ids[:6], [f"ae-{i}" for i in range(6)])
+        self.assertEqual(packed.incomplete_targets, ())
+        prompt = "How does _answer_events work?\n" + "".join(span["text"] for span in packed.spans)
+        for index in range(6):
+            self.assertIn(target[index]["text"].strip(), prompt)
+            self.assertEqual(packed.spans[index]["symbol_id"], "sym.answer_events")
+            self.assertEqual(packed.spans[index]["qualified_name"], "AnswerService._answer_events")
+            self.assertEqual(packed.spans[index]["start_line"], target[index]["start_line"])
+            self.assertEqual(packed.spans[index]["end_line"], target[index]["end_line"])
+        # Unrelated neighbour may follow after the required parts, but must not displace them.
+        if "graph-big" in kept_ids:
+            self.assertGreater(kept_ids.index("graph-big"), 5)
+
+    def test_incomplete_coverage_recorded_when_budget_blocks_parts(self) -> None:
+        target = self._six_parts()
+        # Tight model-context budget so only the first two required parts fit.
+        # Optional neighbours must not steal that budget from the named function.
+        two_parts_text = "q\n" + "".join(span["text"] for span in target[:2])
+        # estimate_tokens ≈ utf8_len // 4; leave room for ~2 parts only.
+        context_tokens = max(8, len(two_parts_text.encode("utf-8")) // 4 + 2)
+        packed = pack_evidence(
+            "q\n",
+            target
+            + [
+                _loaded(
+                    chunk_id="neighbour",
+                    path="backend/app/ingestion/graph_store.py",
+                    qname="write_graph",
+                    kind="symbol_body",
+                    text="N" * 20,
+                    raw_bytes=20,
+                    symbol_id="sym.write_graph",
+                )
+            ],
+            [],
+            [],
+            source_byte_cap=40,
+            input_byte_cap=100_000,
+            context_tokens=context_tokens,
+            output_tokens=1,
+            span_text=lambda span: (span["raw_bytes"], span["text"]),
+            edge_text=lambda _e: "",
+            technology_text=lambda _t: "",
+            required_symbol_ids={"sym.answer_events"},
+        )
+        kept_ids = [span["chunk_id"] for span in packed.spans]
+        self.assertTrue(all(item.startswith("ae-") for item in kept_ids))
+        self.assertLess(len(kept_ids), 6)
+        self.assertEqual(len(packed.incomplete_targets), 1)
+        incomplete = packed.incomplete_targets[0]
+        self.assertEqual(incomplete["symbol_id"], "sym.answer_events")
+        self.assertEqual(incomplete["qualified_name"], "AnswerService._answer_events")
+        self.assertEqual(incomplete["kept_parts"], len(kept_ids))
+        self.assertEqual(incomplete["total_parts"], 6)
+        self.assertNotIn("neighbour", kept_ids)
+
+
 if __name__ == "__main__":
     unittest.main()

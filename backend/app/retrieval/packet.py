@@ -20,6 +20,19 @@ class Packed:
     technologies: list
     raw_source_bytes: int
     excluded: tuple = ()
+    incomplete_targets: tuple = ()
+
+
+def _span_symbol_id(span) -> str:
+    if isinstance(span, dict):
+        return str(span.get("symbol_id") or "")
+    return str(getattr(span, "symbol_id", "") or "")
+
+
+def _span_chunk_kind(span) -> str:
+    if isinstance(span, dict):
+        return str(span.get("chunk_kind") or "")
+    return str(getattr(span, "kind", "") or getattr(span, "chunk_kind", "") or "")
 
 
 def _span_identity(span) -> tuple:
@@ -55,6 +68,58 @@ def _spans_overlap(left, right) -> bool:
     return not (le <= rs or re <= ls)
 
 
+def _order_spans_for_pack(spans: list, required_symbol_ids: set[str] | None) -> list:
+    """Pack explicitly requested symbol bodies before optional graph/secondary context."""
+    if not required_symbol_ids:
+        return list(spans)
+    required: list = []
+    optional: list = []
+    for span in spans:
+        symbol_id = _span_symbol_id(span)
+        kind = _span_chunk_kind(span)
+        if symbol_id and symbol_id in required_symbol_ids and kind in {"symbol_body", "symbol_part"}:
+            required.append(span)
+        elif isinstance(span, dict) and span.get("question_target") and kind in {"symbol_body", "symbol_part"}:
+            required.append(span)
+        else:
+            optional.append(span)
+    return required + optional
+
+
+def _incomplete_target_records(spans: list, kept_spans: list, required_symbol_ids: set[str] | None) -> tuple:
+    if not required_symbol_ids:
+        return ()
+    incomplete: list[dict] = []
+    for symbol_id in required_symbol_ids:
+        wanted = [
+            span
+            for span in spans
+            if _span_symbol_id(span) == symbol_id and _span_chunk_kind(span) in {"symbol_body", "symbol_part"}
+        ]
+        if not wanted:
+            continue
+        kept = [
+            span
+            for span in kept_spans
+            if _span_symbol_id(span) == symbol_id and _span_chunk_kind(span) in {"symbol_body", "symbol_part"}
+        ]
+        if len(kept) >= len(wanted):
+            continue
+        sample = wanted[0]
+        qname = ""
+        if isinstance(sample, dict):
+            qname = str(sample.get("qualified_name") or "")
+        incomplete.append(
+            {
+                "symbol_id": symbol_id,
+                "qualified_name": qname,
+                "kept_parts": len(kept),
+                "total_parts": len(wanted),
+            }
+        )
+    return tuple(incomplete)
+
+
 def pack_evidence(
     header: str,
     spans: list,
@@ -70,12 +135,17 @@ def pack_evidence(
     span_text,
     edge_text,
     technology_text,
+    required_symbol_ids: set[str] | frozenset | None = None,
 ) -> Packed:
     """Add higher-priority evidence first. `span_text` returns `(raw_bytes, utf8_piece)`.
 
-    A span that does not fit is skipped so later, smaller candidates can still enter.
+    Explicitly requested symbol parts pack before optional neighbours. A span that
+    does not fit is skipped so later, smaller candidates can still enter.
     Exclusion reasons are recorded on Packed.excluded (chunk id + reason).
+    Incomplete required coverage is recorded on Packed.incomplete_targets.
     """
+    required_ids = {item for item in (required_symbol_ids or set()) if item}
+    ordered_spans = _order_spans_for_pack(spans, required_ids)
     counter = count_tokens or estimate_tokens
     kept_spans = []
     kept_edges = []
@@ -84,7 +154,7 @@ def pack_evidence(
     raw_bytes = 0
     body = header
     seen_ids: set = set()
-    for span in spans:
+    for span in ordered_spans:
         identity = _span_identity(span)
         chunk_id = identity[0]
         if chunk_id is not None and chunk_id in seen_ids:
@@ -94,21 +164,44 @@ def pack_evidence(
             excluded.append({"chunk_id": chunk_id, "reason": "overlapping_span"})
             continue
         span_raw, piece = span_text(span)
-        if raw_bytes + span_raw > source_byte_cap:
-            excluded.append({"chunk_id": chunk_id, "reason": "source_byte_cap", "raw_bytes": span_raw})
-            continue
-        if not _fits(
-            body + piece,
-            raw_bytes + span_raw,
-            source_byte_cap,
-            input_byte_cap,
-            context_tokens,
-            output_tokens,
-            margin_tokens,
-            counter,
-        ):
-            excluded.append({"chunk_id": chunk_id, "reason": "context_budget", "raw_bytes": span_raw})
-            continue
+        symbol_id = _span_symbol_id(span)
+        kind = _span_chunk_kind(span)
+        is_required = bool(
+            symbol_id
+            and symbol_id in required_ids
+            and kind in {"symbol_body", "symbol_part"}
+        ) or bool(
+            isinstance(span, dict)
+            and span.get("question_target")
+            and kind in {"symbol_body", "symbol_part"}
+        )
+        # Soft byte caps apply to optional context. Required named parts may exceed
+        # SOURCE/INPUT byte caps when the model context window still has room.
+        if is_required:
+            if not fits_model_context(
+                counter(body + piece),
+                output_tokens,
+                margin_tokens,
+                context_tokens,
+            ):
+                excluded.append({"chunk_id": chunk_id, "reason": "context_budget", "raw_bytes": span_raw})
+                continue
+        else:
+            if raw_bytes + span_raw > source_byte_cap:
+                excluded.append({"chunk_id": chunk_id, "reason": "source_byte_cap", "raw_bytes": span_raw})
+                continue
+            if not _fits(
+                body + piece,
+                raw_bytes + span_raw,
+                source_byte_cap,
+                input_byte_cap,
+                context_tokens,
+                output_tokens,
+                margin_tokens,
+                counter,
+            ):
+                excluded.append({"chunk_id": chunk_id, "reason": "context_budget", "raw_bytes": span_raw})
+                continue
         body += piece
         raw_bytes += span_raw
         kept_spans.append(span)
@@ -128,7 +221,8 @@ def pack_evidence(
             continue
         body += piece
         kept_technologies.append(technology)
-    return Packed(kept_spans, kept_edges, kept_technologies, raw_bytes, tuple(excluded))
+    incomplete = _incomplete_target_records(spans, kept_spans, required_ids)
+    return Packed(kept_spans, kept_edges, kept_technologies, raw_bytes, tuple(excluded), incomplete)
 
 
 def estimate_tokens(text: str) -> int:

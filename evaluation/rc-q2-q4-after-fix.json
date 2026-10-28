@@ -1,0 +1,51 @@
+{
+  "q2": {
+    "ae": 6,
+    "assemble": 0,
+    "packet": 6,
+    "incomplete": null,
+    "ae_lines": [
+      "None-None",
+      "None-None",
+      "None-None",
+      "None-None",
+      "None-None",
+      "None-None"
+    ],
+    "ae_order_ok": false,
+    "assemble_path": [],
+    "named_mat": null,
+    "qnames": [
+      "AnswerService._answer_events",
+      "AnswerService._answer_events",
+      "AnswerService._answer_events",
+      "AnswerService._answer_events",
+      "AnswerService._answer_events",
+      "AnswerService._answer_events"
+    ]
+  },
+  "q4": {
+    "ae": 0,
+    "assemble": 1,
+    "packet": 19,
+    "incomplete": null,
+    "ae_lines": [],
+    "ae_order_ok": true,
+    "assemble_path": [
+      "backend/app/ingestion/assemble.py"
+    ],
+    "named_mat": null,
+    "qnames": [
+      "assemble_generation",
+      "ingest_commit",
+      "ingestion_benchmark_trace",
+      "record_step",
+      "active_steps",
+      "delete_repository_graph",
+      "write_graph",
+      "_write_edges",
+      "ensure_constraints",
+      "_write_nodes"
+    ]
+  }
+}
