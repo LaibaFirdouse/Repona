@@ -6,6 +6,7 @@ import unittest
 import urllib.error
 import urllib.request
 from contextlib import redirect_stdout
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from pydantic import ValidationError
@@ -17,6 +18,7 @@ from app.core.config import settings
 from app.retrieval.answer import SYSTEM_PROMPT, Cancelled, compose_model_answer
 from app.retrieval.model_call import ClaimFailureNote, collect_model_claims, log_claim_failure, log_claim_timing, parse_claims
 from app.retrieval.packet import NO_CITED_CLAIM, review_claims
+from app.retrieval.prompt_budget import resolve_prompt_budget
 from app.schemas.qa import RepositoryQuestionRequest
 from app.services.llm.base import LLMProviderError
 from app.services.llm.claude_provider import ClaudeProvider
@@ -128,7 +130,15 @@ class RepairTests(unittest.TestCase):
             calls.append(user_message)
             return "not-json"
 
-        with patch("app.retrieval.model_call.estimate_tokens", return_value=settings.llm_context_tokens):
+        budget = resolve_prompt_budget()
+        with patch(
+            "app.retrieval.model_call.resolve_prompt_budget",
+            return_value=SimpleNamespace(
+                repair_exceeds=lambda *_args, **_kwargs: True,
+                context_tokens=budget.context_tokens,
+                margin_tokens=budget.margin_tokens,
+            ),
+        ):
             claims = collect_model_claims("system", "packet evidence", 40, complete, lambda: None)
         self.assertEqual(claims, [])
         self.assertEqual(calls, ["packet evidence"])

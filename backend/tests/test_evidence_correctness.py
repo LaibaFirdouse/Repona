@@ -21,6 +21,7 @@ from app.retrieval.evidence_scoring import prioritize_question_targets
 from app.retrieval.fusion import ChunkChoice, materialize_anchors, representative_chunk_choices
 from app.retrieval.packet import (
     assign_evidence_aliases,
+    conservative_byte_tokens,
     pack_evidence,
     resolve_evidence_aliases,
     review_claims,
@@ -679,8 +680,8 @@ class ExplicitMultipartTargetPackingTests(unittest.TestCase):
         # Tight model-context budget so only the first two required parts fit.
         # Optional neighbours must not steal that budget from the named function.
         two_parts_text = "q\n" + "".join(span["text"] for span in target[:2])
-        # estimate_tokens ≈ utf8_len // 4; leave room for ~2 parts only.
-        context_tokens = max(8, len(two_parts_text.encode("utf-8")) // 4 + 2)
+        # estimate_tokens ≈ ceil(utf8_len / 3); leave room for ~2 parts only.
+        context_tokens = max(8, conservative_byte_tokens(two_parts_text) + 2)
         packed = pack_evidence(
             "q\n",
             target

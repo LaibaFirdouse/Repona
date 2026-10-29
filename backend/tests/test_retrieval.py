@@ -24,7 +24,11 @@ from app.retrieval.fusion import (
     select_edges,
 )
 from app.retrieval.packet import (
+    CONSERVATIVE_BYTES_PER_TOKEN,
+    approximate_token_margin,
     assign_evidence_aliases,
+    conservative_byte_tokens,
+    estimate_tokens,
     fits_model_context,
     implementation_before_tests,
     ollama_prompt_fits,
@@ -374,13 +378,31 @@ class PacketTests(unittest.TestCase):
         self.assertEqual([span["id"] for span in packed.spans], ["a"])
 
     def test_qwen_template_matches_the_measured_ollama_count(self) -> None:
-        self.assertEqual(qwen_prompt_tokens("Reply with a JSON object.", "Say hi."), 22)
+        # Verified Ollama qwen2.5:1.5b path only; may download/cache from Hugging Face.
+        try:
+            self.assertEqual(qwen_prompt_tokens("Reply with a JSON object.", "Say hi."), 22)
+        except Exception as error:
+            self.skipTest(f"Qwen tokenizer unavailable: {error}")
 
     def test_ollama_budget_leaves_output_room_and_a_margin(self) -> None:
         self.assertTrue(fits_model_context(3000, 800, 256, 4096))
         self.assertFalse(fits_model_context(3041, 800, 256, 4096))
-        with patch("app.retrieval.packet.qwen_prompt_tokens", return_value=4000):
-            self.assertFalse(ollama_prompt_fits("system", "user", 800))
+        with patch("app.retrieval.prompt_budget.qwen_prompt_tokens", return_value=4000):
+            self.assertFalse(ollama_prompt_fits("system", "user", 800, model="qwen2.5:1.5b"))
+
+    def test_cursor_token_estimate_is_conservative_not_exact(self) -> None:
+        text = "a" * 12
+        self.assertEqual(CONSERVATIVE_BYTES_PER_TOKEN, 3)
+        self.assertEqual(conservative_byte_tokens(text), 4)
+        self.assertEqual(estimate_tokens(text, "cursor"), 4)
+        self.assertEqual(approximate_token_margin("cursor"), 256)
+        # Without tiktoken, OpenAI resolves to conservative_bytes + margin.
+        with patch("app.retrieval.prompt_budget._tiktoken_encoding", return_value=None):
+            self.assertEqual(approximate_token_margin("openai"), 256)
+        # Verified Qwen Ollama still reserves CONTEXT_MARGIN_TOKENS.
+        self.assertEqual(approximate_token_margin("ollama", "qwen2.5:1.5b"), 256)
+        # Unmatched Ollama models also use the conservative margin (not Qwen).
+        self.assertEqual(approximate_token_margin("ollama", "llama3.2:3b"), 256)
 
     def test_token_budget_drops_lower_priority_evidence(self) -> None:
         spans = [{"id": "a", "raw": 4, "text": "abcd"}, {"id": "b", "raw": 4, "text": "efgh"}]

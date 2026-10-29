@@ -225,24 +225,46 @@ def pack_evidence(
     return Packed(kept_spans, kept_edges, kept_technologies, raw_bytes, tuple(excluded), incomplete)
 
 
-def estimate_tokens(text: str) -> int:
+# Conservative UTF-8 heuristic for providers without a verified local tokenizer
+# (Cursor, unmatched Ollama models, Claude CLI, …). Typical BPE for ASCII/code
+# is closer to 4 bytes/token; 3 bytes/token deliberately overestimates so packing
+# stays inside the window. This is not an exact model token count.
+CONSERVATIVE_BYTES_PER_TOKEN = 3
+
+
+def estimate_tokens(text: str, provider: str | None = None, model: str | None = None) -> int:
+    """Estimate prompt tokens for a provider (+ optional model).
+
+    Prefer resolve_prompt_budget() for packing and repair. This helper remains
+    for callers that only need a plain-text estimate.
+    """
     if not text:
         return 0
-    if settings.llm_provider == "openai":
-        try:
-            import tiktoken
+    from app.retrieval.prompt_budget import resolve_prompt_budget
 
-            return len(tiktoken.encoding_for_model(settings.openai_model).encode(text))
-        except Exception:
-            pass
-    return max(1, len(text.encode("utf-8")) // 4)
+    return resolve_prompt_budget(provider, model).count_text(text)
+
+
+def conservative_byte_tokens(text: str) -> int:
+    """Overestimate tokens from UTF-8 size. Not a model-exact count."""
+    if not text:
+        return 0
+    return max(1, (len(text.encode("utf-8")) + CONSERVATIVE_BYTES_PER_TOKEN - 1) // CONSERVATIVE_BYTES_PER_TOKEN)
+
+
+def approximate_token_margin(provider: str | None = None, model: str | None = None) -> int:
+    """Reserve tokens when the active budget strategy is approximate."""
+    from app.retrieval.prompt_budget import resolve_prompt_budget
+
+    return resolve_prompt_budget(provider, model).margin_tokens
 
 
 _qwen_tokenizer = None
+_qwen_load_error: BaseException | None = None
 
 
 def render_qwen_chat(system: str, user: str) -> str:
-    """Render the Qwen chat prompt Ollama evaluates. This matches qwen2.5:1.5b."""
+    """Render the Qwen2.5 Instruct chat template (verified for qwen2.5:1.5b)."""
     return (
         "<|im_start|>system\n"
         + system
@@ -253,18 +275,30 @@ def render_qwen_chat(system: str, user: str) -> str:
 
 
 def qwen_prompt_tokens(system: str, user: str) -> int:
-    """Count system, user, and chat-template tokens with the Qwen tokenizer."""
+    """Count system, user, and chat-template tokens with the Qwen tokenizer.
+
+    Call only when the Ollama model is verified to use this template (see
+    prompt_budget.ollama_model_uses_qwen_tokenizer). Lazy-loads
+    Qwen/Qwen2.5-1.5B-Instruct from the Hugging Face cache or Hub.
+    """
     return len(_qwen().encode(render_qwen_chat(system, user), add_special_tokens=False))
 
 
-def ollama_prompt_fits(system: str, user: str, output_tokens: int) -> bool:
-    """True when the rendered prompt, output budget, and margin fit OLLAMA_NUM_CTX."""
-    return fits_model_context(
-        qwen_prompt_tokens(system, user),
-        output_tokens,
-        settings.context_margin_tokens,
-        settings.ollama_num_ctx,
-    )
+def ollama_prompt_fits(
+    system: str,
+    user: str,
+    output_tokens: int,
+    model: str | None = None,
+) -> bool:
+    """True when the Ollama prompt, output budget, and margin fit OLLAMA_NUM_CTX.
+
+    Uses the Qwen tokenizer only for verified Qwen Ollama models; otherwise the
+    conservative byte estimate and the same CONTEXT_MARGIN_TOKENS reserve.
+    """
+    from app.retrieval.prompt_budget import resolve_prompt_budget
+
+    budget = resolve_prompt_budget("ollama", model)
+    return budget.fits(budget.count_chat(system, user), output_tokens)
 
 
 def fits_model_context(prompt_tokens: int, output_tokens: int, margin_tokens: int, context_tokens: int) -> bool:
@@ -272,12 +306,27 @@ def fits_model_context(prompt_tokens: int, output_tokens: int, margin_tokens: in
 
 
 def _qwen():
-    global _qwen_tokenizer
-    if _qwen_tokenizer is None:
+    """Lazy Hugging Face tokenizer load. Never called on the Cursor path."""
+    global _qwen_tokenizer, _qwen_load_error
+    if _qwen_tokenizer is not None:
+        return _qwen_tokenizer
+    if _qwen_load_error is not None:
+        raise _qwen_load_error
+    try:
         from transformers import AutoTokenizer
 
         _qwen_tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-1.5B-Instruct")
+    except Exception as error:
+        _qwen_load_error = error
+        raise
     return _qwen_tokenizer
+
+
+def reset_qwen_tokenizer_cache() -> None:
+    """Test helper: clear the lazy Qwen tokenizer and remembered load errors."""
+    global _qwen_tokenizer, _qwen_load_error
+    _qwen_tokenizer = None
+    _qwen_load_error = None
 
 
 def render_answer(claims: list[dict]) -> str:

@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass
 
 from app.core.config import settings
-from app.retrieval.packet import estimate_tokens, ollama_prompt_fits
+from app.retrieval.prompt_budget import resolve_prompt_budget
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +174,9 @@ def collect_model_claims(
     complete,
     renew,
     record: ClaimFailureNote | None = None,
+    *,
+    provider: str | None = None,
+    model: str | None = None,
 ) -> list[dict]:
     """Call the model once, and repair once when the body is not a claims object.
 
@@ -194,7 +197,13 @@ def collect_model_claims(
         _note(record, "malformed", raw, "oversized")
         return []
     repair_user = user_message + REPAIR_NOTE + raw + REPAIR_INSTRUCTION
-    if _repair_exceeds_context(system_message, repair_user, max_output_tokens):
+    if _repair_exceeds_context(
+        system_message,
+        repair_user,
+        max_output_tokens,
+        provider=provider,
+        model=model,
+    ):
         _note(record, "malformed", raw, "repair_skipped")
         return []
     renew()
@@ -209,11 +218,20 @@ def collect_model_claims(
     return second.claims
 
 
-def _repair_exceeds_context(system_message: str, repair_user: str, max_output_tokens: int) -> bool:
+def _repair_exceeds_context(
+    system_message: str,
+    repair_user: str,
+    max_output_tokens: int,
+    *,
+    provider: str | None = None,
+    model: str | None = None,
+) -> bool:
     """Skip a repair that the runtime would truncate. The repair text itself is unchanged."""
-    if settings.llm_provider == "ollama":
-        return not ollama_prompt_fits(system_message, repair_user, max_output_tokens)
-    return estimate_tokens(system_message + "\n" + repair_user) + max_output_tokens > settings.llm_context_tokens
+    return resolve_prompt_budget(provider, model).repair_exceeds(
+        system_message,
+        repair_user,
+        max_output_tokens,
+    )
 
 
 def log_prompt_budget(prompt_tokens: int, context_tokens: int, output_tokens: int, margin_tokens: int, spans: int, edges: int) -> None:

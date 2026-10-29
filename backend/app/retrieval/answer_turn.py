@@ -15,10 +15,9 @@ from app.retrieval.model_call import (
     _keep_raw,
     _one_claim,
     _unwrap_fence,
-    estimate_tokens,
-    ollama_prompt_fits,
     parse_claims,
 )
+from app.retrieval.prompt_budget import resolve_prompt_budget
 
 Status = Literal["final", "need_evidence"]
 
@@ -95,6 +94,8 @@ def collect_answer_turn(
     *,
     allow_more_evidence: bool,
     record: ClaimFailureNote | None = None,
+    provider: str | None = None,
+    model: str | None = None,
 ) -> AnswerTurn | None:
     renew()
     _count_call(record)
@@ -111,7 +112,13 @@ def collect_answer_turn(
             return AnswerTurn("final", [], None)
         return turn
     repair_user = user_message + REPAIR_NOTE + raw + REPAIR_INSTRUCTION
-    if _repair_exceeds_context(system_message, repair_user, max_output_tokens):
+    if _repair_exceeds_context(
+        system_message,
+        repair_user,
+        max_output_tokens,
+        provider=provider,
+        model=model,
+    ):
         return None
     renew()
     _count_call(record)
@@ -124,10 +131,19 @@ def collect_answer_turn(
     return turn
 
 
-def _repair_exceeds_context(system_message: str, repair_user: str, max_output_tokens: int) -> bool:
-    if settings.llm_provider == "ollama":
-        return not ollama_prompt_fits(system_message, repair_user, max_output_tokens)
-    return estimate_tokens(system_message + "\n" + repair_user) + max_output_tokens > settings.llm_context_tokens
+def _repair_exceeds_context(
+    system_message: str,
+    repair_user: str,
+    max_output_tokens: int,
+    *,
+    provider: str | None = None,
+    model: str | None = None,
+) -> bool:
+    return resolve_prompt_budget(provider, model).repair_exceeds(
+        system_message,
+        repair_user,
+        max_output_tokens,
+    )
 
 
 MORE_EVIDENCE_SUFFIX = (

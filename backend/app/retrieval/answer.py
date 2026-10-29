@@ -81,18 +81,17 @@ from app.retrieval.model_call import (
 from app.retrieval.packet import (
     INSUFFICIENT_EVIDENCE,
     NO_CITED_CLAIM,
-    estimate_tokens,
     fits_model_context,
     assign_evidence_aliases,
     implementation_before_tests,
     pack_evidence,
-    qwen_prompt_tokens,
     render_answer,
     resolve_evidence_aliases,
     review_claims,
     review_implementation_support,
     span_citations,
 )
+from app.retrieval.prompt_budget import resolve_prompt_budget
 from app.retrieval.evidence_debug import (
     evidence_debug_enabled,
     record_operation,
@@ -1044,17 +1043,11 @@ class AnswerService:
                 for span in loaded
             ]
         selected = (provider or settings.llm_provider or "openai").strip().lower()
-        if selected == "ollama":
-            context_tokens = settings.ollama_num_ctx
-            margin_tokens = settings.context_margin_tokens
-
-            def count_tokens(body: str) -> int:
-                return qwen_prompt_tokens(SYSTEM_PROMPT, body)
-
-        else:
-            context_tokens = settings.llm_context_tokens
-            margin_tokens = 0
-            count_tokens = estimate_tokens
+        # Provider choice does not imply a tokenizer: Qwen is used only when the
+        # Ollama model is verified to match that chat template (see prompt_budget).
+        budget = resolve_prompt_budget(selected, model)
+        context_tokens = budget.context_tokens
+        margin_tokens = budget.margin_tokens
 
         dialog_notes: list[str] = []
         loaded_for_answer = loaded
@@ -1068,6 +1061,7 @@ class AnswerService:
         failure: ClaimFailureNote | None = None
         max_rounds = max(0, settings.answer_evidence_rounds)
         force_final = False
+        count_tokens = budget.pack_counter()
         for round_index in range(max_rounds + 1):
             allow_more = round_index < max_rounds and not force_final
             suffix = JSON_FORMAT_SUFFIX + PROSE_STYLE_SUFFIX + (MORE_EVIDENCE_SUFFIX if allow_more else FINAL_ONLY_SUFFIX)
@@ -1079,7 +1073,11 @@ class AnswerService:
                 suffix += CODE_TRACE_SUFFIX
             suffix += answer_suffix_for_intent(retrieval.intent)
             user_block = _dialog_user_block(question, dialog_notes, history_prefix=history_prefix)
-            header = SYSTEM_PROMPT + suffix + "\n" + user_block
+            system_message = SYSTEM_PROMPT + suffix
+            # Always count the same system+user pair packing, repair, and the
+            # provider call use (Cursor included — not only chat-template paths).
+            count_tokens = budget.pack_counter(system_prefix=system_message)
+            header = system_message + "\n" + user_block
             packed, loaded_for_answer = _pack_repository_evidence(
                 header=header,
                 generation=generation,
@@ -1192,6 +1190,8 @@ class AnswerService:
                 renew=lambda: self._require_pin(db, outcome.pin_id),
                 allow_more_evidence=allow_more,
                 record=failure,
+                provider=selected,
+                model=model,
             )
             claims_payload: list[dict] = []
             if turn is not None and turn.status == "need_evidence" and allow_more and turn.more_evidence:
@@ -1225,6 +1225,8 @@ class AnswerService:
                     complete_fn,
                     renew=lambda: self._require_pin(db, outcome.pin_id),
                     record=failure,
+                    provider=selected,
+                    model=model,
                 )
             claims = resolve_evidence_aliases(claims_payload, aliases)
             kept, citations_valid = review_claims(claims, valid_ids)

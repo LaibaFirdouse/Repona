@@ -59,6 +59,9 @@ class Settings:
     ollama_timeout: int = _get_int_env("OLLAMA_TIMEOUT", 180)
     # Runtime window sent as num_ctx. This is separate from the evidence byte caps and the output cap.
     ollama_num_ctx: int = _get_int_env("OLLAMA_NUM_CTX", 4096)
+    # How Ollama prompt tokens are counted: auto (Qwen tokenizer only for verified
+    # OLLAMA_MODEL tags), qwen2.5 (force Qwen chat tokenizer), or conservative.
+    ollama_tokenizer: str = os.getenv("OLLAMA_TOKENIZER", "auto").strip().lower()
     context_margin_tokens: int = _get_int_env("CONTEXT_MARGIN_TOKENS", 256)
     cursor_model: str = os.getenv("CURSOR_MODEL", "composer-2.5-fast")
     cursor_timeout: int = _get_int_env("CURSOR_TIMEOUT", 180)

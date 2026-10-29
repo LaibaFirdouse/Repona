@@ -203,11 +203,17 @@ Paste a GitHub repository URL, choose **Index**, then write a question and choos
 - `ollama`
 - `openai`
 
-Each provider has its own model setting in `.env`, such as `CURSOR_MODEL` or `CLAUDE_MODEL`.
+Each provider has its own model setting in `.env`, such as `CURSOR_MODEL`, `OLLAMA_MODEL`, or `CLAUDE_MODEL`.
 
 `openai` requires `OPENAI_API_KEY`, while `zai` requires `ZAI_API_KEY`.
 
-The accepted API configuration uses Cursor through the host bridge. **The API does not call Ollama**, and Ollama settings have been removed from the API's configuration. An Ollama process may still be running independently on the host.
+Provider selection does not select a tokenizer by itself. Prompt budgeting uses:
+
+- **Cursor and other CLI providers**: a documented conservative UTF-8 byte estimate plus `CONTEXT_MARGIN_TOKENS` (Cursor does not expose a local model tokenizer for pre-flight counts).
+- **OpenAI**: `tiktoken` for the configured `OPENAI_MODEL` when available.
+- **Ollama**: the Qwen2.5 Instruct chat tokenizer only for verified tags (`qwen2.5:1.5b`, `qwen2.5:1.5b-instruct`, or `OLLAMA_TOKENIZER=qwen2.5`). Other Ollama models use the same conservative estimate. See `OLLAMA_TOKENIZER` in `.env.example`.
+
+The accepted API configuration defaults to Cursor. Ollama remains an optional provider when `LLM_PROVIDER=ollama` or a request sets `provider=ollama`.
 
 An `/api/v1/ask` request may set `provider` to `cursor`, `claude`, `codex`, `copilot`, `opencode`, `zai`, or `ollama`, and `model` to that provider's model ID. `openai` is valid as `LLM_PROVIDER` and is rejected as a request field. A request that omits both uses the configured provider. The web interface does not send either field.
 
