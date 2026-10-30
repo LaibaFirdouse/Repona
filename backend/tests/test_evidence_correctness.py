@@ -718,6 +718,61 @@ class ExplicitMultipartTargetPackingTests(unittest.TestCase):
         self.assertEqual(incomplete["total_parts"], 6)
         self.assertNotIn("neighbour", kept_ids)
 
+class StableEvidenceRankingTests(unittest.TestCase):
+    def test_explicit_filename_outranks_other_files(self) -> None:
+        spans = [
+            _loaded(
+                chunk_id="html",
+                path="index.html",
+                kind="file_overview",
+                text="<link href='styles.css'>",
+                raw_bytes=25,
+            ),
+            _loaded(
+                chunk_id="readme",
+                path="README.md",
+                kind="file_overview",
+                text="Example repository",
+                raw_bytes=20,
+            ),
+            _loaded(
+                chunk_id="css",
+                path="styles.css",
+                kind="file_overview",
+                text="#octocat { width: 384px; margin: 50px auto; }",
+                raw_bytes=48,
+            ),
+        ]
+
+        ordered = prioritize_question_targets(
+            spans,
+            "What width and margin are assigned in styles.css?",
+            prefer_implementation=False,
+        )
+
+        self.assertEqual(
+            [span["chunk_id"] for span in ordered],
+            ["css", "html", "readme"],
+        )
+
+    def test_equal_priority_preserves_incoming_retrieval_order(self) -> None:
+        spans = [
+            _loaded(chunk_id="css", path="styles.css", kind="file_overview"),
+            _loaded(chunk_id="html", path="index.html", kind="file_overview"),
+            _loaded(chunk_id="readme", path="README.md", kind="file_overview"),
+        ]
+
+        ordered = prioritize_question_targets(
+            spans,
+            "Show me the relevant files.",
+            prefer_implementation=False,
+        )
+
+        self.assertEqual(
+            [span["chunk_id"] for span in ordered],
+            ["css", "html", "readme"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

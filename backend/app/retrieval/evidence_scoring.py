@@ -181,7 +181,7 @@ def prioritize_question_targets(
             weak_rank = 1 if weak else 0
         kind_rank = _CHUNK_KIND_RANK.get(kind, 9)
         member_rank = named_hit
-        return (named_hit, member_rank, path_hit, doc_rank, weak_rank, kind_rank, path_l)
+        return (named_hit, member_rank, path_hit, doc_rank, weak_rank, kind_rank)
 
     return coalesce_symbol_parts_in_source_order(sorted(spans, key=rank))
 

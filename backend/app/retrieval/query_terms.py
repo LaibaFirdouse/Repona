@@ -22,13 +22,49 @@ def question_identifiers(question: str) -> list[str]:
     return found
 
 
+_QUESTION_PATH_EXTENSIONS = frozenset({
+    "py", "pyi", "js", "jsx", "ts", "tsx", "mjs", "cjs",
+    "go", "rs", "java", "kt", "kts", "scala", "cs",
+    "c", "h", "cc", "cpp", "hpp", "php", "rb", "swift",
+    "sql", "html", "htm", "css", "scss", "sass", "less",
+    "json", "jsonc", "yaml", "yml", "toml", "ini", "cfg",
+    "conf", "md", "markdown", "rst", "txt", "sh", "bash",
+    "xml", "gradle", "properties", "proto", "graphql",
+    "tf", "hcl", "dart", "lua", "ex", "exs", "vue",
+    "svelte", "astro", "ipynb", "lock",
+})
+
+
 def question_paths(question: str) -> list[str]:
-    found: list[str] = []
-    for token in re.findall(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+", question):
-        token = token.strip("./")
-        if token and token not in found:
-            found.append(token)
-    return found
+    # Preserve existing support for directory paths, e.g. src/utils.
+    directory_paths = re.findall(
+        r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+",
+        question,
+    )
+
+    # Also recognise standalone filenames, e.g. styles.css.
+    filename_candidates = re.findall(
+        r"(?<![A-Za-z0-9_./-])[A-Za-z0-9_.-]+\.[A-Za-z0-9_-]{1,12}(?![A-Za-z0-9_./-])",
+        question,
+    )
+
+    bare_filenames = [
+        token
+        for token in filename_candidates
+        if token.rsplit(".", 1)[-1].lower() in _QUESTION_PATH_EXTENSIONS
+    ]
+
+    # Preserve their order in the original question and remove duplicates.
+    candidates = directory_paths + bare_filenames
+    candidates.sort(key=question.find)
+
+    result = []
+    for token in candidates:
+        normalized = token.strip("./")
+        if normalized and normalized not in result:
+            result.append(normalized)
+
+    return result
 
 _STOPWORDS = frozenset(
     {

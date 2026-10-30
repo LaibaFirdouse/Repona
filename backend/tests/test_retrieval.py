@@ -460,6 +460,13 @@ class QuestionTokenTests(unittest.TestCase):
         kept = preserve_named_spans(spans, [], 12)
         self.assertEqual([span.chunk_id for span in kept], [f"c{index}" for index in range(12)])
         self.assertNotIn("c14", [span.chunk_id for span in kept])
+    def test_bare_filename_is_recognized_as_a_question_path(self) -> None:
+        self.assertEqual(
+            question_paths(
+                "What width and margin are assigned to the #octocat element in styles.css?"
+            ),
+            ["styles.css"],
+        )
 
 
 class TechnologySelectionTests(unittest.TestCase):
