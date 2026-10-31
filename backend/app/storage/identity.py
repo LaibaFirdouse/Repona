@@ -234,13 +234,24 @@ def edge_id(
     )
 
 
-def normalize_repository_url(url: str) -> str:
+def normalize_repository_url(
+    url: str,
+    *,
+    allow_loopback_http: bool = False,
+) -> str:
     raw = url.strip()
     if raw.startswith("git@") and ":" in raw:
         host, path = raw[4:].split(":", 1)
         raw = f"https://{host}/{path}"
     parts = urlsplit(raw)
-    if parts.scheme != "https":
+    scheme = (parts.scheme or "").lower()
+    # Loopback HTTP is allowed for local fixture/integration indexing only.
+    # Non-loopback repositories must remain HTTPS.
+    hostname = (parts.hostname or "").lower()
+    if scheme == "http" and hostname in {"127.0.0.1", "localhost", "::1"}:
+        if not allow_loopback_http:
+            raise IdentityError("loopback HTTP is disabled")
+    elif scheme != "https":
         raise IdentityError(f"unsupported repository URL scheme: {parts.scheme or '(none)'}")
     if parts.username or parts.password:
         netloc = parts.hostname or ""
@@ -256,7 +267,8 @@ def normalize_repository_url(url: str) -> str:
         path = path[: -len(".git")]
     if not host or path in {"", "/"}:
         raise IdentityError(f"repository URL has no host or path: {url}")
-    return urlunsplit(("https", host, path, "", ""))
+    out_scheme = "http" if scheme == "http" else "https"
+    return urlunsplit((out_scheme, host, path, "", ""))
 
 
 def canonical_embedding_config(

@@ -27,6 +27,7 @@ LANGUAGE_BY_EXTENSION = {
     '.groovy': 'groovy',
     '.gradle': 'groovy',
     '.cs': 'csharp',
+    '.csproj': 'csharp',
     '.cshtml': 'csharp',
     '.razor': 'csharp',
     '.fs': 'fsharp',
@@ -997,7 +998,28 @@ LANGUAGE_BY_EXTENSION = {
     '.zsh-theme': 'shell',
 }
 INCLUDED_EXTENSIONS = frozenset(LANGUAGE_BY_EXTENSION)
-INCLUDED_FILENAMES = {"Dockerfile", "requirements.txt", "go.mod", "CMakeLists.txt", "Makefile", "makefile", "GNUmakefile", "Gemfile", "Rakefile"}
+INCLUDED_FILENAMES = {
+    "Dockerfile",
+    "requirements.txt",
+    "Pipfile",
+    "pyproject.toml",
+    "go.mod",
+    "Cargo.toml",
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
+    "composer.json",
+    "Package.swift",
+    "pubspec.yaml",
+    "CMakeLists.txt",
+    "Makefile",
+    "makefile",
+    "GNUmakefile",
+    "Gemfile",
+    "Rakefile",
+    "tsconfig.json",
+    "jsconfig.json",
+}
 EXCLUDED_COMPONENTS = {".git", "node_modules", "build", "dist"}
 LOCKFILE_NAMES = {
     "package-lock.json",

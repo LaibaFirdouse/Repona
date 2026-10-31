@@ -125,6 +125,38 @@ def _release(db: Session, pending: list) -> None:
     pending.clear()
 
 
+def _persist_capability_report(
+    db: Session,
+    repository_id: str,
+    generation_id: str,
+    capability_report: dict,
+) -> None:
+    import json
+
+    generation = db.get(IndexGeneration, generation_id)
+
+    if generation is None:
+        raise GenerationWriteError(
+            f"index generation {generation_id} does not exist"
+        )
+
+    if generation.repository_id != repository_id:
+        raise GenerationWriteError(
+            f"index generation {generation_id} belongs to repository "
+            f"{generation.repository_id}, not {repository_id}"
+        )
+
+    report = dict(capability_report)
+    report["generation_id"] = generation_id
+    report["repository_id"] = repository_id
+
+    generation.capability_report_json = json.dumps(
+        report,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+
 def write_draft(
     db: Session,
     repository_id: str,
@@ -134,6 +166,13 @@ def write_draft(
     on_progress=None,
 ) -> None:
     """Insert the same rows as one-at-a-time writes, in batches so a large tree stays inside the lease."""
+    if draft.capability_report is not None:
+        _persist_capability_report(
+            db,
+            repository_id,
+            generation_id,
+            draft.capability_report,
+        )
     renewed = time.monotonic()
     known_directories = _known_ids(db, Directory, [item.id for item in draft.directories])
     pending: list = []

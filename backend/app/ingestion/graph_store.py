@@ -22,7 +22,21 @@ LABEL_BY_KIND = {
     "constant": "Symbol",
 }
 
-_EDGE_TYPES = ("CONTAINS", "DECLARES", "IMPORTS", "DEPENDS_ON", "CALLS", "REFERENCES", "HAS_GENERATION")
+# Keep in sync with app.ingestion.ir.PERSISTED_RELATIONSHIPS. Framework/protocol
+# edges are accepted when emitted; assemble does not yet write all of them.
+_EDGE_TYPES = (
+    "CONTAINS",
+    "DECLARES",
+    "IMPORTS",
+    "DEPENDS_ON",
+    "CALLS",
+    "REFERENCES",
+    "HAS_GENERATION",
+    "ROUTES_TO",
+    "HANDLES",
+    "READS_FROM",
+    "WRITES_TO",
+)
 
 
 def ensure_constraints(session) -> None:
@@ -165,6 +179,11 @@ def _write_edges(session, draft: GenerationDraft, generation_id: str, epoch: int
                 "edge_id": edge.edge_id,
                 "mentioned_name": without_nul(edge.mentioned_name),
                 "resolution": edge.resolution,
+                "resolution_method": without_nul(getattr(edge, "resolution_method", "") or ""),
+                "strategy": without_nul(getattr(edge, "strategy", "") or ""),
+                "start_byte": getattr(edge, "start_byte", None),
+                "end_byte": getattr(edge, "end_byte", None),
+                "evidence": without_nul(getattr(edge, "evidence", "") or ""),
             }
         )
     for (relationship, source_label, target_label), rows in grouped.items():
@@ -181,6 +200,21 @@ def _write_edges(session, draft: GenerationDraft, generation_id: str, epoch: int
             rel.resolution = CASE
                 WHEN rel.writer_epoch IS NULL OR rel.writer_epoch < $epoch THEN row.resolution
                 ELSE rel.resolution END,
+            rel.resolution_method = CASE
+                WHEN rel.writer_epoch IS NULL OR rel.writer_epoch < $epoch THEN row.resolution_method
+                ELSE rel.resolution_method END,
+            rel.strategy = CASE
+                WHEN rel.writer_epoch IS NULL OR rel.writer_epoch < $epoch THEN row.strategy
+                ELSE rel.strategy END,
+            rel.start_byte = CASE
+                WHEN rel.writer_epoch IS NULL OR rel.writer_epoch < $epoch THEN row.start_byte
+                ELSE rel.start_byte END,
+            rel.end_byte = CASE
+                WHEN rel.writer_epoch IS NULL OR rel.writer_epoch < $epoch THEN row.end_byte
+                ELSE rel.end_byte END,
+            rel.evidence = CASE
+                WHEN rel.writer_epoch IS NULL OR rel.writer_epoch < $epoch THEN row.evidence
+                ELSE rel.evidence END,
             rel.writer_epoch = CASE
                 WHEN rel.writer_epoch IS NULL OR rel.writer_epoch < $epoch THEN $epoch
                 ELSE rel.writer_epoch END

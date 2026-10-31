@@ -22,6 +22,9 @@ def create_database_tables() -> None:
                 "ALTER TABLE generation_chunks ADD COLUMN IF NOT EXISTS vector_status VARCHAR(16) NOT NULL DEFAULT 'pending'"
             )
         )
+        connection.execute(
+            text("ALTER TABLE index_generations ADD COLUMN IF NOT EXISTS capability_report_json TEXT")
+        )
     Base.metadata.create_all(bind=engine)
 
 

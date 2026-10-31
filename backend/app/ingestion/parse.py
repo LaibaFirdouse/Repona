@@ -30,6 +30,8 @@ LANGUAGE_BY_EXTENSION = {
     ".py": "python",
     ".js": "javascript",
     ".jsx": "tsx",
+    ".mjs": "javascript",
+    ".cjs": "javascript",
     ".ts": "typescript",
     ".tsx": "tsx",
 }
@@ -61,6 +63,16 @@ class RawMention:
 
 
 @dataclass
+class ImportBinding:
+    module_specifier: str
+    local_name: str
+    imported_name: str
+    kind: str  # named | namespace | default | module
+    start_byte: int = 0
+    end_byte: int = 0
+
+
+@dataclass
 class ParsedFile:
     language: str | None
     parse_status: str
@@ -68,6 +80,7 @@ class ParsedFile:
     symbols: list[RawSymbol] = field(default_factory=list)
     mentions: list[RawMention] = field(default_factory=list)
     import_spans: list[tuple[int, int]] = field(default_factory=list)
+    import_bindings: list[ImportBinding] = field(default_factory=list)
 
 
 _PARSERS: dict[str, Parser] | None = None
@@ -264,6 +277,7 @@ def _walk(relative_path: str, payload: bytes, language: str, root) -> ParsedFile
         if mention.relationship == "REFERENCES" and _is_own_name(symbols, mention):
             continue
         filtered.append(mention)
+    bindings = _extract_import_bindings(payload, import_nodes, language)
     return ParsedFile(
         language=language,
         parse_status="parsed",
@@ -271,6 +285,7 @@ def _walk(relative_path: str, payload: bytes, language: str, root) -> ParsedFile
         symbols=symbols,
         mentions=filtered,
         import_spans=import_spans,
+        import_bindings=bindings,
     )
 
 
@@ -319,6 +334,138 @@ def _import_names(payload: bytes, node) -> list[str]:
         if child.type in {"dotted_name", "identifier", "relative_import"}:
             names.append(_decode(payload, child.start_byte, child.end_byte))
     return names
+
+
+def _extract_import_bindings(payload: bytes, import_nodes, language: str) -> list[ImportBinding]:
+    bindings: list[ImportBinding] = []
+    for node in import_nodes:
+        if node.type == "import_statement":
+            bindings.extend(_js_import_bindings(payload, node))
+        elif node.type == "import_from_statement":
+            bindings.extend(_py_import_from_bindings(payload, node))
+        elif node.type == "import_declaration" and language == "go":
+            bindings.extend(_go_import_bindings(payload, node))
+    return bindings
+
+
+def _go_import_bindings(payload: bytes, node) -> list[ImportBinding]:
+    """Go imports bind the package name (or alias) as a namespace for qualified calls."""
+    bindings: list[ImportBinding] = []
+    specs = []
+    if node.type == "import_declaration":
+        for child in node.children:
+            if child.type == "import_spec":
+                specs.append(child)
+            elif child.type == "import_spec_list":
+                specs.extend(c for c in child.children if c.type == "import_spec")
+    for spec in specs:
+        path_node = spec.child_by_field_name("path")
+        if path_node is None:
+            continue
+        text = _decode(payload, path_node.start_byte, path_node.end_byte).strip()
+        if len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
+            text = text[1:-1]
+        if not text:
+            continue
+        name_node = spec.child_by_field_name("name")
+        if name_node is not None:
+            local = _decode(payload, name_node.start_byte, name_node.end_byte)
+        else:
+            local = text.rstrip("/").rsplit("/", 1)[-1]
+        if not local or local == ".":
+            continue
+        bindings.append(
+            ImportBinding(text, local, "*", "namespace", spec.start_byte, spec.end_byte)
+        )
+    return bindings
+
+
+def _js_import_bindings(payload: bytes, node) -> list[ImportBinding]:
+    source = node.child_by_field_name("source")
+    if source is None:
+        return []
+    text = _decode(payload, source.start_byte, source.end_byte).strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
+        text = text[1:-1]
+    if not text:
+        return []
+    clause = None
+    for child in node.children:
+        if child.type == "import_clause":
+            clause = child
+            break
+    if clause is None:
+        return [ImportBinding(text, "", "", "module", node.start_byte, node.end_byte)]
+    bindings: list[ImportBinding] = []
+    for child in clause.children:
+        if child.type == "identifier":
+            name = _decode(payload, child.start_byte, child.end_byte)
+            bindings.append(
+                ImportBinding(text, name, "default", "default", child.start_byte, child.end_byte)
+            )
+        elif child.type == "namespace_import":
+            ident = next((c for c in child.children if c.type == "identifier"), None)
+            if ident is not None:
+                name = _decode(payload, ident.start_byte, ident.end_byte)
+                bindings.append(
+                    ImportBinding(text, name, "*", "namespace", child.start_byte, child.end_byte)
+                )
+        elif child.type == "named_imports":
+            for spec in child.children:
+                if spec.type != "import_specifier":
+                    continue
+                idents = [c for c in spec.children if c.type == "identifier"]
+                if not idents:
+                    continue
+                if len(idents) == 1:
+                    name = _decode(payload, idents[0].start_byte, idents[0].end_byte)
+                    bindings.append(
+                        ImportBinding(text, name, name, "named", spec.start_byte, spec.end_byte)
+                    )
+                else:
+                    imported = _decode(payload, idents[0].start_byte, idents[0].end_byte)
+                    local = _decode(payload, idents[-1].start_byte, idents[-1].end_byte)
+                    bindings.append(
+                        ImportBinding(text, local, imported, "named", spec.start_byte, spec.end_byte)
+                    )
+    return bindings
+
+
+def _py_import_from_bindings(payload: bytes, node) -> list[ImportBinding]:
+    module = node.child_by_field_name("module_name")
+    if module is None:
+        return []
+    specifier = _decode(payload, module.start_byte, module.end_byte)
+    bindings: list[ImportBinding] = []
+    for child in node.children:
+        if child.type == "dotted_name" and child != module:
+            name = _decode(payload, child.start_byte, child.end_byte)
+            # Skip if this is part of relative import prefix handling.
+            if name == specifier:
+                continue
+            local = name.rsplit(".", 1)[-1]
+            bindings.append(
+                ImportBinding(specifier, local, local, "named", child.start_byte, child.end_byte)
+            )
+        elif child.type == "aliased_import":
+            name_node = child.child_by_field_name("name")
+            alias_node = child.child_by_field_name("alias")
+            if name_node is None:
+                continue
+            imported = _decode(payload, name_node.start_byte, name_node.end_byte)
+            local = (
+                _decode(payload, alias_node.start_byte, alias_node.end_byte)
+                if alias_node is not None
+                else imported
+            )
+            bindings.append(
+                ImportBinding(specifier, local, imported, "named", child.start_byte, child.end_byte)
+            )
+        elif child.type == "wildcard_import":
+            bindings.append(
+                ImportBinding(specifier, "*", "*", "namespace", child.start_byte, child.end_byte)
+            )
+    return bindings
 
 
 def _contiguous_import_spans(payload: bytes, nodes) -> list[tuple[int, int]]:

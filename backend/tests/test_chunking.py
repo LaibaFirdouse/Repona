@@ -14,6 +14,9 @@ class InclusionTests(unittest.TestCase):
         self.assertTrue(is_included("Makefile", "100644"))
         self.assertTrue(is_included("Dockerfile", "100755"))
         self.assertTrue(is_included("requirements.txt", "100644"))
+        self.assertTrue(is_included("pom.xml", "100644"))
+        self.assertTrue(is_included("Cargo.toml", "100644"))
+        self.assertTrue(is_included("pyproject.toml", "100644"))
 
     def test_skips_other_text_lockfiles_and_vendor_trees(self) -> None:
         self.assertFalse(is_included("notes.txt", "100644"))

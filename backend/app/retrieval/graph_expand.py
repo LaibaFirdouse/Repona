@@ -5,6 +5,9 @@ from __future__ import annotations
 from app.models.catalog import Symbol
 
 _CALL_EXPAND = frozenset({"CALLS", "REFERENCES"})
+# Protocol hops (ROUTES_TO) extend the frontier so backend CALLS can be reached
+# after a frontend seed. Never treat these as function CALLS.
+_PROTOCOL_EXPAND = frozenset({"ROUTES_TO"})
 
 _EDGE_QUERY = """
 MATCH (generation:IndexGeneration {id: $generation_id})
@@ -44,11 +47,16 @@ def next_symbol_frontier(
     *,
     limit: int,
 ) -> list[str]:
-    """Symbol ids one hop away via CALLS/REFERENCES from the current frontier."""
+    """Symbol ids one hop away via CALLS/REFERENCES/ROUTES_TO from the frontier."""
     next_ids: list[str] = []
     seen: set[str] = set()
     for row in rows:
-        if row["relationship_type"] not in _CALL_EXPAND:
+        rel = row["relationship_type"]
+        if rel in _CALL_EXPAND:
+            pass
+        elif rel in _PROTOCOL_EXPAND and str(row.get("resolution") or "") == "protocol":
+            pass
+        else:
             continue
         anchor_id = row["anchor_id"]
         if anchor_id not in frontier:

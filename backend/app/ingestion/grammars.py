@@ -21,12 +21,14 @@ from tree_sitter_language_pack import (
 
 from app.ingestion.inclusion import INCLUDED_FILENAMES, LANGUAGE_BY_EXTENSION
 from app.ingestion.parse import (
+    ImportBinding,
     ParsedFile,
     ParserFailure,
     RawMention,
     RawSymbol,
     _contiguous_import_spans,
     _decode,
+    _go_import_bindings,
     _signature,
     _span_for,
     module_qualified_name,
@@ -118,8 +120,20 @@ def parse_other(relative_path: str, payload: bytes) -> ParsedFile:
             ProcessConfig(language=grammar, structure=True, imports=True, symbols=True),
         )
     except (DownloadError, LanguageNotFoundError):
-        return ParsedFile(language=None, parse_status="not_parsed", parse_message=None)
+        return ParsedFile(
+            language=language,
+            parse_status="not_parsed",
+            parse_message="grammar unavailable",
+        )
     except Exception as exc:
+        # Cache/lock/download failures must not abort the whole generation — keep source discoverable.
+        name = type(exc).__name__
+        if "Cache" in name or "Download" in name or "Lock" in name:
+            return ParsedFile(
+                language=language,
+                parse_status="not_parsed",
+                parse_message=f"grammar unavailable: {name}",
+            )
         raise ParserFailure(f"parser failed for {relative_path}") from exc
     if tree is None:
         raise ParserFailure(f"parser returned no tree for {relative_path}")
@@ -151,6 +165,9 @@ def parse_other(relative_path: str, payload: bytes) -> ParsedFile:
     for mention in mentions:
         if mention.relationship == "IMPORTS":
             mention.import_span = _span_for(import_spans, mention.start_byte)
+    bindings: list[ImportBinding] = []
+    if language == "go":
+        bindings = _go_bindings_from_tree(tree.root_node, payload)
     parsed = ParsedFile(
         language=language,
         parse_status="parsed",
@@ -158,6 +175,7 @@ def parse_other(relative_path: str, payload: bytes) -> ParsedFile:
         symbols=symbols,
         mentions=mentions,
         import_spans=import_spans,
+        import_bindings=bindings,
     )
     if tree.root_node.has_error:
         parsed.parse_status = "syntax_error"
@@ -185,6 +203,20 @@ def parse_other(relative_path: str, payload: bytes) -> ParsedFile:
         )
     )
     return parsed
+
+
+def _go_bindings_from_tree(root, payload: bytes) -> list[ImportBinding]:
+    bindings: list[ImportBinding] = []
+
+    def visit(node) -> None:
+        if node.type == "import_declaration":
+            bindings.extend(_go_import_bindings(payload, node))
+            return
+        for child in node.children:
+            visit(child)
+
+    visit(root)
+    return bindings
 
 
 def _grammar_for(relative_path: str) -> str | None:

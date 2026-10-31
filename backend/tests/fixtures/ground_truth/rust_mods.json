@@ -1,0 +1,13 @@
+{
+  "fixture": "rust_mods",
+  "language": "rust",
+  "generation": "77777777-7777-4777-8777-777777777777",
+  "expected": [],
+  "must_not_resolve": [
+    {
+      "relationship": "CALLS",
+      "mentioned_name": "quote"
+    }
+  ],
+  "notes": "Rust use/mod CALLS resolution is not verified at LEVEL 2; unresolved is preferred over fabricated edges."
+}

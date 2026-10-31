@@ -83,5 +83,7 @@ CODE_TRACE_SUFFIX = (
     "\nThe user wants a step-by-step walkthrough in the implementation excerpts: follow real control flow "
     "(entry function → branches → calls → returns) in order. Name functions and key variables from the code. "
     "Do not substitute Makefile/README/build docs when class or function bodies for the topic are present. "
-    "If only a benchmark driver is present, trace that driver line-by-line; do not claim internals that are not in the excerpts."
+    "If only a benchmark driver is present, trace that driver line-by-line; do not claim internals that are not in the excerpts. "
+    "When the question asks for a request or execution flow, organise claims in execution order and cite the "
+    "source lines that establish each hop. Prefer a partial cited trace over empty claims when some stages are present."
 )

@@ -140,6 +140,28 @@ class AssembleTests(unittest.TestCase):
         self.assertEqual(call.resolution, "unresolved")
         self.assertEqual(call.target_id, file_id)
 
+    def test_js_path_alias_import_resolves_calls(self) -> None:
+        draft = assemble_generation(
+            REPO,
+            "a" * 40,
+            [
+                blob("lib/helper.ts", "export function helper() {\n  return 1;\n}\n"),
+                blob(
+                    "app/api/run/route.ts",
+                    'import { helper } from "@/lib/helper";\n\nexport async function POST() {\n  return helper();\n}\n',
+                ),
+            ],
+            "f" * 64,
+            GENERATION,
+        )
+        imports = [edge for edge in draft.edges if edge.relationship == "IMPORTS"]
+        self.assertEqual(len(imports), 1)
+        self.assertEqual(imports[0].resolution, "resolved")
+        call = next(edge for edge in draft.edges if edge.relationship == "CALLS" and edge.mentioned_name == "helper")
+        target = next(symbol.id for symbol in draft.symbols if symbol.qualified_name == "helper")
+        self.assertEqual(call.resolution, "resolved")
+        self.assertEqual(call.target_id, target)
+
     def test_module_symbol_has_no_chunk(self) -> None:
         draft = assemble_generation(
             REPO,
@@ -195,6 +217,268 @@ class AssembleTests(unittest.TestCase):
             self.assertEqual([item.id for item in serial.symbols], [item.id for item in draft.symbols])
             self.assertEqual([item.id for item in serial.chunks], [item.id for item in draft.chunks])
             self.assertEqual([item.edge_id for item in serial.edges], [item.edge_id for item in draft.edges])
+
+
+
+class IrNormalizationTests(unittest.TestCase):
+    def test_python_parse_round_trips_through_ir(self) -> None:
+        from app.ingestion.ir import (
+            ir_to_parsed_file,
+            parsed_file_to_ir,
+        )
+
+        path = "app/services/orders.py"
+        payload = (
+            b"from app.db import save_order\n\n"
+            b"def create_order():\n"
+            b"    save_order()\n"
+        )
+
+        original = parse_file(path, payload)
+        document = parsed_file_to_ir(
+            path,
+            original,
+            adapter_id="python_treesitter",
+        )
+
+        self.assertEqual(document.relative_path, path)
+        self.assertEqual(document.language, "python")
+        self.assertTrue(document.entities)
+        self.assertTrue(document.relationships)
+
+        self.assertTrue(
+            any(item.kind == "function" for item in document.entities)
+        )
+        self.assertTrue(
+            any(item.kind == "CALLS" for item in document.relationships)
+        )
+        self.assertTrue(
+            any(item.kind == "IMPORTS" for item in document.relationships)
+        )
+
+        self.assertTrue(
+            all(
+                item.provenance.adapter_id == "python_treesitter"
+                for item in document.relationships
+            )
+        )
+
+        restored = ir_to_parsed_file(document)
+        self.assertEqual(restored, original)
+
+    def test_ir_relationship_sources_reference_entities(self) -> None:
+        from app.ingestion.ir import parsed_file_to_ir
+
+        path = "app.py"
+        parsed = parse_file(
+            path,
+            b"def run():\n    helper()\n",
+        )
+        document = parsed_file_to_ir(path, parsed)
+
+        entity_ids = {entity.id for entity in document.entities}
+
+        for relationship in document.relationships:
+            self.assertIn(relationship.source_id, entity_ids)
+
+    def test_syntax_error_round_trips_without_inventing_symbols(self) -> None:
+        from app.ingestion.ir import ir_to_parsed_file, parsed_file_to_ir
+
+        path = "broken.py"
+        original = parse_file(path, b"def (")
+
+        document = parsed_file_to_ir(path, original)
+        restored = ir_to_parsed_file(document)
+
+        self.assertEqual(original.parse_status, "syntax_error")
+        self.assertEqual(restored, original)
+
+    def test_unparsed_file_round_trips(self) -> None:
+        from app.ingestion.ir import ir_to_parsed_file, parsed_file_to_ir
+
+        path = "package.json"
+        original = parse_file(path, b'{"name": "demo"}')
+
+        document = parsed_file_to_ir(path, original)
+        restored = ir_to_parsed_file(document)
+
+        self.assertEqual(original.parse_status, "not_parsed")
+        self.assertEqual(restored, original)
+
+
+
+class AdapterDispatchTests(unittest.TestCase):
+    def test_assembly_dispatches_through_registered_language_adapter(self) -> None:
+        from unittest.mock import patch
+
+        from app.ingestion.adapters import builtin
+        from app.ingestion.adapters.language import language_registry
+
+        builtin.register_builtin_adapters()
+
+        adapter = language_registry.for_path("app.py", "python")
+        self.assertIsNotNone(adapter)
+
+        payload = b"def run():\n    helper()\n"
+
+        with patch.object(
+            adapter, "parse_ir", wraps=adapter.parse_ir
+        ) as parse_spy:
+            draft = assemble_generation(
+                REPO,
+                "9" * 40,
+                [blob("app.py", payload.decode())],
+                "f" * 64,
+                GENERATION,
+                workers=1,
+            )
+
+        parse_spy.assert_called_once_with("app.py", payload)
+        self.assertEqual(draft.files[0].parse_status, "parsed")
+        self.assertTrue(draft.symbols)
+
+
+
+class AdapterIrContractTests(unittest.TestCase):
+    def test_builtin_adapters_emit_ir_for_supported_languages(self) -> None:
+        from app.ingestion.adapters import builtin as _builtin
+        from app.ingestion.adapters.language import language_registry
+        from app.ingestion.ir import IrDocument, ir_to_parsed_file
+
+        _builtin.register_builtin_adapters()
+
+        cases = {
+            "demo.py": b"def run():\n    helper()\n",
+            "demo.ts": b"export function run() { helper(); }\n",
+            "main.go": b"package main\nfunc run() { helper() }\n",
+            "Demo.java": b"class Demo { void run() { helper(); } }\n",
+            "package.json": b'{"name": "demo"}',
+        }
+
+        for path, payload in cases.items():
+            with self.subTest(path=path):
+                adapter = language_registry.for_path(path, None)
+                self.assertIsNotNone(adapter, path)
+
+                document = adapter.parse_ir(path, payload)
+                self.assertIsInstance(document, IrDocument)
+                self.assertEqual(document.relative_path, path)
+
+                restored = ir_to_parsed_file(document)
+                original = adapter.parse(path, payload)
+
+                self.assertEqual(restored, original)
+
+                entity_ids = {entity.id for entity in document.entities}
+                for relationship in document.relationships:
+                    self.assertIn(relationship.source_id, entity_ids)
+
+    def test_source_only_adapter_is_terminal_fallback(self) -> None:
+        from app.ingestion.adapters import builtin as _builtin
+        from app.ingestion.adapters.language import language_registry
+
+        _builtin.register_builtin_adapters()
+
+        adapter = language_registry.for_path("notes.unknown", None)
+
+        self.assertIsNotNone(adapter)
+        self.assertEqual(adapter.id, "source_only")
+
+
+
+class IrCanonicalFileProductTests(unittest.TestCase):
+    def test_file_product_contains_ir_document(self) -> None:
+        from app.ingestion.assemble import _build_file
+        from app.ingestion.ir import IrDocument, ir_to_parsed_file
+
+        payload = b"def run():\n    helper()\n"
+
+        product = _build_file(
+            REPO, "app.py", payload, "abc123", "f" * 64
+        )
+
+        self.assertIsInstance(product[1], IrDocument)
+        self.assertEqual(
+            ir_to_parsed_file(product[1]),
+            parse_file("app.py", payload),
+        )
+
+    def test_legacy_cache_product_is_upgraded_to_ir(self) -> None:
+        from app.ingestion.assemble import (
+            _build_file,
+            _normalize_cached_file_product,
+        )
+        from app.ingestion.ir import IrDocument, ir_to_parsed_file
+
+        payload = b"def run():\n    helper()\n"
+        current = _build_file(
+            REPO, "app.py", payload, "abc123", "f" * 64
+        )
+
+        legacy_parsed = parse_file("app.py", payload)
+        legacy_product = (
+            current[0],
+            legacy_parsed,
+            *current[2:],
+        )
+
+        upgraded = _normalize_cached_file_product(
+            "app.py", legacy_product
+        )
+
+        self.assertIsNotNone(upgraded)
+        self.assertIsInstance(upgraded[1], IrDocument)
+        self.assertEqual(
+            ir_to_parsed_file(upgraded[1]),
+            legacy_parsed,
+        )
+
+    def test_parallel_parse_cache_stores_ir_documents(self) -> None:
+        import pickle
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        from app.ingestion.checkpoint import ParseCache
+        from app.ingestion.ir import IrDocument
+
+        blobs = [
+            blob("pkg/first.py", "def first():\n    return 1\n"),
+            blob("pkg/second.py", "def second():\n    return 2\n"),
+        ]
+
+        with TemporaryDirectory() as directory:
+            cache = ParseCache(Path(directory))
+
+            draft = assemble_generation(
+                REPO,
+                "8" * 40,
+                blobs,
+                "f" * 64,
+                GENERATION,
+                workers=2,
+                cache=cache,
+            )
+
+            cache_files = [
+                path
+                for path in Path(directory).rglob("*")
+                if path.is_file()
+            ]
+
+            self.assertEqual(len(cache_files), 2)
+            self.assertEqual(len(draft.files), 2)
+
+            products = [
+                pickle.loads(path.read_bytes())
+                for path in cache_files
+            ]
+
+            self.assertTrue(
+                all(
+                    isinstance(product[1], IrDocument)
+                    for product in products
+                )
+            )
 
 
 if __name__ == "__main__":

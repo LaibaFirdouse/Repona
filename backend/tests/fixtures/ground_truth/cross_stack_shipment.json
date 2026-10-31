@@ -1,0 +1,41 @@
+{
+  "fixture": "cross_stack_shipment",
+  "language": "mixed",
+  "generation": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  "expected": [
+    {
+      "relationship": "CALLS",
+      "source_path": "web/src/DispatchBoard.tsx",
+      "mentioned_name": "enqueueParcel",
+      "target_path": "web/src/shippingClient.ts",
+      "resolution": "resolved"
+    },
+    {
+      "relationship": "CALLS",
+      "source_path": "app/routers/shipments.py",
+      "mentioned_name": "reserve_tracking_code",
+      "target_path": "app/services/dispatcher.py",
+      "resolution": "resolved"
+    },
+    {
+      "relationship": "ROUTES_TO",
+      "source_path": "web/src/shippingClient.ts",
+      "mentioned_name": "POST /api/v1/shipments",
+      "target_path": "app/routers/shipments.py",
+      "resolution": "protocol"
+    },
+    {
+      "relationship": "CALLS",
+      "source_path": "web/src/shippingClient.ts",
+      "mentioned_name": "fetch",
+      "resolution": "external"
+    }
+  ],
+  "must_not_resolve": [
+    {
+      "relationship": "CALLS",
+      "source_path": "web/src/DispatchBoard.tsx",
+      "mentioned_name": "reserve_tracking_code"
+    }
+  ]
+}

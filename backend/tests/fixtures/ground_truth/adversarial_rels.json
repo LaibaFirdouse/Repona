@@ -1,0 +1,71 @@
+{
+  "fixture": "adversarial_rels",
+  "language": "typescript",
+  "generation": "33333333-3333-4333-8333-333333333333",
+  "expected": [
+    {
+      "relationship": "CALLS",
+      "source_path": "src/caller.ts",
+      "mentioned_name": "makeAlpha",
+      "target_path": "src/alpha.ts",
+      "resolution": "resolved"
+    },
+    {
+      "relationship": "CALLS",
+      "source_path": "src/caller.ts",
+      "mentioned_name": "uniqueAlpha",
+      "target_path": "src/alpha.ts",
+      "resolution": "resolved"
+    },
+    {
+      "relationship": "CALLS",
+      "source_path": "src/caller.ts",
+      "mentioned_name": "host.create",
+      "target_path": "src/alpha.ts",
+      "resolution": "resolved"
+    },
+    {
+      "relationship": "CALLS",
+      "source_path": "src/caller.ts",
+      "mentioned_name": "create",
+      "resolution": "unresolved"
+    },
+    {
+      "relationship": "CALLS",
+      "source_path": "src/caller.ts",
+      "mentioned_name": "execute",
+      "resolution": "unresolved"
+    },
+    {
+      "relationship": "CALLS",
+      "source_path": "src/caller.ts",
+      "mentioned_name": "console.log",
+      "resolution": "external"
+    },
+    {
+      "relationship": "IMPORTS",
+      "source_path": "src/caller.ts",
+      "mentioned_name": "./does-not-exist",
+      "resolution": "unresolved"
+    },
+    {
+      "relationship": "IMPORTS",
+      "source_path": "src/caller.ts",
+      "mentioned_name": "@dup/alpha",
+      "target_path": "src/alpha.ts",
+      "resolution": "resolved"
+    }
+  ],
+  "must_not_resolve": [
+    {
+      "relationship": "CALLS",
+      "source_path": "src/caller.ts",
+      "mentioned_name": "create"
+    },
+    {
+      "relationship": "CALLS",
+      "source_path": "src/caller.ts",
+      "mentioned_name": "execute"
+    }
+  ]
+}

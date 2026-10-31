@@ -567,10 +567,17 @@ class AskRouteTests(unittest.TestCase):
     def setUp(self) -> None:
         self.refresh = ask_route.refresh_service
         self.answer = ask_route.answer_service
+        self.client_user_id = ask_route.client_user_id
+        self.record_qa_message = ask_route.record_qa_message
+
+        ask_route.client_user_id = lambda db, user_id: user_id
+        ask_route.record_qa_message = lambda *args, **kwargs: None
 
     def tearDown(self) -> None:
         ask_route.refresh_service = self.refresh
         ask_route.answer_service = self.answer
+        ask_route.client_user_id = self.client_user_id
+        ask_route.record_qa_message = self.record_qa_message
 
     def test_a_provider_failure_is_unavailable(self) -> None:
         ask_route.refresh_service = _Refresh()
@@ -921,7 +928,7 @@ class _RecordingAnswer:
         self.model = None
         self.provider = None
 
-    def answer(self, db, question, outcome, trace=None, model=None, provider=None):
+    def answer(self, db, question, outcome, trace=None, model=None, provider=None, conversation=None):
         self.model = model
         self.provider = provider
         return type(
@@ -935,7 +942,7 @@ class _FailingAnswer:
     def __init__(self, error: Exception) -> None:
         self.error = error
 
-    def answer(self, db, question, outcome, trace=None, model=None, provider=None):
+    def answer(self, db, question, outcome, trace=None, model=None, provider=None, conversation=None):
         raise self.error
 
 

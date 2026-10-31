@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "note": "Hand-authored execution paths for Phase B.3. Not generated from the resolver.",
+  "scenarios": [
+    {
+      "id": "A_typescript_execution_flow",
+      "fixture": "execution_flow",
+      "language": "typescript",
+      "generation": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "question": "Trace what happens when the user submits the plan form from the frontend through the API to the database.",
+      "expected_start": {"path": "components/PlanForm.tsx", "symbol": "onGenerate"},
+      "expected_path": [
+        {"path": "components/PlanForm.tsx", "symbol": "onGenerate", "stage": "event_handler"},
+        {"path": "app/api/plans/route.ts", "symbol": "POST", "stage": "api_handler", "via": "ROUTES_TO"},
+        {"path": "lib/service.ts", "symbol": "createStudyPlan", "stage": "business_logic", "via": "CALLS"},
+        {"path": "lib/rules.ts", "symbol": "generateTasks", "stage": "business_logic", "via": "CALLS"},
+        {"path": "lib/db.ts", "symbol": "savePlan", "stage": "database", "via": "CALLS"}
+      ],
+      "must_cite_paths": [
+        "components/PlanForm.tsx",
+        "app/api/plans/route.ts",
+        "lib/service.ts",
+        "lib/db.ts"
+      ],
+      "must_not_include": [
+        {"path": "lib/unused.ts", "symbol": "generateTasksAlt"},
+        {"path": "lib/service.ts", "symbol": "createStudyPlanPreview"}
+      ],
+      "external_ok": ["fetch", "NextResponse.json", "console"]
+    },
+    {
+      "id": "B_python_fastapi_orders",
+      "fixture": "fastapi_orders",
+      "language": "python",
+      "generation": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "question": "Trace how submit_customer_order processes a request through the service layer into the database.",
+      "expected_start": {"path": "app/routers/orders.py", "symbol": "submit_customer_order"},
+      "expected_path": [
+        {"path": "app/routers/orders.py", "symbol": "submit_customer_order", "stage": "api_handler"},
+        {"path": "app/services/order_service.py", "symbol": "place_customer_order", "stage": "business_logic", "via": "CALLS"},
+        {"path": "app/services/inventory.py", "symbol": "assert_sku_available", "stage": "business_logic", "via": "CALLS"},
+        {"path": "app/db/repository.py", "symbol": "persist_order_record", "stage": "database", "via": "CALLS"}
+      ],
+      "must_cite_paths": [
+        "app/routers/orders.py",
+        "app/services/order_service.py",
+        "app/db/repository.py"
+      ],
+      "must_not_include": [
+        {"path": "app/services/order_service.py", "symbol": "preview_customer_order"},
+        {"path": "app/services/unrelated.py", "symbol": "place_customer_order"}
+      ],
+      "blocked_stages": ["frontend_update"]
+    },
+    {
+      "id": "C_go_warehouse",
+      "fixture": "go_warehouse",
+      "language": "go",
+      "generation": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "question": "Trace what happens when the /warehouse/stock HTTP handler returns stock levels.",
+      "expected_start": {"path": "main.go", "symbol": "stockHandler"},
+      "expected_path": [
+        {"path": "main.go", "symbol": "stockHandler", "stage": "api_handler"},
+        {"path": "internal/service/stock.go", "symbol": "StockLevels", "stage": "business_logic", "via": "CALLS"},
+        {"path": "internal/store/bins.go", "symbol": "CountBins", "stage": "database", "via": "CALLS"}
+      ],
+      "must_cite_paths": ["main.go", "internal/service/stock.go", "internal/store/bins.go"],
+      "must_not_include": [
+        {"path": "main.go", "symbol": "unusedPreviewHandler"}
+      ],
+      "external_ok": ["json.NewEncoder", "http.HandleFunc"]
+    },
+    {
+      "id": "D_cross_stack_shipment",
+      "fixture": "cross_stack_shipment",
+      "language": "mixed",
+      "generation": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "question": "Trace the request flow when a dispatcher enqueues a parcel from the console to the shipment API.",
+      "expected_start": {"path": "web/src/DispatchBoard.tsx", "symbol": "onDispatch"},
+      "expected_path": [
+        {"path": "web/src/DispatchBoard.tsx", "symbol": "onDispatch", "stage": "event_handler"},
+        {"path": "web/src/shippingClient.ts", "symbol": "enqueueParcel", "stage": "http_request", "via": "CALLS"},
+        {"path": "app/routers/shipments.py", "symbol": "create_shipment", "stage": "api_handler", "via": "ROUTES_TO"},
+        {"path": "app/services/dispatcher.py", "symbol": "reserve_tracking_code", "stage": "business_logic", "via": "CALLS"}
+      ],
+      "must_cite_paths": [
+        "web/src/shippingClient.ts",
+        "app/routers/shipments.py",
+        "app/services/dispatcher.py"
+      ],
+      "must_not_include": [],
+      "protocol_required": true
+    },
+    {
+      "id": "E_adversarial_rels",
+      "fixture": "adversarial_rels",
+      "language": "typescript",
+      "generation": "33333333-3333-4333-8333-333333333333",
+      "question": "Trace what create and execute do in this repository.",
+      "expected_start": null,
+      "expected_path": [],
+      "must_cite_paths": [],
+      "must_not_resolve_calls": ["create", "execute"],
+      "correct_abstention": true,
+      "notes": "Bare common names must remain unresolved; no fabricated execution path."
+    },
+    {
+      "id": "E_unsupported_cobol",
+      "fixture": "unsupported_cobol",
+      "language": "cobol",
+      "generation": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      "question": "Trace the execution path of the legacy billing program.",
+      "expected_start": null,
+      "expected_path": [],
+      "must_cite_paths": [],
+      "correct_abstention": true,
+      "unsupported_capability": true,
+      "notes": "Unsupported language: plan must not invent CALLS."
+    }
+  ]
+}

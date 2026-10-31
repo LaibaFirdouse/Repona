@@ -1,0 +1,74 @@
+{
+  "fixture": "execution_flow",
+  "language": "typescript",
+  "generation": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "expected": [
+    {
+      "relationship": "CALLS",
+      "source_path": "app/api/plans/route.ts",
+      "mentioned_name": "createStudyPlan",
+      "target_path": "lib/service.ts",
+      "resolution": "resolved"
+    },
+    {
+      "relationship": "CALLS",
+      "source_path": "lib/service.ts",
+      "mentioned_name": "generateTasks",
+      "target_path": "lib/rules.ts",
+      "resolution": "resolved"
+    },
+    {
+      "relationship": "CALLS",
+      "source_path": "lib/service.ts",
+      "mentioned_name": "savePlan",
+      "target_path": "lib/db.ts",
+      "resolution": "resolved"
+    },
+    {
+      "relationship": "CALLS",
+      "source_path": "app/api/plans/route.ts",
+      "mentioned_name": "requireSession",
+      "target_path": "lib/auth.ts",
+      "resolution": "resolved"
+    },
+    {
+      "relationship": "CALLS",
+      "source_path": "lib/namespaced.ts",
+      "mentioned_name": "auth.requireSession",
+      "target_path": "lib/auth.ts",
+      "resolution": "resolved"
+    },
+    {
+      "relationship": "IMPORTS",
+      "source_path": "app/api/plans/route.ts",
+      "mentioned_name": "@/lib/service",
+      "target_path": "lib/service.ts",
+      "resolution": "resolved"
+    },
+    {
+      "relationship": "ROUTES_TO",
+      "source_path": "components/PlanForm.tsx",
+      "mentioned_name": "POST /api/plans",
+      "target_path": "app/api/plans/route.ts",
+      "resolution": "protocol"
+    },
+    {
+      "relationship": "CALLS",
+      "source_path": "app/api/plans/route.ts",
+      "mentioned_name": "NextResponse.json",
+      "resolution": "external"
+    }
+  ],
+  "must_not_resolve": [
+    {
+      "relationship": "CALLS",
+      "source_path": "lib/service.ts",
+      "mentioned_name": "generateTasksAlt"
+    },
+    {
+      "relationship": "CALLS",
+      "source_path": "app/api/plans/route.ts",
+      "mentioned_name": "createStudyPlanPreview"
+    }
+  ]
+}

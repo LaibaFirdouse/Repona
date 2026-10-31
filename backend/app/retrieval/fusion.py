@@ -14,11 +14,12 @@ KIND_ORDER = {
 }
 EDGE_ORDER = {
     "CALLS": 0,
-    "REFERENCES": 1,
-    "IMPORTS": 2,
-    "DEPENDS_ON": 3,
-    "DECLARES": 4,
-    "CONTAINS": 5,
+    "ROUTES_TO": 1,
+    "REFERENCES": 2,
+    "IMPORTS": 3,
+    "DEPENDS_ON": 4,
+    "DECLARES": 5,
+    "CONTAINS": 6,
 }
 
 
@@ -194,6 +195,11 @@ def neighbor_chunk(
 def allow_edge(relationship: str, outgoing: bool, anchor_role: str, other_role: str) -> bool:
     if relationship in {"CALLS", "REFERENCES"}:
         return True
+    # Protocol correspondence (HTTP client → handler). Not a CALLS edge; still
+    # admissible for evidence neighbor expansion when both ends are symbols.
+    if relationship == "ROUTES_TO":
+        del outgoing
+        return anchor_role == "symbol" and other_role == "symbol"
     if relationship == "IMPORTS":
         return anchor_role == "file" if outgoing else anchor_role in {"file", "module"}
     if relationship == "DEPENDS_ON":

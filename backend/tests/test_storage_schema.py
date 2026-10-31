@@ -48,6 +48,10 @@ class StorageSchemaTests(unittest.TestCase):
         self.assertNotIn("is_active", columns)
         self.assertIn("normalized_url", columns)
 
+    def test_index_generation_stores_capability_report(self) -> None:
+        columns = set(Base.metadata.tables["index_generations"].columns.keys())
+        self.assertIn("capability_report_json", columns)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,27 @@
+{
+  "fixture": "go_inventory",
+  "language": "go",
+  "generation": "55555555-5555-4555-8555-555555555555",
+  "expected": [
+    {
+      "relationship": "IMPORTS",
+      "source_path": "cmd/main.go",
+      "mentioned_name": "example.com/inventory/internal/stock",
+      "target_path": "internal/stock/count.go",
+      "resolution": "resolved"
+    },
+    {
+      "relationship": "IMPORTS",
+      "source_path": "cmd/main.go",
+      "mentioned_name": "fmt",
+      "resolution": "external"
+    }
+  ],
+  "must_not_resolve": [
+    {
+      "relationship": "CALLS",
+      "mentioned_name": "fmt.Println"
+    }
+  ],
+  "notes": "Go CALLS across packages remain unresolved without SCIP/gopls; IMPORTS module resolution is in scope."
+}

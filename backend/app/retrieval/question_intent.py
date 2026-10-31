@@ -30,7 +30,8 @@ _DEBUGGING = re.compile(
 
 _ARCHITECTURE = re.compile(
     r"\b("
-    r"tell me everything|high[- ]level|architecture|big picture|overview|"
+    r"tell me everything|tell me about (?:this |the )?(?:repo|repository|codebase|project)|"
+    r"high[- ]level|architecture|big picture|overview|"
     r"what is this repo|what'?s this repo|purpose of|components|structure of the (?:repo|project|codebase)|"
     r"how (?:is|are) .+ (?:organized|structured)|design of"
     r")\b",
@@ -203,7 +204,10 @@ def answer_suffix_for_intent(intent: QueryIntent) -> str:
         return (
             "\nAnswer as an ordered walkthrough of the code path: each step should name the function or block, "
             "what it reads/writes, and what it calls next. Prefer implementation files over build scripts unless "
-            "the question is explicitly about build or benchmark harness entrypoints."
+            "the question is explicitly about build or benchmark harness entrypoints. "
+            "Cite evidence ids for every important hop. If an HTTP fetch string maps to a route file in the "
+            "excerpts, explain that binding; do not invent calls that are not shown. When coverage is incomplete, "
+            "return a partial ordered trace that states which stages remain unresolved."
         )
     if intent == "architecture_question":
         return (

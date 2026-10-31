@@ -1,0 +1,13 @@
+{
+  "fixture": "java_methods",
+  "language": "java",
+  "generation": "66666666-6666-4666-8666-666666666666",
+  "expected": [],
+  "must_not_resolve": [
+    {
+      "relationship": "CALLS",
+      "mentioned_name": "tag"
+    }
+  ],
+  "notes": "Java static imports and method CALLS are not yet semantically resolved; abstention is required."
+}

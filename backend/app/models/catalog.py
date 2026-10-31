@@ -93,6 +93,7 @@ class IndexGeneration(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     graph_epoch: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    capability_report_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     retired_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

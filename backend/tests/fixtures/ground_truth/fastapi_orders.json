@@ -1,0 +1,47 @@
+{
+  "fixture": "fastapi_orders",
+  "language": "python",
+  "generation": "ffffffff-ffff-4fff-8fff-ffffffffffff",
+  "expected": [
+    {
+      "relationship": "CALLS",
+      "source_path": "app/routers/orders.py",
+      "mentioned_name": "place_customer_order",
+      "target_path": "app/services/order_service.py",
+      "resolution": "resolved"
+    },
+    {
+      "relationship": "CALLS",
+      "source_path": "app/services/order_service.py",
+      "mentioned_name": "assert_sku_available",
+      "target_path": "app/services/inventory.py",
+      "resolution": "resolved"
+    },
+    {
+      "relationship": "CALLS",
+      "source_path": "app/services/order_service.py",
+      "mentioned_name": "persist_order_record",
+      "target_path": "app/db/repository.py",
+      "resolution": "resolved"
+    },
+    {
+      "relationship": "IMPORTS",
+      "source_path": "app/routers/orders.py",
+      "mentioned_name": "app.services.order_service",
+      "target_path": "app/services/order_service.py",
+      "resolution": "resolved"
+    },
+    {
+      "relationship": "IMPORTS",
+      "source_path": "app/routers/orders.py",
+      "mentioned_name": "fastapi",
+      "resolution": "external"
+    }
+  ],
+  "must_not_resolve": [
+    {
+      "relationship": "CALLS",
+      "mentioned_name": "preview_customer_order"
+    }
+  ]
+}

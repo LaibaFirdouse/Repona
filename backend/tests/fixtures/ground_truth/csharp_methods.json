@@ -1,0 +1,13 @@
+{
+  "fixture": "csharp_methods",
+  "language": "csharp",
+  "generation": "88888888-8888-4888-8888-888888888888",
+  "expected": [],
+  "must_not_resolve": [
+    {
+      "relationship": "CALLS",
+      "mentioned_name": "Fee"
+    }
+  ],
+  "notes": "C# namespace/method CALLS are not verified; do not invent resolved edges."
+}

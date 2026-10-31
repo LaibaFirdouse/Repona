@@ -165,7 +165,18 @@ from app.retrieval.workflow_boost import (
     workflow_lexical_queries,
 )
 from app.retrieval.catalog_context import catalog_path_filters, indexed_path_spans_for_question
+from app.retrieval.capability_profile import load_capability_profile
 from app.retrieval.trace_anchors import catalog_trace_anchor_choices, question_wants_trace_anchors
+from app.retrieval.execution_trace import (
+    build_investigation_plan,
+    execution_trace_prompt_suffix,
+    expand_execution_trace_evidence,
+    ground_investigation_plan,
+    investigation_seed_choices,
+    order_spans_by_execution_stage,
+    partial_trace_claims,
+    wants_execution_trace_plan,
+)
 from app.retrieval.question_intent import PLANNER_SYSTEM, answer_suffix_for_intent
 from app.retrieval.query_router import (
     RetrievalRequest,
@@ -492,6 +503,27 @@ class AnswerService:
             retrieval = replace(retrieval, path_filters=merged_paths)
             if trace is not None:
                 trace["catalog_path_filters"] = catalog_paths[:8]
+        trace_plan = None
+        capability_profile = None
+        if wants_execution_trace_plan(search_question, retrieval.intent):
+            capability_profile = load_capability_profile(db, generation)
+            trace_plan = build_investigation_plan(
+                search_question, history, profile=capability_profile
+            )
+            ground_investigation_plan(db, generation, trace_plan, profile=capability_profile)
+            if trace_plan.path_hints:
+                merged_paths = list(
+                    dict.fromkeys(list(retrieval.path_filters) + trace_plan.path_hints)
+                )[:8]
+                retrieval = replace(retrieval, path_filters=merged_paths)
+            if trace_plan.lexical_queries:
+                merged_lex = list(
+                    dict.fromkeys(list(retrieval.lexical_queries) + trace_plan.lexical_queries)
+                )[:4]
+                retrieval = replace(retrieval, lexical_queries=merged_lex)
+            if trace is not None:
+                trace["execution_trace_plan"] = trace_plan.as_trace_dict()
+                trace["capability_profile"] = capability_profile.as_trace_dict()
         if trace is not None:
             if history:
                 trace["conversation_turns"] = len(history)
@@ -849,6 +881,18 @@ class AnswerService:
                     graph_hops=graph_hops,
                     anchor_stats=anchor_stats,
                 )
+        if trace_plan is not None:
+            seed = investigation_seed_choices(
+                db,
+                generation,
+                trace_plan,
+                limit=min(12, span_limit),
+                profile=capability_profile,
+            )
+            if seed:
+                spans = _merge_chunk_choices(seed, spans, span_limit + 8)
+                if trace is not None:
+                    trace["execution_trace_seed_chunks"] = len(seed)
         if code_first:
             boost = code_first_chunk_choices(db, generation, question=search_question, limit=span_limit)
             spans = _merge_chunk_choices(spans, boost, span_limit)
@@ -994,6 +1038,45 @@ class AnswerService:
             search_question,
             prefer_implementation=prefer_impl or code_first or substantive,
         )
+        if trace_plan is not None:
+            investigate_started = perf_counter()
+            for _pass in range(3):
+                follow_choices, trace_plan = expand_execution_trace_evidence(
+                    db,
+                    generation,
+                    loaded,
+                    edges,
+                    trace_plan,
+                    limit=min(16, span_limit),
+                    profile=capability_profile,
+                )
+                if not follow_choices:
+                    break
+                follow_loaded = _load_span_text(db, generation.id, revision, follow_choices, blobs)
+                loaded = _merge_loaded_spans(loaded, follow_loaded)
+                loaded = limit_spans_per_file(loaded, max_per_file=per_file_cap)
+                loaded = deprioritize_thin_spans(loaded)
+                if trace_plan.stop_reason in {
+                    "stages_covered",
+                    "pass_budget",
+                    "no_followup_targets",
+                    "partial_capability_limit",
+                    "capability_generation_mismatch",
+                }:
+                    break
+            loaded = order_spans_by_execution_stage(loaded, trace_plan)
+            for symbol_id in trace_plan.target_symbols:
+                required_symbol_ids.add(symbol_id)
+                for span in loaded:
+                    if str(span.get("symbol_id") or "") == symbol_id:
+                        span["question_target"] = True
+            if trace is not None:
+                trace["execution_trace_plan"] = trace_plan.as_trace_dict()
+                if capability_profile is not None:
+                    trace["capability_profile"] = capability_profile.as_trace_dict()
+                trace["execution_trace_investigate_seconds"] = round(
+                    perf_counter() - investigate_started, 3
+                )
         if evidence_debug_enabled(trace):
             record_stage(
                 trace,
@@ -1072,6 +1155,8 @@ class AnswerService:
             if code_trace:
                 suffix += CODE_TRACE_SUFFIX
             suffix += answer_suffix_for_intent(retrieval.intent)
+            if trace_plan is not None:
+                suffix += execution_trace_prompt_suffix(trace_plan)
             user_block = _dialog_user_block(question, dialog_notes, history_prefix=history_prefix)
             system_message = SYSTEM_PROMPT + suffix
             # Always count the same system+user pair packing, repair, and the
@@ -1302,6 +1387,23 @@ class AnswerService:
                     continue
                 if trace is not None:
                     trace["audit_recovery_no_chunks"] = True
+            if not kept and trace_plan is not None:
+                fallback = partial_trace_claims(
+                    trace_plan,
+                    [span for span in packed.spans if isinstance(span, dict)],
+                )
+                if fallback:
+                    kept, citations_valid = review_claims(fallback, valid_ids)
+                    if require_impl_support:
+                        kept, impl_supported = review_implementation_support(
+                            kept,
+                            [span for span in packed.spans if isinstance(span, dict)],
+                            require_implementation=True,
+                        )
+                        if not impl_supported:
+                            citations_valid = False
+                    if kept and trace is not None:
+                        trace["execution_trace_partial_fallback"] = True
             if not kept:
                 failure_message = (
                     INSUFFICIENT_EVIDENCE if audit_only_response and pack_thin else NO_CITED_CLAIM
@@ -2462,9 +2564,11 @@ def _span_piece(span: dict, evidence_id: str | None = None) -> str:
     prefix = span["context_prefix"]
     body = span["text"] if not prefix else f"{prefix}\n{span['text']}"
     cited = span["chunk_id"] if evidence_id is None else evidence_id
+    stage = span.get("execution_stage")
+    stage_bit = f" stage {stage}" if stage and stage != "other" else ""
     return (
         f"\nspan {cited} {span['relative_path']} {span['qualified_name'] or ''} "
-        f"{span['chunk_kind']} lines {span['start_line']}-{span['end_line']}\n{body}"
+        f"{span['chunk_kind']} lines {span['start_line']}-{span['end_line']}{stage_bit}\n{body}"
     )
 
 

@@ -47,6 +47,25 @@ class IdentityTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             normalize_repository_url("http://github.com/org/repo")
 
+    def test_loopback_http_is_allowed_for_local_fixtures(self) -> None:
+        self.assertEqual(
+            normalize_repository_url("http://127.0.0.1:8766/execution_flow.git", allow_loopback_http=True),
+            "http://127.0.0.1:8766/execution_flow",
+        )
+        self.assertEqual(
+            normalize_repository_url("http://localhost:8766/fastapi_orders.git", allow_loopback_http=True),
+            "http://localhost:8766/fastapi_orders",
+        )
+
+    def test_loopback_http_requires_explicit_opt_in(self) -> None:
+        for url in (
+            "http://127.0.0.1:8766/repo",
+            "http://localhost:8766/repo",
+            "http://[::1]:8766/repo",
+        ):
+            with self.assertRaises(ValueError):
+                normalize_repository_url(url)
+
     def test_same_natural_key_reproduces_the_id(self) -> None:
         url = normalize_repository_url("https://github.com/org/repo.git")
         self.assertEqual(repository_id(url), repository_id(url))

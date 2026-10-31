@@ -1,0 +1,33 @@
+{
+  "fixture": "routes_to_stress",
+  "language": "mixed",
+  "generation": "44444444-4444-4444-8444-444444444444",
+  "expected": [
+    {
+      "relationship": "ROUTES_TO",
+      "source_path": "web/client.ts",
+      "mentioned_name": "GET /api/v2/users/{param}",
+      "target_path": "api/app.py",
+      "resolution": "protocol"
+    },
+    {
+      "relationship": "ROUTES_TO",
+      "source_path": "web/client.ts",
+      "mentioned_name": "POST /api/v2/users",
+      "target_path": "api/app.py",
+      "resolution": "protocol"
+    }
+  ],
+  "must_not_resolve": [
+    {
+      "relationship": "ROUTES_TO",
+      "source_path": "web/client.ts",
+      "mentioned_name": "DELETE /api/v2/users/{param}"
+    },
+    {
+      "relationship": "ROUTES_TO",
+      "source_path": "web/client.ts",
+      "mentioned_name": "GET /api/v2/items"
+    }
+  ]
+}
