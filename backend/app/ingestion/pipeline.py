@@ -310,6 +310,18 @@ def _finish_generation(
         t = perf_counter()
         _assert_catalog(db, generation_key, fingerprint, draft, blobs)
         record_step("ingest.assert_postgres_catalog", t)
+        t = perf_counter()
+        deferred_rows_stored = _store_deferred_chunk_rows(
+            db,
+            repository_id,
+            generation_key,
+            fingerprint,
+            draft,
+            enabled=progressive and settings.progressive_store_deferred_chunks,
+            on_progress=renew,
+        )
+        if deferred_rows_stored:
+            record_step("ingest.store_deferred_chunks_postgres", t, chunks=len(draft.deferred_chunks))
         indexed_chunks = list(draft.chunks)
         collection: str | None = None
         if qdrant_url is not None and (indexed_chunks or draft.deferred_chunks):
@@ -389,14 +401,15 @@ def _finish_generation(
                 raise ChecklistError("qdrant is required when completing deferred embeddings during ingest")
             t = perf_counter()
             ensure_collection(qdrant_url, collection, vector_dimensions)
-            append_generation_chunks(
-                db,
-                repository_id,
-                generation_key,
-                fingerprint,
-                type(draft)(chunks=draft.deferred_chunks),
-            )
-            record_step("ingest.append_deferred_chunks_postgres", t, chunks=len(draft.deferred_chunks))
+            if not deferred_rows_stored:
+                append_generation_chunks(
+                    db,
+                    repository_id,
+                    generation_key,
+                    fingerprint,
+                    type(draft)(chunks=draft.deferred_chunks),
+                )
+                record_step("ingest.append_deferred_chunks_postgres", t, chunks=len(draft.deferred_chunks))
             indexed_chunks.extend(draft.deferred_chunks)
             deferred_stats: dict = {}
             t = perf_counter()
@@ -469,6 +482,36 @@ def _finish_generation(
             db.commit()
         _fail_if_owner(db, repository_id, generation_key, owner, epoch)
         raise
+
+
+def _store_deferred_chunk_rows(
+    db: Session,
+    repository_id: str,
+    generation_id: str,
+    fingerprint: str,
+    draft,
+    *,
+    enabled: bool,
+    on_progress=None,
+) -> bool:
+    """Write deferred (function/method body) chunk rows without embedding them.
+
+    Lazy indexing defers embedding, the expensive step, not parsing or full-text search. Without
+    these rows function bodies are invisible to lexical search, so nothing can find them in order
+    to embed them on demand. Rows start with vector_status='pending'; the ask path embeds the ones
+    a question reaches. Returns whether rows were written.
+    """
+    if not enabled or not draft.deferred_chunks:
+        return False
+    append_generation_chunks(
+        db,
+        repository_id,
+        generation_id,
+        fingerprint,
+        type(draft)(chunks=draft.deferred_chunks),
+        on_progress=on_progress,
+    )
+    return True
 
 
 def _ready_vector_chunk_ids(db: Session, generation_id: str) -> set[str]:

@@ -7,6 +7,11 @@ from typing import Iterable
 
 from app.core.config import settings
 from app.retrieval.answer_prose import sanitize_answer_prose
+from app.retrieval.query_terms import extract_search_terms
+
+# A follow-up with fewer distinctive words than this ("and where is it called?") borrows the
+# previous question's words; a self-contained question is searched on its own.
+_FOLLOW_UP_MIN_TERMS = 3
 
 
 @dataclass(frozen=True)
@@ -33,21 +38,22 @@ def normalize_turns(history: Iterable[QaTurn] | None) -> list[QaTurn]:
 
 
 def retrieval_question_text(question: str, history: list[QaTurn]) -> str:
-    """Expand a follow-up into one retrieval string for lanes and lexical search."""
+    """Search text for one question: the question itself, plus the previous question for short follow-ups.
+
+    Earlier answers are never included. They used to be (3 turns x 400 chars), which put model
+    prose and the words "User"/"Assistant" into every search, pushed the current question past the
+    embedding model's 256-token window, and kept earlier topics' symbols marked as required.
+    """
     current = question.strip()
     if not history:
         return current
-    parts: list[str] = []
-    for turn in history[-3:]:
-        line = f"User asked: {turn.question}"
-        if turn.answer:
-            summary = turn.answer[:400].rstrip()
-            if len(turn.answer) > 400:
-                summary += "…"
-            line += f" Assistant answered: {summary}"
-        parts.append(line)
-    parts.append(f"Follow-up question: {current}")
-    return " ".join(parts)
+    if len(extract_search_terms(current)) >= _FOLLOW_UP_MIN_TERMS:
+        return current
+    previous = history[-1].question.strip()
+    if not previous:
+        return current
+    # Current question first so it survives truncation by the embedding model.
+    return f"{current} {previous}"
 
 
 def format_planner_user(question: str, history: list[QaTurn]) -> str:

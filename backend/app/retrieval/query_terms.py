@@ -152,16 +152,21 @@ def extract_search_terms(question: str) -> list[str]:
 
 
 def build_lexical_queries(question: str) -> list[str]:
-    """A small set of complementary plain-text queries for PostgreSQL full-text search."""
+    """Plain-text queries for full-text search, most distinctive terms first.
+
+    The full-text lane ORs the words of all queries and keeps the first dozen, so order matters:
+    identifiers, paths and quoted strings lead, and the whole question comes last as a fallback
+    for questions with no extractable terms.
+    """
     normalized = normalize_question(question)
     terms = extract_search_terms(question)
     queries: list[str] = []
-    if normalized:
-        queries.append(normalized)
     if terms:
         queries.append(" ".join(terms[:8]))
         if len(terms) > 1:
             queries.append(" ".join(terms[:4]))
+    if normalized:
+        queries.append(normalized)
     deduped: list[str] = []
     for item in queries:
         key = item.strip().lower()

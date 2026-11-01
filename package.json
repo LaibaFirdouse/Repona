@@ -17,6 +17,7 @@
     "benchmark:lazy-validation": "PYTHONPATH=backend .venv/bin/python scripts/benchmark_lazy_validation.py",
     "benchmark:router-correctness": "PYTHONPATH=backend .venv/bin/python scripts/benchmark_router_correctness.py",
     "benchmark:compare": "PYTHONPATH=backend .venv/bin/python scripts/compare_retrieval_paths.py",
+    "eval:v1": "python3 scripts/eval_v1.py --base-url http://127.0.0.1:8000 --output evaluation/v1-eval-latest.json --markdown evaluation/v1-eval-latest.md",
     "e2e:smoke": "PYTHONPATH=backend .venv/bin/python scripts/e2e_smoke.py --base-url http://127.0.0.1:8000",
     "measure:nextjs": "PYTHONPATH=backend .venv/bin/python scripts/measure_index_ask.py --repo-url https://github.com/vercel/next.js --question 'How does Next.js implement the App Router and route segment handling?' --json evaluation/nextjs-index-ask-latest.json --markdown evaluation/nextjs-index-ask-report.md",
     "deploy": "bash scripts/deploy_production.sh",

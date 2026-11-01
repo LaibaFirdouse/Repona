@@ -36,10 +36,23 @@ services:
       SERVER_LOG_LEVEL: ${SERVER_LOG_LEVEL:-INFO}
       SERVER_LOGS_TOKEN: ${SERVER_LOGS_TOKEN:-}
       # Progressive lazy indexing (validated via npm run benchmark:lazy-validation). Re-index after deploy.
+      # Lazy indexing (v1): parse every file and store every chunk with full-text search at
+      # index time; embed only docs/config/import chunks up front; embed function bodies on
+      # first use by a question. Retrieval is one LLM call per question (planner off, no extra round).
       PROGRESSIVE_INDEXING: ${PROGRESSIVE_INDEXING:-true}
-      EMBED_CATALOGUE_BEFORE_ACTIVATE: ${EMBED_CATALOGUE_BEFORE_ACTIVATE:-false}
+      PROGRESSIVE_STORE_DEFERRED_CHUNKS: ${PROGRESSIVE_STORE_DEFERRED_CHUNKS:-true}
+      EMBED_CATALOGUE_BEFORE_ACTIVATE: ${EMBED_CATALOGUE_BEFORE_ACTIVATE:-true}
       PROGRESSIVE_COMPLETE_DEFERRED_IN_INGEST: ${PROGRESSIVE_COMPLETE_DEFERRED_IN_INGEST:-false}
       LAZY_EMBED_ON_QUERY: ${LAZY_EMBED_ON_QUERY:-true}
+      QUERY_PLANNER_ENABLED: ${QUERY_PLANNER_ENABLED:-false}
+      ANSWER_EVIDENCE_ROUNDS: ${ANSWER_EVIDENCE_ROUNDS:-0}
+      ANSWER_RETRY_ON_AUDIT_ONLY: ${ANSWER_RETRY_ON_AUDIT_ONLY:-false}
+      TRACE_ANCHOR_BOOST_ENABLED: ${TRACE_ANCHOR_BOOST_ENABLED:-false}
+      TRACE_ANCHOR_GRAPH_ENABLED: ${TRACE_ANCHOR_GRAPH_ENABLED:-false}
+      TRACE_ANCHOR_OUT_DEGREE_ENABLED: ${TRACE_ANCHOR_OUT_DEGREE_ENABLED:-false}
+      LLM_MAX_CLAIMS: ${LLM_MAX_CLAIMS:-40}
+      ANSWER_CONVERSATION_MAX_TURNS: ${ANSWER_CONVERSATION_MAX_TURNS:-2}
+      ANSWER_CONVERSATION_ANSWER_CHARS: ${ANSWER_CONVERSATION_ANSWER_CHARS:-600}
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: safe.directory
       GIT_CONFIG_VALUE_0: "*"

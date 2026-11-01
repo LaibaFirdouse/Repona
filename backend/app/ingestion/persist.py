@@ -9,6 +9,7 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from app.ingestion.assemble import GenerationDraft
+from app.ingestion.lexical import code_search_text
 from app.storage.identity import without_nul
 from app.ingestion.versions import (
     CHUNKING_VERSION,
@@ -411,7 +412,8 @@ def _bulk_insert_generation_chunks(
                 "context_prefix": without_nul(chunk.context_prefix),
                 "embedding_input_hash": chunk.embedding_input_hash,
                 "embedding_config_fingerprint": fingerprint,
-                "lexical": without_nul(chunk.lexical_text),
+                # Full-text input only: adds the words of compound identifiers (deriveKey, a.b.c).
+                "lexical": code_search_text(without_nul(chunk.lexical_text)),
             }
             for chunk in part
         ]
