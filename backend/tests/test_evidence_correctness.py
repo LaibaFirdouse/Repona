@@ -25,7 +25,6 @@ from app.retrieval.packet import (
     pack_evidence,
     resolve_evidence_aliases,
     review_claims,
-    review_implementation_support,
     span_citations,
 )
 
@@ -284,20 +283,16 @@ class ReadmeVsImplementationTests(unittest.TestCase):
             prefer_implementation=True,
         )
         self.assertEqual(ordered[0]["chunk_id"], "impl")
-        kept, ok = review_implementation_support(
-            [{"kind": "observed", "text": "It checks credentials.", "evidence_ids": ["readme"]}],
-            ordered,
-            require_implementation=True,
+
+    def test_a_claim_citing_the_readme_is_kept(self) -> None:
+        # README support is valid for purpose/setup statements; the implementation-support filter
+        # that dropped such claims (and often the whole answer) was removed.
+        kept, valid = review_claims(
+            [{"kind": "observed", "text": "Login is described in the README.", "evidence_ids": ["readme"]}],
+            {"readme", "impl"},
         )
-        self.assertEqual(kept, [])
-        self.assertFalse(ok)
-        kept, ok = review_implementation_support(
-            [{"kind": "observed", "text": "It checks credentials.", "evidence_ids": ["impl"]}],
-            ordered,
-            require_implementation=True,
-        )
-        self.assertEqual(kept[0]["evidence_ids"], ["impl"])
-        self.assertTrue(ok)
+        self.assertEqual(kept[0]["evidence_ids"], ["readme"])
+        self.assertTrue(valid)
 
 
 class ClassMemberBeatsBareTypeShellTests(unittest.TestCase):
@@ -333,10 +328,10 @@ class ClassMemberBeatsBareTypeShellTests(unittest.TestCase):
         self.assertEqual(ordered[1]["chunk_id"], "class0")
 
 
-class ImportsDoNotSatisfyImplementationTests(unittest.TestCase):
-    """4. Imports alone must not satisfy an implementation question."""
+class ImplementationBodyOutranksImportsTests(unittest.TestCase):
+    """4. For an implementation question the body ranks ahead of the import block."""
 
-    def test_import_only_claim_rejected_when_body_present(self) -> None:
+    def test_body_ranks_ahead_of_imports(self) -> None:
         spans = [
             _loaded(
                 chunk_id="imports",
@@ -361,13 +356,6 @@ class ImportsDoNotSatisfyImplementationTests(unittest.TestCase):
             prefer_implementation=True,
         )
         self.assertEqual(ordered[0]["chunk_id"], "body")
-        kept, ok = review_implementation_support(
-            [{"kind": "observed", "text": "It imports RingBuffer.", "evidence_ids": ["imports"]}],
-            ordered,
-            require_implementation=True,
-        )
-        self.assertEqual(kept, [])
-        self.assertFalse(ok)
 
 
 class PackSkipsOversizedKeepsLaterTests(unittest.TestCase):

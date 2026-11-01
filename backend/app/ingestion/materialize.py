@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 from app.ingestion.assemble import SourceBlob
-from app.ingestion.inclusion import is_included
+from app.ingestion.inclusion import is_indexed_blob
 
 
 class SnapshotError(RuntimeError):
@@ -39,7 +39,7 @@ def write_detached_tree(git_dir: Path, commit_sha: str, creating: Path) -> list[
     _git(git_dir, "worktree", "add", "--detach", str(creating), commit_sha, text=False)
     blobs = read_commit_blobs(git_dir, commit_sha)
     for blob in blobs:
-        if not is_included(blob.relative_path, blob.mode):
+        if not is_indexed_blob(blob):
             continue
         target = creating / blob.relative_path
         target.parent.mkdir(parents=True, exist_ok=True)

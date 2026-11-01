@@ -9,8 +9,11 @@ from app.retrieval.answer_prose import sanitize_answer_prose
 
 NO_CITED_CLAIM = "The repository evidence did not produce a cited claim."
 INSUFFICIENT_EVIDENCE = "The retrieved evidence is not sufficient to explain this."
-SOURCE_BYTE_CAP = 24_000
-INPUT_BYTE_CAP = 32_000
+# Evidence budget (RETRIEVAL_SOURCE_BYTE_CAP / RETRIEVAL_EVIDENCE_BYTE_CAP). INPUT_BYTE_CAP bounds the
+# evidence text added after the header; the header (question, notes, conversation history) is not
+# counted, so a long chat no longer squeezes out code. The model context window bounds everything.
+SOURCE_BYTE_CAP = settings.retrieval_source_byte_cap
+INPUT_BYTE_CAP = settings.retrieval_evidence_byte_cap
 
 
 @dataclass(frozen=True)
@@ -146,6 +149,8 @@ def pack_evidence(
     """
     required_ids = {item for item in (required_symbol_ids or set()) if item}
     ordered_spans = _order_spans_for_pack(spans, required_ids)
+    # input_byte_cap applies to evidence only: add the header's size so it is not charged against it.
+    input_byte_cap += len(header.encode("utf-8"))
     counter = count_tokens or estimate_tokens
     kept_spans = []
     kept_edges = []
@@ -456,36 +461,6 @@ def is_weak_implementation_span(span: dict) -> bool:
     if name.startswith("readme") or name in {"package.json", "pyproject.toml"}:
         return True
     return False
-
-
-def review_implementation_support(
-    claims: list[dict],
-    spans: list[dict],
-    *,
-    require_implementation: bool,
-) -> tuple[list[dict], bool]:
-    """When implementation evidence is in the pack, reject claims citing only weak spans.
-
-    Citation id validity is separate from semantic support: a README id can be a
-    valid packet id and still fail as sole support for an implementation claim.
-    """
-    if not require_implementation or not claims:
-        return claims, True
-    by_id = {str(span.get("chunk_id")): span for span in spans if span.get("chunk_id")}
-    substantive_ids = {
-        chunk_id for chunk_id, span in by_id.items() if not is_weak_implementation_span(span)
-    }
-    if not substantive_ids:
-        # No implementation evidence reached the prompt—caller should abstain.
-        return [], False
-    kept: list[dict] = []
-    for claim in claims:
-        ids = [str(item) for item in claim.get("evidence_ids") or []]
-        strong = [item for item in ids if item in substantive_ids]
-        if not strong:
-            continue
-        kept.append({**claim, "evidence_ids": strong})
-    return kept, bool(kept)
 
 
 def _fits(

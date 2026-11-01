@@ -4,7 +4,6 @@ from unittest.mock import patch
 
 from app.services.llm.claude_provider import ClaudeProvider
 from app.services.llm.codex_provider import CodexProvider
-from app.services.llm.copilot_provider import CopilotProvider
 from app.services.llm.cursor_provider import CursorProvider
 from app.services.llm.opencode_provider import OpenCodeProvider
 from app.services.llm.zai_provider import ZaiProvider
@@ -38,17 +37,19 @@ class LLMFactoryTests(unittest.TestCase):
             self.assertIsInstance(codex, CodexProvider)
             self.assertEqual(codex.model, "gpt-5.5")
 
-    def test_factory_uses_opencode_zai_and_copilot(self) -> None:
+    def test_factory_uses_opencode_and_zai_and_refuses_copilot(self) -> None:
         with patch.dict(os.environ, {"LLM_PROVIDER": "opencode", "OPENCODE_MODEL": "opencode/big-pickle"}, clear=False):
             self.assertIsInstance(LLMFactory.create_provider(), OpenCodeProvider)
         with patch.dict(os.environ, {"LLM_PROVIDER": "zai", "ZAI_MODEL": "glm-5.3", "ZAI_API_KEY": "secret"}, clear=False):
             zai = LLMFactory.create_provider()
             self.assertIsInstance(zai, ZaiProvider)
             self.assertEqual(zai.model, "glm-5.3")
+        # Copilot runs with --allow-all-tools, so it is not offered.
         with patch.dict(os.environ, {"LLM_PROVIDER": "copilot", "COPILOT_MODEL": "auto"}, clear=False):
-            copilot = LLMFactory.create_provider("gpt-5")
-            self.assertIsInstance(copilot, CopilotProvider)
-            self.assertEqual(copilot.model, "gpt-5")
+            with self.assertLogs("app.services.llm.llm_factory", level="WARNING") as logs:
+                with self.assertRaises(LLMProviderError):
+                    LLMFactory.create_provider("gpt-5")
+        self.assertIn("provider=copilot", logs.output[0])
 
     def test_factory_uses_ollama_provider_when_configured(self) -> None:
         with patch.dict(

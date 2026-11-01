@@ -55,6 +55,7 @@ class LogsRouteTests(unittest.TestCase):
             settings = SimpleNamespace(
                 server_logs_enabled=True,
                 server_logs_token="",
+                app_env="local",
                 api_v1_prefix="/api/v1",
             )
             with patch("app.api.v1.routes.logs.settings", settings):
@@ -78,6 +79,16 @@ class LogsRouteTests(unittest.TestCase):
             self.assertEqual(blocked.status_code, 401)
             ok = client.get("/api/v1/logs", headers={"X-Server-Logs-Token": "secret"})
             self.assertEqual(ok.status_code, 200)
+
+    def test_logs_without_a_token_are_closed_outside_local_development(self) -> None:
+        app = FastAPI()
+        app.include_router(logs_route.router, prefix="/api/v1")
+        settings = SimpleNamespace(server_logs_enabled=True, server_logs_token="", app_env="production")
+        with patch("app.api.v1.routes.logs.settings", settings):
+            client = TestClient(app)
+            response = client.get("/api/v1/logs")
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("SERVER_LOGS_TOKEN", response.json()["detail"])
 
 
 class RequestLoggingMiddlewareTests(unittest.TestCase):

@@ -6,6 +6,8 @@ psycopg[binary]
 sqlalchemy
 uvicorn[standard]
 sentence-transformers
+# ModernBERT (default embedding model) needs transformers 4.48 or newer.
+transformers>=4.48
 numpy
 tree-sitter>=0.24
 tree-sitter-python

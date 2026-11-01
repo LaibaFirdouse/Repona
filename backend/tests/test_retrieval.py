@@ -337,6 +337,48 @@ class PacketTests(unittest.TestCase):
         self.assertEqual([span["id"] for span in packed.spans], ["a"])
         self.assertTrue(any(item.get("reason") == "source_byte_cap" for item in packed.excluded))
 
+    def test_a_long_header_does_not_consume_the_evidence_cap(self) -> None:
+        # Conversation history lives in the header; it must not squeeze out code.
+        spans = [{"id": "a", "raw": 8, "text": "abcdefgh"}]
+        packed = pack_evidence(
+            "h" * 5_000,
+            spans,
+            [],
+            [],
+            source_byte_cap=100,
+            input_byte_cap=50,
+            context_tokens=100_000,
+            output_tokens=1,
+            span_text=lambda span: (span["raw"], span["text"]),
+            edge_text=lambda edge: "",
+            technology_text=lambda item: "",
+        )
+        self.assertEqual([span["id"] for span in packed.spans], ["a"])
+
+    def test_evidence_beyond_the_evidence_cap_is_dropped(self) -> None:
+        spans = [{"id": "a", "raw": 8, "text": "a" * 40}, {"id": "b", "raw": 8, "text": "b" * 40}]
+        packed = pack_evidence(
+            "header",
+            spans,
+            [],
+            [],
+            source_byte_cap=100,
+            input_byte_cap=60,
+            context_tokens=100_000,
+            output_tokens=1,
+            span_text=lambda span: (span["raw"], span["text"]),
+            edge_text=lambda edge: "",
+            technology_text=lambda item: "",
+        )
+        self.assertEqual([span["id"] for span in packed.spans], ["a"])
+
+    def test_default_caps_come_from_settings(self) -> None:
+        from app.core.config import settings
+        from app.retrieval.packet import INPUT_BYTE_CAP, SOURCE_BYTE_CAP
+
+        self.assertEqual(SOURCE_BYTE_CAP, settings.retrieval_source_byte_cap)
+        self.assertEqual(INPUT_BYTE_CAP, settings.retrieval_evidence_byte_cap)
+
     def test_later_smaller_span_is_kept_after_oversized_candidate(self) -> None:
         spans = [
             {"id": "huge", "raw": 100, "text": "x" * 100},

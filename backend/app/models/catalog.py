@@ -224,6 +224,9 @@ class Chunk(Base):
             "kind IN ('symbol_body', 'symbol_part', 'import_block', 'file_overview', 'non_code')",
             name="ck_chunks_kind",
         ),
+        # Lazy materialisation and symbol/file lookups filter chunks by these columns.
+        Index("ix_chunks_symbol_id", "symbol_id"),
+        Index("ix_chunks_file_id", "file_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -266,6 +269,8 @@ class GenerationFile(Base):
             "parse_status IN ('not_parsed', 'parsed', 'syntax_error')",
             name="ck_generation_files_parse_status",
         ),
+        # The primary key leads with repository_id, but queries filter by generation only.
+        Index("ix_generation_files_generation_file", "index_generation_id", "file_id"),
     )
 
     repository_id: Mapped[str] = mapped_column(ForeignKey("repositories.id"), primary_key=True)
@@ -314,6 +319,9 @@ class GenerationChunk(Base):
             "search_vector",
             postgresql_using="gin",
         ),
+        # The primary key leads with repository_id, but queries filter by generation only.
+        Index("ix_generation_chunks_generation_chunk", "index_generation_id", "chunk_id"),
+        Index("ix_generation_chunks_generation_status", "index_generation_id", "vector_status"),
     )
 
     repository_id: Mapped[str] = mapped_column(ForeignKey("repositories.id"), primary_key=True)

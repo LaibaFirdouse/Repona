@@ -10,7 +10,11 @@ router = APIRouter(tags=["logs"])
 def _authorize_logs(authorization: str | None, logs_token: str | None) -> None:
     expected = settings.server_logs_token.strip()
     if not expected:
-        return
+        # Logs can contain repository names, questions and errors. Without a token they are only
+        # served in local development; deployments (APP_ENV other than local) must set one.
+        if settings.app_env == "local":
+            return
+        raise HTTPException(status_code=404, detail="server logs need SERVER_LOGS_TOKEN outside local development")
     bearer = ""
     if authorization and authorization.lower().startswith("bearer "):
         bearer = authorization[7:].strip()

@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 from app.ingestion.assemble import SourceBlob
-from app.ingestion.inclusion import is_included
+from app.ingestion.inclusion import is_indexed_blob
 from app.storage.identity import content_hash, point_id
 
 
@@ -21,7 +21,7 @@ def validate_worktree_bytes(git_dir: Path, commit_sha: str, work_tree: Path, blo
     common = Path(_git_text(work_tree, "rev-parse", "--git-common-dir")).resolve()
     if common != git_dir.resolve():
         raise ChecklistError("work tree does not use the repository git dir")
-    included = [blob for blob in blobs if is_included(blob.relative_path, blob.mode)]
+    included = [blob for blob in blobs if is_indexed_blob(blob)]
     for blob in included:
         digest = content_hash(blob.payload)
         on_disk = work_tree / blob.relative_path

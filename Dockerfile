@@ -25,9 +25,12 @@ ENV PYTHONPATH=/app/backend \
     SENTENCE_TRANSFORMERS_HOME=/home/repona/.cache/sentence-transformers
 
 USER repona
-# Embedding model used at query/index time. Qwen tokenizer is not warmed here:
-# default LLM_PROVIDER is cursor, which budgets with a conservative byte estimate.
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+# Embedding model used at query/index time, downloaded at build time so the first ask is not cold.
+# To use another model, build with --build-arg EMBEDDING_MODEL=... and set EMBEDDING_DIMENSIONS to match.
+# Qwen tokenizer is not warmed here: default LLM_PROVIDER is cursor, which budgets with a byte estimate.
+ARG EMBEDDING_MODEL=Alibaba-NLP/gte-modernbert-base
+ENV EMBEDDING_MODEL=${EMBEDDING_MODEL}
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${EMBEDDING_MODEL}')"
 
 USER root
 COPY docker/entrypoint.sh /entrypoint.sh

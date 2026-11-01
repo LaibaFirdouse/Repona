@@ -21,6 +21,11 @@ class QaTurn:
 
 
 def normalize_turns(history: Iterable[QaTurn] | None) -> list[QaTurn]:
+    """Bounded conversation context. Turns that ended in a refusal line are dropped.
+
+    Refusals stay in the stored chat (the UI shows them), but replaying them taught the model to
+    refuse again and pulled the unanswered topic into later questions.
+    """
     if not history:
         return []
     kept: list[QaTurn] = []
@@ -29,6 +34,8 @@ def normalize_turns(history: Iterable[QaTurn] | None) -> list[QaTurn]:
         if not question:
             continue
         answer = (item.answer or "").strip()
+        if answer in REFUSAL_LINES:
+            continue
         if len(answer) > settings.answer_conversation_answer_chars:
             answer = answer[: settings.answer_conversation_answer_chars].rstrip() + "…"
         kept.append(QaTurn(question=question, answer=answer))

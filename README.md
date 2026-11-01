@@ -76,7 +76,7 @@ The diagram shows the logical flow. The API, database services, and bridge run i
 | API and web interface | FastAPI, HTML | Repository indexing and question answering |
 | Catalog | PostgreSQL | Repository records, chunks, dependencies, and generations |
 | Vector retrieval | Qdrant | Semantic search over embedded chunks |
-| Embeddings | `all-MiniLM-L6-v2` | 384-dimensional text embeddings |
+| Embeddings | `Alibaba-NLP/gte-modernbert-base` (configurable) | 768-dimensional code-aware embeddings |
 | Code relationship graph | Neo4j | Call and dependency relationships |
 | Source parsing | Tree-sitter | Extracting code structure |
 | Answer generation | Cursor CLI through a host-side bridge | Generating answers from evidence |
@@ -197,7 +197,6 @@ Paste a GitHub repository URL, choose **Index**, then write a question and choos
 - `cursor`
 - `claude`
 - `codex`
-- `copilot`
 - `opencode`
 - `zai`
 - `ollama`
@@ -207,6 +206,10 @@ Each provider has its own model setting in `.env`, such as `CURSOR_MODEL`, `OLLA
 
 `openai` requires `OPENAI_API_KEY`, while `zai` requires `ZAI_API_KEY`.
 
+`copilot` is disabled: its CLI runs with `--allow-all-tools`, so text inside an indexed repository could make it run commands on the server. Selecting it returns HTTP 503 and logs the reason.
+
+When a CLI provider fails, the API answers HTTP 503 and the server log records the program, exit code or timeout, and a redacted tail of its error output (never the prompt).
+
 Provider selection does not select a tokenizer by itself. Prompt budgeting uses:
 
 - **Cursor and other CLI providers**: a documented conservative UTF-8 byte estimate plus `CONTEXT_MARGIN_TOKENS` (Cursor does not expose a local model tokenizer for pre-flight counts).
@@ -215,7 +218,7 @@ Provider selection does not select a tokenizer by itself. Prompt budgeting uses:
 
 The accepted API configuration defaults to Cursor. Ollama remains an optional provider when `LLM_PROVIDER=ollama` or a request sets `provider=ollama`.
 
-An `/api/v1/ask` request may set `provider` to `cursor`, `claude`, `codex`, `copilot`, `opencode`, `zai`, or `ollama`, and `model` to that provider's model ID. `openai` is valid as `LLM_PROVIDER` and is rejected as a request field. A request that omits both uses the configured provider. The web interface does not send either field.
+An `/api/v1/ask` request may set `provider` to `cursor`, `claude`, `codex`, `opencode`, `zai`, or `ollama`, and `model` to that provider's model ID. `openai` is valid as `LLM_PROVIDER` and is rejected as a request field. A request that omits both uses the configured provider. The web interface does not send either field.
 
 If the selected provider fails because of a missing or rejected key, a rate limit, a network error, or a timeout, the API returns HTTP 503 with a generic provider-unavailable message. It does not silently switch to another provider.
 
@@ -244,11 +247,13 @@ The bridge's `/health` endpoint returns:
 
 The bridge invokes Cursor CLI in Ask mode with sandbox mode enabled. It does not use `--force` or `--yolo`.
 
+The bridge serves requests concurrently and runs at most `CURSOR_BRIDGE_MAX_CONCURRENT` CLI processes at once (default 4); further requests wait for a free slot. A CLI that exceeds `CURSOR_TIMEOUT` is killed together with any processes it started.
+
 The CLI help nevertheless states that print mode can access shell and write tools. A probe with the same flags did not create a file inside or outside its workspace, but this does not prove that every command or filesystem operation is blocked. Treat the bridge as a local development component, not as a fully security-isolated execution environment.
 
 ### Rate limiting
 
-Per-IP limits are **on by default** for `POST /api/v1/ask` and `POST /api/v1/repository`. Defaults: **12 asks per minute** and **360 index POSTs per hour** per address (each index poll counts as one POST). Over-limit calls receive **HTTP 429** with a `Retry-After` header. Set `RATE_LIMIT_ENABLED=false` in `.env` to disable. See `.env.example` for `RATE_LIMIT_*` variables.
+Per-IP limits are **on by default** for `POST /api/v1/ask` (including `POST /api/v1/ask/stream`, which the web page uses; both share one budget) and `POST /api/v1/repository`. Defaults: **12 asks per minute** and **360 index POSTs per hour** per address (each index poll counts as one POST). Over-limit calls receive **HTTP 429** with a `Retry-After` header. Set `RATE_LIMIT_ENABLED=false` in `.env` to disable. See `.env.example` for `RATE_LIMIT_*` variables.
 
 The accepted run used:
 
@@ -305,7 +310,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/ask \
 
 Read the `answer` and `citations` fields in the response.
 
-You can optionally set `provider` to `cursor`, `claude`, `codex`, `copilot`, `opencode`, `zai`, or `ollama`, and set `model` to that provider's model ID. If both are omitted, Repona uses the configured provider.
+You can optionally set `provider` to `cursor`, `claude`, `codex`, `opencode`, `zai`, or `ollama`, and set `model` to that provider's model ID. If both are omitted, Repona uses the configured provider.
 
 `openai` is selected through `LLM_PROVIDER`, not through the request's `provider` field.
 
@@ -322,7 +327,7 @@ When the response says `wait`, send the same request again. The page displays th
 
 Repona shallow-fetches the tracked branch and creates a snapshot of the indexed commit.
 
-It keeps supported programming-language files, plus JSON, Markdown, YAML, TOML, SQL, shell scripts, Dockerfiles, and dependency manifests such as:
+It keeps supported programming-language files, plus JSON, Markdown/MDX, reStructuredText, plain text, YAML, TOML, INI/CFG, SQL, shell scripts, Dockerfiles (including `Dockerfile.*`), and dependency manifests such as:
 
 - `requirements.txt`
 - `package.json`
@@ -333,11 +338,19 @@ It keeps supported programming-language files, plus JSON, Markdown, YAML, TOML, 
 - `Gemfile`
 - `Rakefile`
 
-It skips `.git`, `node_modules`, `build`, `dist`, and lockfiles.
+It skips:
+
+- dependency, virtualenv, build-output and cache directories: `.git`, `node_modules`, `build`, `dist`, `vendor`, `third_party`, `.venv`, `venv`, `target`, `.next`, `.nuxt`, `.svelte-kit`, `__pycache__`, `.tox`, `.mypy_cache`, `.pytest_cache`, `.gradle`;
+- lockfiles, and generated or minified files (`*.min.js`, `*.min.css`, source maps, `*_pb2.py`, `*.pb.go`);
+- files over 1 MB, and binary files (a NUL byte in the first 8 KB).
 
 Python, JavaScript, and TypeScript use dedicated parsing paths. Other languages use tree-sitter grammars when available. A language without a suitable grammar is still stored as text, allowing its contents to be retrieved and cited.
 
 The indexed source snapshot is the authority for answering questions. Chunks contain byte ranges into that snapshot, and citations are mapped back to source locations.
+
+Chunks are at most 2 KB. Functions and methods are chunked on their own; a class (or struct, interface, trait) keeps only its header chunk, so methods are not stored twice. Each chunk's embedding input starts with `path :: Name(signature)`.
+
+Indexing is lazy where it is expensive. Every file is parsed and every chunk is stored with full-text search when the repository is indexed. Documentation, configuration and import chunks are embedded up front; function and method bodies are embedded the first time a question reaches them (`PROGRESSIVE_STORE_DEFERRED_CHUNKS`, `LAZY_EMBED_ON_QUERY`).
 
 ### Storage responsibilities
 
@@ -348,7 +361,7 @@ The indexed source snapshot is the authority for answering questions. Chunks con
 | Neo4j | Call and dependency relationships |
 | Git directory and snapshot | Source for the indexed commit |
 
-Qdrant uses `all-MiniLM-L6-v2` embeddings with 384 dimensions and cosine similarity.
+Qdrant uses `Alibaba-NLP/gte-modernbert-base` embeddings (768 dimensions, cosine similarity, input capped at 512 tokens). Set `EMBEDDING_MODEL`, `EMBEDDING_DIMENSIONS` and the Docker build argument `EMBEDDING_MODEL` to change it; existing repositories must be re-indexed to use vectors from a new model.
 
 A ready generation of the same commit is served without fetching again. A new commit requires a new generation. The new generation becomes active only after indexing finishes, so questions continue to use the previous ready generation until cutover.
 
@@ -357,7 +370,7 @@ The Docker API container stores Git data and snapshots in the `app_data` volume 
 ## How answering works
 
 1. Repona checks that the user is an active member of the repository.
-2. It checks whether the tracked branch still points to the indexed commit.
+2. It serves the repository's active index. A question never fetches or re-indexes: to pick up new commits, index the repository again. For a private repository it first confirms that the stored token can still read it.
 3. It retrieves relevant evidence through symbol search, full-text search, and Qdrant vector search.
 4. It combines the hits into a bounded evidence packet containing source spans and code relationships.
 5. Repona sends the packet to the configured model provider. If retrieval found no code spans, the packet still lists indexed file paths so the model can explain what is missing.
@@ -417,6 +430,10 @@ docker compose start api
 ```
 
 `GET /api/v1/health` returns `ok` when the API process is running. It does not check PostgreSQL, Qdrant, Neo4j, or Cursor availability.
+
+`GET /api/v1/logs` returns recent server log lines. Outside local development (`APP_ENV` other than `local`, which Compose sets) it requires `SERVER_LOGS_TOKEN`, sent as `Authorization: Bearer <token>` or `X-Server-Logs-Token`; without a configured token it answers 404.
+
+On startup the API creates missing tables, then adds columns and indexes introduced after the first release, so an existing database is upgraded in place and a new one starts cleanly.
 
 After a reboot, start the data services and API with Compose and start the host bridge separately. If the bridge is unavailable, model-backed questions return HTTP 503.
 

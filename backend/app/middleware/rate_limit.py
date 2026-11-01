@@ -29,9 +29,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if rule is None:
             return await call_next(request)
 
-        limit, window = rule
+        name, limit, window = rule
         client = client_ip(request)
-        key = (client, request.url.path)
+        key = (client, name)
         now = time.monotonic()
         retry_after = self._consume(key, limit, window, now)
         if retry_after is not None:
@@ -67,12 +67,17 @@ def client_ip(request: Request) -> str:
     return request.client.host
 
 
-def _rule_for_path(path: str) -> tuple[int, float] | None:
+def _rule_for_path(path: str) -> tuple[str, int, float] | None:
+    """(bucket, limit, window seconds) for a limited path.
+
+    /ask and /ask/stream (the one the web page uses) share one bucket, so alternating between them
+    does not double the limit. /ask/stream used to be unlimited.
+    """
     prefix = settings.api_v1_prefix.rstrip("/")
     ask = f"{prefix}/ask"
     repository = f"{prefix}/repository"
-    if path == ask:
-        return settings.rate_limit_ask_per_minute, 60.0
+    if path in (ask, f"{ask}/stream"):
+        return "ask", settings.rate_limit_ask_per_minute, 60.0
     if path == repository:
-        return settings.rate_limit_index_per_hour, 3600.0
+        return "index", settings.rate_limit_index_per_hour, 3600.0
     return None
