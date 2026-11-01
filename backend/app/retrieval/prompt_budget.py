@@ -260,6 +260,10 @@ def _default_model_for_provider(provider: str) -> str:
         return settings.opencode_model
     if provider == "zai":
         return settings.zai_model
+    if provider == "grok":
+        return settings.grok_model
+    if provider == "groq":
+        return settings.groq_model
     if provider == "copilot":
         return settings.copilot_model
     if provider == "openai":

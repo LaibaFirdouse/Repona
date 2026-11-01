@@ -51,6 +51,16 @@ class Settings:
     api_v1_prefix: str = os.getenv("API_V1_PREFIX", "/api/v1")
     database_url: str = _database_url_from_env()
     llm_provider: str = os.getenv("LLM_PROVIDER", "cursor").strip().lower()
+    grok_api_key: str = os.getenv("XAI_API_KEY", "")
+    grok_model: str = os.getenv("GROK_MODEL", "grok-4.1-fast")
+    grok_timeout: float = _get_float_env("GROK_TIMEOUT", 60.0)
+    
+    groq_api_key: str = os.getenv("GROQ_API_KEY", "")
+    groq_model: str = os.getenv(
+        "GROQ_MODEL",
+        "openai/gpt-oss-20b",
+    )
+    groq_timeout: float = _get_float_env("GROQ_TIMEOUT", 60.0)
     ollama_base_url: str = os.getenv(
         "OLLAMA_BASE_URL",
         "http://localhost:11434",

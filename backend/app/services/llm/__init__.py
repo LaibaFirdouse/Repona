@@ -8,7 +8,8 @@ from app.services.llm.ollama_provider import OllamaProvider
 from app.services.llm.openai_provider import OpenAIProvider
 from app.services.llm.opencode_provider import OpenCodeProvider
 from app.services.llm.zai_provider import ZaiProvider
-
+from app.services.llm.grok_provider import GrokProvider
+from app.services.llm.groq_provider import GroqProvider
 __all__ = [
     "BaseLLMProvider",
     "ClaudeProvider",
@@ -21,4 +22,6 @@ __all__ = [
     "OpenAIProvider",
     "OpenCodeProvider",
     "ZaiProvider",
+    "GrokProvider",
+    "GroqProvider",
 ]

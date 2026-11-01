@@ -2,8 +2,19 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-AskProviderName = Literal["cursor", "claude", "codex", "ollama", "opencode", "zai", "copilot"]
-ASK_PROVIDERS = frozenset(("cursor", "claude", "codex", "ollama", "opencode", "zai", "copilot"))
+
+AskProviderName = Literal[
+    "cursor",
+    "claude",
+    "codex",
+    "ollama",
+    "opencode",
+    "zai",
+    "grok",
+    "groq",
+    "copilot",
+]
+ASK_PROVIDERS = frozenset(("cursor", "claude", "codex", "ollama", "opencode", "zai","grok","groq", "copilot"))
 
 
 class ConversationTurn(BaseModel):
