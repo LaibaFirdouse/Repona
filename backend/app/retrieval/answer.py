@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from time import perf_counter
 
-from sqlalchemy import case, desc, func, or_
+from sqlalchemy import case, desc, func, literal, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -24,6 +24,7 @@ from app.ingestion.validation import (
 )
 from app.ingestion.vector_store import VectorStoreError, collection_config, ensure_collection, search_points
 from app.retrieval.vector_filter import vector_query_filter
+from app.ingestion.lexical import lexical_query_words, tsquery_term
 from app.ingestion.versions import LEXICAL_INDEX_VERSION
 from app.models.catalog import (
     Chunk,
@@ -147,7 +148,6 @@ from app.retrieval.conversation_context import (
 )
 from app.retrieval.overview_boost import overview_chunk_choices, overview_question
 from app.retrieval.hydrate import (
-    file_ids_for_chunk_hits,
     hydrate_deferred_from_preview,
     preview_hits_mostly_non_body,
 )
@@ -374,13 +374,9 @@ class AnswerService:
             try:
                 gen = db.get(IndexGeneration, generation_id)
                 started = perf_counter()
-                scope = getattr(self, "_vector_scope_file_ids", None)
-                hits = self._vector_hits(
-                    db,
-                    gen,
-                    request.semantic_query or question,
-                    scope_file_ids=scope,
-                )
+                # Whole generation: restricting to the other lanes' files meant vectors could
+                # only re-find what lexical/name search had already found.
+                hits = self._vector_hits(db, gen, request.semantic_query or question)
                 return hits, perf_counter() - started
             finally:
                 db.close()
@@ -619,8 +615,6 @@ class AnswerService:
             trace["retrieval_router"] = retrieval.trace
             trace["retrieval_router_ms"] = retrieval.router_ms
         self._ensure_open(db, outcome.pin_id)
-        preview_scope_files = file_ids_for_chunk_hits(db, generation.id, preview_name + preview_text)
-        self._vector_scope_file_ids = preview_scope_files or None
         if trace is not None:
             trace.setdefault("lazy_query_embed", {})
             self._lazy_embed_stats_sink = trace["lazy_query_embed"]
@@ -633,7 +627,6 @@ class AnswerService:
             )
         finally:
             self._lazy_embed_stats_sink = None
-            self._vector_scope_file_ids = None
         if should_retry_vector_lane(
             retrieval,
             vector_hits,
@@ -656,7 +649,6 @@ class AnswerService:
                     stats=retry_stats,
                 )
                 db.commit()
-                scope = file_ids_for_chunk_hits(db, generation.id, name_hits + text_hits) or preview_scope_files
                 retry_started = perf_counter()
                 if trace is not None:
                     self._lazy_embed_stats_sink = trace.setdefault("lazy_query_embed", {})
@@ -667,7 +659,6 @@ class AnswerService:
                         db,
                         generation,
                         retrieval.semantic_query or search_question,
-                        scope_file_ids=scope or None,
                     )
                 finally:
                     self._lazy_embed_stats_sink = None
@@ -676,7 +667,6 @@ class AnswerService:
                     trace["vector_lane_retry"] = {
                         **retry_stats,
                         "hits": len(vector_hits),
-                        "scope_files": len(scope or []),
                     }
                     trace["vectors_ready"] = count_vector_ready(db, generation.id)
             except Exception as exc:
@@ -1106,13 +1096,15 @@ class AnswerService:
             names = [str(item["name"]) for item in technologies]
             choices = _chunks_mentioning(db, generation, names)
             if choices:
+                # Append, never replace: these are the first chunks mentioning the package by line
+                # order (mostly import lines). Replacing the ranked evidence with them threw away
+                # the code that actually uses the package.
                 self._ensure_open(db, outcome.pin_id)
-                loaded = implementation_before_tests(
+                mentions = implementation_before_tests(
                     _load_span_text(db, generation.id, revision, choices, blobs),
                     search_question,
                 )
-            else:
-                loaded = [span for span in loaded if _mentions_any(str(span.get("text") or ""), names)]
+                loaded = _merge_loaded_spans(loaded, mentions)
             edges = [edge for edge in edges if _mentions_any(edge.mentioned_name, names)]
         loaded = omit_test_spans_unless_asked(loaded, search_question)
         step = _trace_step(trace, "10_technology_specific_filter", step)
@@ -1987,23 +1979,23 @@ def _name_hits(
         seen.add(anchor_id)
         hits.append(LaneHit(anchor_id, chunk_id, len(hits) + 1))
 
-    path_question = " ".join(path_filters) if path_filters else question
-    for file_id, chunk_id in _path_file_hits(db, generation, path_question):
+    # Order: files the question names explicitly, then symbol-name matches, then other path
+    # filters. Path-derived files used to go first and could fill the whole lane, so a symbol
+    # the question named never made it in.
+    for file_id, chunk_id in _path_file_hits(db, generation, question):
         add(file_id, chunk_id)
     identifiers = list(retrieval_identifiers(question, path_filters))
+    lowered = list(dict.fromkeys(item.lower() for item in identifiers if len(item) >= 3))
     matches = [Symbol.qualified_name == question, Symbol.name == question]
     if identifiers:
         matches.extend([Symbol.name.in_(identifiers), Symbol.qualified_name.in_(identifiers)])
-    matches.extend([Symbol.name.op("%")(question), Symbol.qualified_name.op("%")(question)])
-    rank = case((Symbol.qualified_name == question, 0), (Symbol.name == question, 1), else_=2)
+    if lowered:
+        # Questions are written in lowercase prose ("the signer"); symbol names are not ("Signer").
+        matches.append(func.lower(Symbol.name).in_(lowered))
+    whens = [(Symbol.qualified_name == question, 0), (Symbol.name == question, 1)]
     if identifiers:
-        rank = case(
-            (Symbol.qualified_name == question, 0),
-            (Symbol.name == question, 1),
-            (Symbol.name.in_(identifiers), 2),
-            (Symbol.qualified_name.in_(identifiers), 3),
-            else_=4,
-        )
+        whens.extend([(Symbol.qualified_name.in_(identifiers), 2), (Symbol.name.in_(identifiers), 3)])
+    rank = case(*whens, else_=4)
     rows = (
         db.query(Symbol)
         .join(GenerationFile, GenerationFile.file_id == Symbol.file_id)
@@ -2012,12 +2004,16 @@ def _name_hits(
             Symbol.parser_version == generation.parser_version,
             or_(*matches),
         )
-        .order_by(rank, desc(func.greatest(func.similarity(Symbol.name, question), func.similarity(Symbol.qualified_name, question))), Symbol.id)
+        # Shorter qualified names first: a top-level definition before a same-named nested one.
+        .order_by(rank, func.length(Symbol.qualified_name), Symbol.id)
         .limit(limit)
         .all()
     )
     for row in rows:
         add(row.id, None)
+    if path_filters:
+        for file_id, chunk_id in _path_file_hits(db, generation, " ".join(path_filters)):
+            add(file_id, chunk_id)
     return hits
 
 
@@ -2060,9 +2056,11 @@ def _path_file_hits(db: Session, generation: IndexGeneration, question: str) -> 
 def retrieval_identifiers(question: str, path_filters: list[str] | None = None) -> list[str]:
     found = extract_router_identifiers(question)
     for item in path_filters or []:
-        for part in item.replace("/", " ").split("."):
-            if len(part) >= 3 and part not in found:
-                found.append(part)
+        # Only the file name stem ("inclusion" from backend/app/ingestion/inclusion.py). Directory
+        # names ("app", "backend") would match unrelated symbols.
+        stem = item.rstrip("/").rsplit("/", 1)[-1].split(".", 1)[0]
+        if len(stem) >= 3 and stem not in found:
+            found.append(stem)
     return found
 
 
@@ -2071,34 +2069,30 @@ def extract_router_identifiers(question: str) -> list[str]:
     return terms or question_identifiers(question)
 
 
-def _text_hits(db: Session, generation: IndexGeneration, lexical_queries: list[str]) -> list[LaneHit]:
-    limit = settings.retrieval_lane_limit
-    min_hits = settings.lexical_min_hits
-    rows: list = []
-    seen_chunks: set[str] = set()
-    for index, query_text in enumerate(lexical_queries or [""]):
-        if len(rows) >= limit:
-            break
-        if not query_text.strip():
-            continue
-        query = func.plainto_tsquery("simple", query_text)
-        batch = (
-            db.query(GenerationChunk.chunk_id, Chunk.symbol_id, Chunk.file_id)
-            .join(Chunk, Chunk.id == GenerationChunk.chunk_id)
-            .filter(GenerationChunk.index_generation_id == generation.id, GenerationChunk.search_vector.op("@@")(query))
-            .order_by(desc(func.ts_rank(GenerationChunk.search_vector, query)), GenerationChunk.chunk_id)
-            .limit(limit)
-            .all()
-        )
-        for row in batch:
-            if row.chunk_id in seen_chunks:
-                continue
-            seen_chunks.add(row.chunk_id)
-            rows.append(row)
-            if len(rows) >= limit:
-                break
-        if len(rows) >= min_hits or index == len(lexical_queries) - 1:
-            break
+def _text_hits(db: Session, generation: IndexGeneration, lexical_queries: list[str] | str) -> list[LaneHit]:
+    """Full-text lane: OR of the question's distinctive words, ranked by how many a chunk contains.
+
+    `plainto_tsquery` ANDed every word, so a natural-language question ("how does X decide Y")
+    matched almost nothing. Here any word can match; chunks covering more distinct words rank
+    first, and length-normalised `ts_rank` breaks ties.
+    """
+    words = lexical_query_words(lexical_queries or [])
+    if not words:
+        return []
+    terms = [tsquery_term(word) for word in words]
+    vector = GenerationChunk.search_vector
+    query = func.to_tsquery("simple", " | ".join(terms))
+    coverage = literal(0)
+    for term in terms:
+        coverage = coverage + case((vector.op("@@")(func.to_tsquery("simple", term)), 1), else_=0)
+    rows = (
+        db.query(GenerationChunk.chunk_id, Chunk.symbol_id, Chunk.file_id)
+        .join(Chunk, Chunk.id == GenerationChunk.chunk_id)
+        .filter(GenerationChunk.index_generation_id == generation.id, vector.op("@@")(query))
+        .order_by(desc(coverage), desc(func.ts_rank(vector, query, 1)), GenerationChunk.chunk_id)
+        .limit(settings.retrieval_lane_limit)
+        .all()
+    )
     return [LaneHit(row.symbol_id or row.file_id, row.chunk_id, index) for index, row in enumerate(rows, start=1)]
 
 

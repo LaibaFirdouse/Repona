@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import func, or_
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -81,6 +81,11 @@ def generation_has_path(db: Session, generation_id: str, path_hint: str) -> bool
     return row is not None
 
 
+def _like_escape(value: str) -> str:
+    """Escape LIKE wildcards; `_` in identifiers such as rate_limit is otherwise a wildcard."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def catalog_path_filters(
     db: Session,
     generation_id: str,
@@ -89,25 +94,33 @@ def catalog_path_filters(
     search_question: str = "",
     limit: int = 8,
 ) -> list[str]:
-    """Path substrings that exist in this generation and match the user's words."""
+    """Indexed paths the question names: explicit paths, or files whose name is a question word.
+
+    A word only matches a file whose name stem equals it ("inclusion" -> .../inclusion.py,
+    "rate_limit" -> middleware/rate_limit.py). Substring matching on the whole path made every
+    common word ("request", "flask") pull in unrelated files, which then crowded out real hits.
+    """
     hints: list[str] = []
     for path in question_paths(question) + question_paths(search_question):
         if generation_has_path(db, generation_id, path):
             hints.append(path)
     terms = extract_search_terms(search_question or question)
     for term in terms:
-        token = term.strip().replace("%", "")
-        # Short tokens and path segments like "make" match Makefile; require length or a path slash.
-        if "/" in token:
-            pass
-        elif len(token) < 4 or token.lower() in _PATH_TERM_STOP:
+        token = term.strip()
+        if "/" in token or "." in token:
+            continue  # explicit paths and dotted names were handled by question_paths above
+        if len(token) < 4 or token.lower() in _PATH_TERM_STOP:
             continue
+        escaped = _like_escape(token)
         rows = (
             db.query(File.relative_path)
             .join(GenerationFile, GenerationFile.file_id == File.id)
             .filter(
                 GenerationFile.index_generation_id == generation_id,
-                File.relative_path.ilike(f"%{token}%"),
+                or_(
+                    File.relative_path.ilike(f"%/{escaped}.%", escape="\\"),
+                    File.relative_path.ilike(f"{escaped}.%", escape="\\"),
+                ),
             )
             .order_by(File.relative_path, File.id)
             .limit(4)
@@ -142,51 +155,6 @@ def _files_matching_terms(
         .join(GenerationFile, GenerationFile.file_id == File.id)
         .filter(GenerationFile.index_generation_id == generation_id, or_(*filters))
         .order_by(File.relative_path, File.id)
-        .limit(limit)
-        .all()
-    )
-    return [row for row in rows if not is_meta_config_path(row.relative_path)]
-
-
-def _files_richest_in_symbol_bodies(
-    db: Session,
-    generation_id: str,
-    *,
-    limit: int,
-) -> list[File]:
-    """Files in this generation with the most indexed symbol_body bytes."""
-    rows = (
-        db.query(
-            File,
-            func.coalesce(func.sum(Chunk.end_byte - Chunk.start_byte), 0).label("body_bytes"),
-        )
-        .join(GenerationFile, GenerationFile.file_id == File.id)
-        .join(Chunk, Chunk.file_id == File.id)
-        .join(GenerationChunk, GenerationChunk.chunk_id == Chunk.id)
-        .filter(
-            GenerationFile.index_generation_id == generation_id,
-            GenerationChunk.index_generation_id == generation_id,
-            Chunk.kind == "symbol_body",
-        )
-        .group_by(File.id)
-        .order_by(func.coalesce(func.sum(Chunk.end_byte - Chunk.start_byte), 0).desc(), File.relative_path)
-        .limit(limit)
-        .all()
-    )
-    if rows:
-        return [row[0] for row in rows if not is_meta_config_path(row[0].relative_path)]
-    rows = (
-        db.query(File)
-        .join(GenerationFile, GenerationFile.file_id == File.id)
-        .join(Chunk, Chunk.file_id == File.id)
-        .join(GenerationChunk, GenerationChunk.chunk_id == Chunk.id)
-        .filter(
-            GenerationFile.index_generation_id == generation_id,
-            GenerationChunk.index_generation_id == generation_id,
-            Chunk.kind.in_(("symbol_part", "non_code", "file_overview")),
-        )
-        .group_by(File.id)
-        .order_by(func.count(Chunk.id).desc(), File.relative_path)
         .limit(limit)
         .all()
     )
@@ -279,7 +247,7 @@ def catalog_implementation_chunk_choices(
     *,
     limit: int = 24,
 ) -> list[ChunkChoice]:
-    """Implementation chunks from indexed files that match the question, then richest bodies in the index."""
+    """Implementation chunks from indexed files that match the question, then matching symbols."""
     terms = extract_search_terms(question)
     files = _files_matching_terms(db, generation.id, terms, limit=limit * 2)
     choices: list[ChunkChoice] = []
@@ -287,16 +255,8 @@ def catalog_implementation_chunk_choices(
         choices = chunk_choices_for_files(db, generation.id, files, limit=limit)
     if len(choices) >= max(4, limit // 2):
         return choices[:limit]
-    rich = _files_richest_in_symbol_bodies(db, generation.id, limit=limit * 2)
-    rich = [item for item in rich if item.id not in {file.id for file in files}]
-    if rich:
-        choices = _merge_choices(
-            choices,
-            chunk_choices_for_files(db, generation.id, rich, limit=limit),
-            limit,
-        )
-    if choices:
-        return choices[:limit]
+    # No "largest files in the repo" fallback: those are unrelated to the question and took the
+    # packet's best slots. Fall back to symbols whose names match the question instead.
     symbols = _symbols_matching_terms(db, generation, terms, limit=limit)
     from app.retrieval.chunk_selection import pick_best_symbol_chunk
 
@@ -308,17 +268,6 @@ def catalog_implementation_chunk_choices(
         if len(choices) >= limit:
             break
     return choices[:limit]
-
-
-def _merge_choices(primary: list[ChunkChoice], extra: list[ChunkChoice], limit: int) -> list[ChunkChoice]:
-    seen = {item.chunk_id for item in primary}
-    merged = list(primary)
-    for item in extra:
-        if item.chunk_id in seen or len(merged) >= limit:
-            continue
-        seen.add(item.chunk_id)
-        merged.append(item)
-    return merged[:limit]
 
 
 def indexed_path_spans_for_question(

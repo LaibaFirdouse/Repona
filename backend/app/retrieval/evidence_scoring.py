@@ -44,19 +44,11 @@ def is_documentation_path(relative_path: str) -> bool:
     return lower.endswith(".md") or lower.endswith(".markdown") or lower.endswith(".rst")
 
 
-def _span_sort_key(span: dict, *, overview: bool, terms: list[str]) -> tuple:
-    path = str(span.get("relative_path") or "")
-    kind = str(span.get("chunk_kind") or "")
-    kind_rank = _CHUNK_KIND_RANK.get(kind, 9)
-    doc_rank = 0 if overview or not is_documentation_path(path) else 1
-    text = str(span.get("text") or "").lower()
-    term_hits = 0
-    for term in terms:
-        token = term.strip().lower()
-        if len(token) >= 3 and token in text:
-            term_hits += 1
-    raw_bytes = int(span.get("raw_bytes") or 0)
-    return (doc_rank, kind_rank, -term_hits, -raw_bytes, path)
+def _doc_rank(span: dict, *, overview: bool) -> int:
+    """Documentation and meta-config spans sink below code unless the question is an overview."""
+    if overview:
+        return 0
+    return 1 if is_documentation_path(str(span.get("relative_path") or "")) else 0
 
 
 def coalesce_symbol_parts_in_source_order(spans: list[dict]) -> list[dict]:
@@ -93,15 +85,21 @@ def coalesce_symbol_parts_in_source_order(spans: list[dict]) -> list[dict]:
 
 
 def sort_loaded_spans(spans: list[dict], *, overview: bool, terms: list[str]) -> list[dict]:
-    """Implementation-first order for packing; documentation paths sink when not overview.
+    """Keep retrieval order for packing; documentation paths sink when not an overview.
 
-    After ranking, coalesce each symbol's parts into source order so oversized
-    functions keep entry → mid → return instead of largest-middle-first.
+    The incoming order is the fused search ranking plus the boosts merged after it. This used to
+    be re-sorted by chunk kind, substring hits and size (largest first), which discarded relevance
+    and let big unrelated functions take the packet. `terms` is accepted for callers but no
+    longer reorders spans.
+
+    Each symbol's parts are then coalesced into source order so an oversized function reads
+    entry → middle → return.
     """
+    del terms
     if not spans:
         return []
-    ordered = sorted(spans, key=lambda span: _span_sort_key(span, overview=overview, terms=terms))
-    return coalesce_symbol_parts_in_source_order(ordered)
+    positioned = sorted(enumerate(spans), key=lambda pair: (_doc_rank(pair[1], overview=overview), pair[0]))
+    return coalesce_symbol_parts_in_source_order([span for _, span in positioned])
 
 
 def question_allows_imports_as_primary(question: str) -> bool:

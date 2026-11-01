@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "description": "v1 release gate. Each question lists files a correct answer should cite (any one counts as a hit). Questions with expect_absent=true ask about something the repository does not do; a good answer says so instead of inventing it. Expected files for itsdangerous and starlette reflect their layout as of 2025-2026; adjust if upstream moves files.",
+  "repositories": [
+    {
+      "id": "repona",
+      "repo_url": "https://github.com/LaibaFirdouse/Repona",
+      "note": "Not memorized by models: tests retrieval, not recall.",
+      "questions": [
+        {"id": "repona-inclusion", "question": "How does Repona decide which files from a repository get indexed?", "expected_files": ["backend/app/ingestion/inclusion.py"]},
+        {"id": "repona-bridge-auth", "question": "Where is the Cursor bridge bearer token checked, and what happens when it is wrong?", "expected_files": ["backend/app/services/llm/cursor_bridge.py"]},
+        {"id": "repona-rate-limit", "question": "How are per-IP rate limits applied to ask and index requests?", "expected_files": ["backend/app/middleware/rate_limit.py"]},
+        {"id": "repona-chunk-split", "question": "How does chunking split a symbol that is larger than the chunk size limit?", "expected_files": ["backend/app/ingestion/chunking.py"]},
+        {"id": "repona-session-expiry", "question": "What happens to a client's repositories after a period of inactivity?", "expected_files": ["backend/app/services/client_session.py"]},
+        {"id": "repona-qdrant-write", "question": "How are chunk embeddings written to Qdrant?", "expected_files": ["backend/app/ingestion/vector_store.py", "backend/app/ingestion/embedding_reuse.py", "backend/app/ingestion/pipeline.py"]},
+        {"id": "repona-lazy-embed", "question": "How does lazy embedding work when a question needs chunks that have no vectors yet?", "expected_files": ["backend/app/ingestion/lazy_vectors.py", "backend/app/ingestion/chunk_materialize.py"]},
+        {"id": "repona-followup", "question": "How is a follow-up question turned into search text?", "expected_files": ["backend/app/retrieval/conversation_context.py"]},
+        {"id": "repona-token-crypto", "question": "How are stored GitHub access tokens encrypted and decrypted?", "expected_files": ["backend/app/ingestion/secrets.py"]},
+        {"id": "repona-absent-email", "question": "How does Repona send email notifications to users?", "expected_files": [], "expect_absent": true}
+      ]
+    },
+    {
+      "id": "itsdangerous",
+      "repo_url": "https://github.com/pallets/itsdangerous",
+      "note": "Small and well known.",
+      "questions": [
+        {"id": "itsd-sign", "question": "How does Signer.sign produce a signed value?", "expected_files": ["src/itsdangerous/signer.py"]},
+        {"id": "itsd-expiry", "question": "How does TimestampSigner reject a signature that is too old?", "expected_files": ["src/itsdangerous/timed.py"]},
+        {"id": "itsd-urlsafe", "question": "How does URLSafeSerializer make its output safe to put in a URL?", "expected_files": ["src/itsdangerous/url_safe.py", "src/itsdangerous/encoding.py"]},
+        {"id": "itsd-b64", "question": "How are bytes base64-encoded without padding?", "expected_files": ["src/itsdangerous/encoding.py"]},
+        {"id": "itsd-rotation", "question": "How does key rotation with multiple secret keys work?", "expected_files": ["src/itsdangerous/signer.py", "src/itsdangerous/serializer.py"]},
+        {"id": "itsd-badsig", "question": "What exception is raised when a signature does not match, and what data does it carry?", "expected_files": ["src/itsdangerous/exc.py"]},
+        {"id": "itsd-derive", "question": "How is the signing key derived from the secret key and salt?", "expected_files": ["src/itsdangerous/signer.py"]},
+        {"id": "itsd-loads", "question": "How does Serializer.loads verify and decode a payload?", "expected_files": ["src/itsdangerous/serializer.py"]},
+        {"id": "itsd-compare", "question": "How are signatures compared safely against timing attacks?", "expected_files": ["src/itsdangerous/signer.py"]},
+        {"id": "itsd-absent-db", "question": "How does itsdangerous store sessions in a database?", "expected_files": [], "expect_absent": true}
+      ]
+    },
+    {
+      "id": "starlette",
+      "repo_url": "https://github.com/encode/starlette",
+      "note": "Medium size, flat package layout.",
+      "questions": [
+        {"id": "star-routing", "question": "How does the router match an incoming request path to a route?", "expected_files": ["starlette/routing.py"]},
+        {"id": "star-convertors", "question": "How are typed path parameters such as {id:int} converted?", "expected_files": ["starlette/convertors.py", "starlette/routing.py"]},
+        {"id": "star-cors", "question": "How does CORSMiddleware handle preflight requests?", "expected_files": ["starlette/middleware/cors.py"]},
+        {"id": "star-static", "question": "How does StaticFiles look up and serve a file?", "expected_files": ["starlette/staticfiles.py"]},
+        {"id": "star-multipart", "question": "How is multipart form data parsed?", "expected_files": ["starlette/formparsers.py", "starlette/requests.py"]},
+        {"id": "star-background", "question": "How do background tasks run after the response is sent?", "expected_files": ["starlette/background.py", "starlette/responses.py"]},
+        {"id": "star-threadpool", "question": "How does run_in_threadpool execute synchronous code?", "expected_files": ["starlette/concurrency.py"]},
+        {"id": "star-middleware-stack", "question": "How does the application build its middleware stack?", "expected_files": ["starlette/applications.py"]},
+        {"id": "star-500", "question": "How are unhandled exceptions turned into 500 responses?", "expected_files": ["starlette/middleware/errors.py"]},
+        {"id": "star-absent-db", "question": "How does Starlette connect to a PostgreSQL database?", "expected_files": [], "expect_absent": true}
+      ]
+    }
+  ]
+}

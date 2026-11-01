@@ -1,5 +1,8 @@
 import unittest
+from dataclasses import replace
+from unittest.mock import patch
 
+from app.core.config import settings
 from app.retrieval.query_plan import QueryPlanV1
 from app.retrieval.query_router import parse_planner_json, route_question
 from app.retrieval.query_terms import build_lexical_queries, extract_search_terms
@@ -21,10 +24,25 @@ class QueryRouterTests(unittest.TestCase):
                 lexical_queries=["authenticate_user"],
             )
 
-        request = route_question("Where is authenticate_user defined?", planner=planner)
+        # The planner is off by default (one LLM call per question); enable it for this test.
+        with patch("app.retrieval.query_router.settings", replace(settings, query_planner_enabled=True)):
+            request = route_question("Where is authenticate_user defined?", planner=planner)
         self.assertEqual(request.lanes, ["symbol", "lexical"])
         self.assertTrue(request.used_llm_planner)
         self.assertEqual(request.intent, "exact_lookup")
+
+    def test_disabled_planner_is_never_called(self) -> None:
+        calls: list[str] = []
+
+        def planner(question: str) -> QueryPlanV1:
+            calls.append(question)
+            return QueryPlanV1(intent="exact_lookup", retrieval_lanes=["symbol"])
+
+        with patch("app.retrieval.query_router.settings", replace(settings, query_planner_enabled=False)):
+            request = route_question("Where is authenticate_user defined?", planner=planner)
+        self.assertEqual(calls, [])
+        self.assertFalse(request.used_llm_planner)
+        self.assertIn("lexical", request.lanes)
 
     def test_path_terms_in_fallback(self) -> None:
         request = route_question("Show src/flask/app.py", planner=None)
@@ -47,6 +65,13 @@ class QueryRouterTests(unittest.TestCase):
         queries = build_lexical_queries("How does Flask dispatch_request handle errors?")
         self.assertGreaterEqual(len(queries), 1)
         self.assertTrue(any("dispatch_request" in item or "Flask" in item for item in queries))
+
+    def test_lexical_queries_lead_with_terms_and_end_with_the_question(self) -> None:
+        question = "How does Flask dispatch_request handle errors?"
+        queries = build_lexical_queries(question)
+        self.assertIn("dispatch_request", queries[0])
+        self.assertNotIn("How does", queries[0])
+        self.assertEqual(queries[-1], question)
 
 
 if __name__ == "__main__":
