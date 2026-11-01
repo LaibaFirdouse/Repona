@@ -27,14 +27,34 @@ ENV PYTHONPATH=/app/backend \
     PATH=/home/repona/.local/bin:/usr/local/bin:/usr/bin:/bin \
     CURSOR_AGENT_BIN=agent
 
-USER repona
+#USER repona
 # Embedding model used at query/index time. Qwen tokenizer is not warmed here:
 # default LLM_PROVIDER is cursor, which budgets with a conservative byte estimate.
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
-RUN curl https://cursor.com/install -fsS | bash \
-    && agent --version \
-    && agent sandbox disable
+#RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+#RUN curl https://cursor.com/install -fsS | bash \
+#    && agent --version \
+#    && agent sandbox disable
 
+USER repona
+
+# Pre-download the embedding model.
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+
+# Cursor Agent is optional.
+ARG INSTALL_CURSOR_AGENT=false
+
+RUN if [ "$INSTALL_CURSOR_AGENT" = "true" ]; then \
+        echo "Installing Cursor Agent..." && \
+        curl --retry 5 \
+             --retry-all-errors \
+             --retry-delay 3 \
+             -fsSL https://cursor.com/install -o /tmp/install-cursor.sh && \
+        bash /tmp/install-cursor.sh && \
+        agent --version && \
+        rm -f /tmp/install-cursor.sh; \
+    else \
+        echo "Skipping Cursor Agent installation. Using API-based LLM providers."; \
+    fi
 USER root
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod 755 /entrypoint.sh && sed -i 's/\r$//' /entrypoint.sh

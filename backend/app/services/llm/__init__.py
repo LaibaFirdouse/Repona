@@ -10,6 +10,7 @@ from app.services.llm.opencode_provider import OpenCodeProvider
 from app.services.llm.zai_provider import ZaiProvider
 from app.services.llm.grok_provider import GrokProvider
 from app.services.llm.groq_provider import GroqProvider
+from app.services.llm.openrouter_provider import OpenRouterProvider
 __all__ = [
     "BaseLLMProvider",
     "ClaudeProvider",
@@ -23,5 +24,6 @@ __all__ = [
     "OpenCodeProvider",
     "ZaiProvider",
     "GrokProvider",
+    "OpenRouterProvider",
     "GroqProvider",
 ]

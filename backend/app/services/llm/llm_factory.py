@@ -14,6 +14,7 @@ from app.services.llm.openai_provider import OpenAIProvider
 from app.services.llm.opencode_provider import OpenCodeProvider
 from app.services.llm.zai_provider import ZaiProvider
 from app.services.llm.groq_provider import GroqProvider
+from app.services.llm.openrouter_provider import OpenRouterProvider
 
 def provider_name(requested: str | None = None) -> str:
     name = (
@@ -40,6 +41,7 @@ class LLMFactory:
 
         providers = {
             "cursor": CursorProvider,
+            "openrouter": OpenRouterProvider,
             "claude": ClaudeProvider,
             "codex": CodexProvider,
             "opencode": OpenCodeProvider,
@@ -66,6 +68,7 @@ class LLMFactory:
         selected = provider_name(provider)
 
         models = {
+            "openrouter": (os.getenv("OPENROUTER_MODEL"),settings.openrouter_model),
             "cursor": (os.getenv("CURSOR_MODEL"), settings.cursor_model),
             "claude": (os.getenv("CLAUDE_MODEL"), settings.claude_model),
             "codex": (os.getenv("CODEX_MODEL"), settings.codex_model),

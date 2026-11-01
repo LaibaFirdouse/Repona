@@ -61,6 +61,19 @@ class Settings:
         "openai/gpt-oss-20b",
     )
     groq_timeout: float = _get_float_env("GROQ_TIMEOUT", 60.0)
+    # OpenRouter Configuration
+    openrouter_api_key: str = os.getenv(
+        "OPENROUTER_API_KEY", ""
+    )
+
+    openrouter_model: str = os.getenv(
+        "OPENROUTER_MODEL",
+        "openai/gpt-4o-mini",
+    )
+
+    openrouter_timeout: float = _get_float_env(
+        "OPENROUTER_TIMEOUT", 60.0
+    )
     ollama_base_url: str = os.getenv(
         "OLLAMA_BASE_URL",
         "http://localhost:11434",
