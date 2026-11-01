@@ -20,7 +20,7 @@ TAG_UUID = 0x02
 TAG_BYTES = 0x03
 TAG_UINT32 = 0x04
 
-INPUT_RECIPE = "parent_qualified_name_and_signature\nspan_utf8"
+INPUT_RECIPE = "relative_path :: parent_qualified_name_and_signature\nspan_utf8"
 VECTOR_NORMALIZATION = "none"
 DISTANCE = "cosine"
 
@@ -320,6 +320,32 @@ def context_prefix(parent_qualified_name: str | None, signature: str | None) -> 
     if signature:
         return f"{parent_qualified_name}({signature})"
     return parent_qualified_name
+
+
+PATH_PREFIX_SEPARATOR = " :: "
+
+
+def embedding_prefix(relative_path: str, parent_qualified_name: str | None, signature: str | None) -> str:
+    """First line of a chunk's embedding and full-text input: where the code lives and what it is.
+
+    `backend/app/ingestion/inclusion.py :: is_included(relative_path, mode)` for a symbol chunk,
+    just the path for file-level chunks (README sections, config, imports). Without the path,
+    file-level chunks were embedded with no context at all.
+    """
+    symbol = context_prefix(parent_qualified_name, signature)
+    if not symbol:
+        return relative_path
+    return f"{relative_path}{PATH_PREFIX_SEPARATOR}{symbol}"
+
+
+def display_prefix(prefix: str, relative_path: str) -> str:
+    """The stored prefix without its path, for prompts whose span header already names the file."""
+    if prefix == relative_path:
+        return ""
+    lead = f"{relative_path}{PATH_PREFIX_SEPARATOR}"
+    if prefix.startswith(lead):
+        return prefix[len(lead):]
+    return prefix
 
 
 def without_nul(value: str) -> str:

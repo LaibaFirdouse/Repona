@@ -15,7 +15,7 @@ from openai import OpenAIError
 
 from app.api.v1.routes import ask as ask_route
 from app.core.config import settings
-from app.retrieval.answer import SYSTEM_PROMPT, Cancelled, compose_model_answer
+from app.retrieval.answer import SYSTEM_PROMPT, Cancelled, answer_system_messages, compose_model_answer
 from app.retrieval.model_call import ClaimFailureNote, collect_model_claims, log_claim_failure, log_claim_timing, parse_claims
 from app.retrieval.packet import NO_CITED_CLAIM, review_claims
 from app.retrieval.prompt_budget import resolve_prompt_budget
@@ -83,24 +83,60 @@ class ParseTests(unittest.TestCase):
                     {"kind": "observed", "text": "kept", "evidence_ids": ["chunk-1"]},
                     {"kind": "observed", "text": "", "evidence_ids": ["chunk-1"]},
                     {"kind": "maybe", "text": "no", "evidence_ids": ["chunk-1"]},
-                    {"kind": "observed", "text": "bad id", "evidence_ids": ["has space"]},
+                    {"kind": "observed", "text": "string id", "evidence_ids": "chunk-2"},
+                    {"kind": "observed", "text": "wrong type", "evidence_ids": {"E1": True}},
                 ]
             }
         )
         parsed = parse_claims(raw)
         self.assertTrue(parsed.accepted)
-        self.assertEqual([claim["text"] for claim in parsed.claims], ["kept"])
+        self.assertEqual([claim["text"] for claim in parsed.claims], ["kept", "string id"])
 
-    def test_too_many_claims_reject_the_body(self) -> None:
+    def test_malformed_ids_are_dropped_not_the_claim(self) -> None:
+        raw = json.dumps(
+            {"claims": [{"kind": "observed", "text": "kept", "evidence_ids": ["chunk-1", "bad/id!", 7]}]}
+        )
+        parsed = parse_claims(raw)
+        self.assertEqual(parsed.claims[0]["evidence_ids"], ["chunk-1"])
+
+    def test_separated_ids_and_kind_case_are_normalized(self) -> None:
         raw = json.dumps(
             {
                 "claims": [
-                    {"kind": "observed", "text": "yes", "evidence_ids": ["chunk-1"]}
-                    for _ in range(settings.llm_max_claims + 1)
+                    {"kind": "Observed", "text": "a", "evidence_ids": ["E1, E2", " E3 "]},
+                    {"kind": "INFERENCE", "text": "b", "evidence_ids": "E4 E5;E4"},
                 ]
             }
         )
-        self.assertFalse(parse_claims(raw).accepted)
+        parsed = parse_claims(raw)
+        self.assertEqual(parsed.claims[0], {"kind": "observed", "text": "a", "evidence_ids": ["E1", "E2", "E3"]})
+        self.assertEqual(parsed.claims[1], {"kind": "inference", "text": "b", "evidence_ids": ["E4", "E5"]})
+
+    def test_json_after_a_preamble_is_parsed_without_a_repair(self) -> None:
+        raw = "Here is the answer:\n```json\n" + _claim() + "\n```\nHope this helps."
+        parsed = parse_claims(raw)
+        self.assertTrue(parsed.accepted)
+        self.assertEqual(parsed.claims[0]["evidence_ids"], ["chunk-1"])
+
+    def test_claim_text_with_a_code_fence_still_parses(self) -> None:
+        text = "It returns early:\n```python\nif not ok:\n    return None\n```"
+        raw = json.dumps({"claims": [{"kind": "observed", "text": text, "evidence_ids": ["chunk-1"]}]})
+        parsed = parse_claims(raw)
+        self.assertEqual(parsed.claims[0]["text"], text)
+
+    def test_too_many_claims_keep_the_first_ones(self) -> None:
+        raw = json.dumps(
+            {
+                "claims": [
+                    {"kind": "observed", "text": f"claim {index}", "evidence_ids": ["chunk-1"]}
+                    for index in range(settings.llm_max_claims + 5)
+                ]
+            }
+        )
+        parsed = parse_claims(raw)
+        self.assertTrue(parsed.accepted)
+        self.assertEqual(len(parsed.claims), settings.llm_max_claims)
+        self.assertEqual(parsed.claims[0]["text"], "claim 0")
 
 
 class RepairTests(unittest.TestCase):
@@ -656,6 +692,27 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Never mention internal ids such as E1", SYSTEM_PROMPT)
         self.assertIn("Do not invent paths", SYSTEM_PROMPT)
         self.assertIn("the way a helpful assistant would", SYSTEM_PROMPT)
+
+    def test_system_prompt_does_not_offer_more_evidence_or_forbid_saying_what_is_missing(self) -> None:
+        self.assertNotIn("need_evidence", SYSTEM_PROMPT)
+        self.assertIn("not covered by the excerpts, say so", SYSTEM_PROMPT)
+
+    def test_final_round_never_offers_need_evidence_and_states_the_claim_cap(self) -> None:
+        system, final_only = answer_system_messages(allow_more=False, style_suffix="\nSTYLE")
+        self.assertEqual(system, final_only)
+        self.assertNotIn("need_evidence", system)
+        self.assertIn(f"at most {settings.llm_max_claims} claims", system)
+        self.assertTrue(system.endswith("\nSTYLE"))
+
+    def test_a_round_that_may_fetch_more_offers_it_and_keeps_a_final_only_fallback(self) -> None:
+        system, final_only = answer_system_messages(allow_more=True, style_suffix="")
+        self.assertIn("need_evidence", system)
+        self.assertNotIn("need_evidence", final_only)
+
+    def test_markdown_code_is_allowed_in_claim_text(self) -> None:
+        _system, final_only = answer_system_messages(allow_more=False, style_suffix="")
+        self.assertIn("Markdown", final_only)
+        self.assertNotIn("no markdown", final_only.lower())
 
 
 class ModelAnswerTests(unittest.TestCase):

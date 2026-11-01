@@ -28,9 +28,16 @@ from app.storage.identity import IdentityError, embedding_config_fingerprint, no
 from urllib.parse import urlsplit
 
 
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-VECTOR_DIMENSIONS = 384
-MODEL_REVISION = "unversioned"
+# Configured in core/config.py (EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, EMBEDDING_MODEL_REVISION).
+# All three feed the embedding fingerprint, so changing any of them gives new generations their own
+# Qdrant collection, and older generations stop using vectors until they are re-indexed.
+EMBEDDING_MODEL = settings.embedding_model
+VECTOR_DIMENSIONS = settings.embedding_dimensions
+MODEL_REVISION = settings.embedding_model_revision
+
+
+def current_embedding_fingerprint() -> str:
+    return embedding_config_fingerprint(EMBEDDING_MODEL, MODEL_REVISION, VECTOR_DIMENSIONS)
 
 
 class RefreshError(Exception):
@@ -133,6 +140,14 @@ class RefreshService:
         return self._apply(db, repository, user_id, token, result.sha)
 
     def ask(self, db: Session, repository_id_value: str, user_id: str) -> RefreshOutcome:
+        """Pin the active ready generation for one question. A question never indexes.
+
+        Questions used to probe the remote, re-read and hash every file of the snapshot twice, and
+        start a full re-index inside the request whenever the branch had moved (answering "wait"
+        meanwhile). Now the indexed commit is served until someone indexes again
+        (POST /repository). Snapshot integrity is still checked per question by the answer path:
+        a HEAD check plus a hash check of every chunk it reads.
+        """
         repository = db.get(Repository, repository_id_value)
         if repository is None:
             raise RefreshError(404, "repository was not found")
@@ -147,24 +162,67 @@ class RefreshService:
             )
             .one_or_none()
         )
-        token = "" if credential is None else open_token(credential.token_ciphertext, self._key())
+        if credential is not None:
+            # Private repository: confirm this user's token still grants access before serving.
+            self._require_access(db, repository, user_id, open_token(credential.token_ciphertext, self._key()))
+        if repair_repository_data_paths(db, repository):
+            db.commit()
+            db.refresh(repository)
+        return self._serve_active(db, repository)
+
+    def _require_access(self, db: Session, repository: Repository, user_id: str, token: str) -> None:
         result = self.probe(repository.normalized_url, repository.tracked_branch, token)
         if result.upstream == "not_found":
             raise RefreshError(404, "repository was not found")
         if result.upstream == "unauthorized":
             self._revoke(db, user_id, repository.id)
-            if token:
-                raise RefreshError(403, "the access token cannot read this repository")
-            raise RefreshError(403, "repository is private or inaccessible")
+            raise RefreshError(403, "the access token cannot read this repository")
         if result.upstream != "authorized":
             raise RefreshError(503, "the repository host is unavailable")
-        self._prepare_repository(db, repository)
-        return self._apply(db, repository, user_id, token, result.sha)
+
+    def _serve_active(self, db: Session, repository: Repository) -> RefreshOutcome:
+        generation, revision = self._active(db, repository)
+        servable = (
+            generation is not None
+            and revision is not None
+            and generation.status == "ready"
+            and generation.gc_claimed_at is None
+            and revision.snapshot_state == "ready"
+            and bool(revision.snapshot_path)
+        )
+        if not servable:
+            if repository.refresh_state == "running":
+                message = "This repository is still being indexed."
+            else:
+                message = "This repository has no searchable index yet. Index it first."
+            sha = None if revision is None else revision.commit_sha
+            return self._outcome(repository, "wait", sha, None, message)
+        pinned_at = datetime.utcnow()
+        pin = insert_reader_pin(
+            db,
+            repository_id=repository.id,
+            generation_id=generation.id,
+            source_revision_id_value=revision.id,
+            expires_at=pinned_at + timedelta(minutes=2),
+            hard_deadline=lease_deadline(pinned_at),
+        )
+        if pin is None:
+            return self._outcome(repository, "wait", revision.commit_sha, None, "The active snapshot cannot be pinned.")
+        db.commit()
+        return self._outcome(
+            repository,
+            "serve",
+            revision.commit_sha,
+            generation.id,
+            "Serving the indexed commit.",
+            pin.id,
+        )
 
     def _apply(self, db: Session, repository: Repository, user_id: str, token: str, remote_sha: str) -> RefreshOutcome:
-        fingerprint = embedding_config_fingerprint(EMBEDDING_MODEL, MODEL_REVISION, VECTOR_DIMENSIONS)
+        fingerprint = current_embedding_fingerprint()
         generation, revision = self._active(db, repository)
         git_dir = _absolute(repository.git_dir)
+        checked_revision_id = None if revision is None else revision.id
         source_valid = _source_is_valid(git_dir, revision)
         now = datetime.utcnow()
         lease_held = refresh_lease_held(repository.refresh_lease_expires_at, repository.refresh_heartbeat_at, now)
@@ -186,7 +244,10 @@ class RefreshService:
         generation, revision = self._active(db, repository)
         pinned_at = datetime.utcnow()
         if revision is not None and revision.commit_sha == remote_sha and generation is not None and generation.status == "ready":
-            if not _source_is_valid(git_dir, revision):
+            # Full validation reads every blob and hashes the snapshot; reuse the first result unless
+            # a build ran or another request switched the active revision in the meantime.
+            unchanged = build == "none" and revision.id == checked_revision_id
+            if not (source_valid if unchanged else _source_is_valid(git_dir, revision)):
                 return self._outcome(repository, "wait", remote_sha, None, "The published work tree does not match the commit.")
             pin = insert_reader_pin(
                 db,
@@ -430,24 +491,28 @@ def _absolute(git_dir: str) -> Path:
     return PROJECT_ROOT / path
 
 
-def _embed(text: str) -> list[float]:
+def _embedding_service():
+    """One process-wide embedding model, loaded on first use."""
     from app.services.embedding_service import EmbeddingService
 
     service = getattr(_embed, "service", None)
     if service is None:
-        service = EmbeddingService(EMBEDDING_MODEL)
+        service = EmbeddingService(
+            EMBEDDING_MODEL,
+            revision=None if MODEL_REVISION == "unversioned" else MODEL_REVISION,
+            max_seq_length=settings.embedding_max_seq_length,
+            expected_dimensions=VECTOR_DIMENSIONS,
+        )
         setattr(_embed, "service", service)
-    return service.generate_text_embedding(text)
+    return service
+
+
+def _embed(text: str) -> list[float]:
+    return _embedding_service().generate_text_embedding(text)
 
 
 def _embed_many(texts: list[str]) -> list[list[float]]:
-    from app.services.embedding_service import EmbeddingService
-
-    service = getattr(_embed, "service", None)
-    if service is None:
-        service = EmbeddingService(EMBEDDING_MODEL)
-        setattr(_embed, "service", service)
-    return service.generate_text_embeddings(texts)
+    return _embedding_service().generate_text_embeddings(texts)
 
 
 _embed.many = _embed_many

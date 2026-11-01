@@ -14,7 +14,8 @@ import json
 import os
 import re
 import tempfile
-from http.server import BaseHTTPRequestHandler, HTTPServer
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from app.core.config import settings
 from app.services.llm.base import LLMProviderError
@@ -23,6 +24,8 @@ from app.services.llm.cli_runner import json_result_text, run_cli
 MODEL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 REQUEST_FIELDS = frozenset({"system_message", "user_message", "max_output_tokens", "model"})
 MAX_BODY_BYTES = 2_000_000
+# CLI runs allowed at once. Each request runs its own Cursor CLI process; further requests wait.
+DEFAULT_MAX_CONCURRENT = 4
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
@@ -142,8 +145,12 @@ def invoke_ask(
     return json_result_text(stdout)
 
 
-class BridgeServer(HTTPServer):
+class BridgeServer(ThreadingHTTPServer):
+    """One thread per request. A single-threaded server made every other user wait behind a
+    CLI call of up to CURSOR_TIMEOUT seconds, then time out with a 503."""
+
     allow_reuse_address = True
+    daemon_threads = True
 
     def __init__(
         self,
@@ -153,6 +160,7 @@ class BridgeServer(HTTPServer):
         model: str,
         timeout: float,
         runner=run_ask,
+        max_concurrent: int = DEFAULT_MAX_CONCURRENT,
     ) -> None:
         if len(token) < 16:
             raise ValueError("the bridge credential is missing")
@@ -162,6 +170,7 @@ class BridgeServer(HTTPServer):
         self.model = model
         self.cli_timeout = timeout
         self.runner = runner
+        self.cli_slots = threading.BoundedSemaphore(max(1, max_concurrent))
         super().__init__(address, BridgeHandler)
 
 
@@ -200,15 +209,16 @@ class BridgeHandler(BaseHTTPRequestHandler):
             return
         try:
             packet = parse_packet(body, self.server.model)
-            result = invoke_ask(
-                self.server.executable,
-                packet[3],
-                self.server.cli_timeout,
-                packet[0],
-                packet[1],
-                packet[2],
-                self.server.runner,
-            )
+            with self.server.cli_slots:
+                result = invoke_ask(
+                    self.server.executable,
+                    packet[3],
+                    self.server.cli_timeout,
+                    packet[0],
+                    packet[1],
+                    packet[2],
+                    self.server.runner,
+                )
         except BridgeRejected:
             self._send(400, {"error": "rejected"})
             return
@@ -238,7 +248,8 @@ def main() -> None:
     executable = os.getenv("CURSOR_AGENT_BIN") or "agent"
     model = os.getenv("CURSOR_MODEL") or settings.cursor_model
     timeout = float(os.getenv("CURSOR_TIMEOUT") or settings.cursor_timeout)
-    server = BridgeServer((host, port), token, executable, model, timeout)
+    max_concurrent = int(os.getenv("CURSOR_BRIDGE_MAX_CONCURRENT") or DEFAULT_MAX_CONCURRENT)
+    server = BridgeServer((host, port), token, executable, model, timeout, max_concurrent=max_concurrent)
     server.serve_forever()
 
 

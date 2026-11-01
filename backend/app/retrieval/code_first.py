@@ -72,7 +72,7 @@ def _span_path(span) -> str:
 
 
 CODE_FIRST_SUFFIX = (
-    "\nGround the answer in implementation source files present in the repository excerpts (largest symbol bodies first). "
+    "\nGround the answer in implementation source files present in the repository excerpts. "
     "Use README or package.json only when they add product or setup facts the code excerpts do not cover—never instead of code for how-it-works questions. "
     "Do not say \"the excerpts\", \"this packet\", or \"README alone\". "
     "Write in flowing paragraphs: do not put a file path, import list, or export name in every sentence. "

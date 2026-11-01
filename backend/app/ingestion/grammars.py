@@ -35,7 +35,10 @@ from app.ingestion.parse import (
 )
 
 # These are indexed, but they are not programming languages with declarations.
-_UNPARSED = {"markdown", "json", "yaml", "toml", "html", "css", "scss", "sass", "less", "jupyter"}
+_UNPARSED = {
+    "markdown", "json", "yaml", "toml", "html", "css", "scss", "sass", "less", "jupyter",
+    "text", "restructuredtext", "ini",
+}
 
 _KIND = {
     "function": "function",

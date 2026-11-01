@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import Literal
 
@@ -14,7 +13,7 @@ from app.retrieval.model_call import (
     _count_call,
     _keep_raw,
     _one_claim,
-    _unwrap_fence,
+    extract_json_object,
     parse_claims,
 )
 from app.retrieval.prompt_budget import resolve_prompt_budget
@@ -30,19 +29,17 @@ class AnswerTurn:
 
 
 def parse_answer_turn(raw: str) -> AnswerTurn | None:
+    """Parse one answer turn. Claims beyond LLM_MAX_CLAIMS are dropped from the end, not rejected."""
     if len(raw.encode("utf-8")) > settings.llm_max_response_bytes:
         return None
-    text = _unwrap_fence(raw.strip())
-    try:
-        body = json.loads(text)
-    except json.JSONDecodeError:
-        return None
+    body = extract_json_object(raw)
     if not isinstance(body, dict):
         return None
     status = body.get("status")
     if status not in {"final", "need_evidence"}:
         legacy = body.get("claims")
         if isinstance(legacy, list):
+            legacy = legacy[: settings.llm_max_claims]
             claims = [c for c in (_one_claim(item) for item in legacy) if c is not None]
             if claims or legacy == []:
                 return AnswerTurn("final", claims, None)
@@ -53,8 +50,9 @@ def parse_answer_turn(raw: str) -> AnswerTurn | None:
             return None
         return AnswerTurn("need_evidence", [], _normalize_more_evidence(more))
     claims = body.get("claims")
-    if not isinstance(claims, list) or len(claims) > settings.llm_max_claims:
+    if not isinstance(claims, list):
         return None
+    claims = claims[: settings.llm_max_claims]
     kept = [claim for claim in (_one_claim(item) for item in claims) if claim is not None]
     if not kept and claims:
         return None
@@ -153,13 +151,16 @@ MORE_EVIDENCE_SUFFIX = (
 )
 
 FINAL_ONLY_SUFFIX = (
-    '\nRespond with JSON only: {"status":"final","claims":[{"kind":"observed","text":"...",'
-    '"evidence_ids":["E1"]}]}. kind must be observed, inference, or suggestion. '
-    "The text field is shown to the user: natural paragraphs, not a path/import laundry list—no E1/E2 labels. "
-    "You must use status final — do not request more evidence."
+    '\nRespond with one JSON object and nothing else: {"status":"final","claims":[{"kind":"observed",'
+    '"text":"...","evidence_ids":["E1"]}]}. '
+    f"Use at most {settings.llm_max_claims} claims; merge related points into one claim rather than "
+    "dropping them. Each text is one paragraph shown to the user and may use Markdown, including a short "
+    "fenced code quote. Put excerpt ids only in evidence_ids."
 )
 
+# Only used in a round that may still request evidence (ANSWER_EVIDENCE_ROUNDS > 0).
 JSON_FORMAT_SUFFIX = (
-    '\nOutput JSON only (no markdown prose). Either {"status":"final","claims":[...]} '
+    '\nRespond with one JSON object and nothing else: either {"status":"final","claims":[...]} '
+    f"(at most {settings.llm_max_claims} claims) "
     'or {"status":"need_evidence","more_evidence":{"note":"...","lexical_queries":[],"path_contains":[]}}.'
 )

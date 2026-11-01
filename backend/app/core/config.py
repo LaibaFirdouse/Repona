@@ -118,6 +118,15 @@ class Settings:
     retrieval_vector_raw_limit: int = _get_int_env("RETRIEVAL_VECTOR_RAW_LIMIT", 64)
     retrieval_vector_max_file_filter: int = _get_int_env("RETRIEVAL_VECTOR_MAX_FILE_FILTER", 256)
     retrieval_light_snapshot_validate: bool = _get_bool_env("RETRIEVAL_LIGHT_SNAPSHOT_VALIDATE", True)
+    # Code-aware embedding model with an 8k context (loads without trust_remote_code; needs
+    # transformers>=4.48). Changing model, dimensions or revision gives new generations their own
+    # Qdrant collection; existing generations need re-indexing to use vectors again.
+    # Fallback: EMBEDDING_MODEL=all-MiniLM-L6-v2 EMBEDDING_DIMENSIONS=384 (faster, weaker on code).
+    embedding_model: str = os.getenv("EMBEDDING_MODEL", "Alibaba-NLP/gte-modernbert-base").strip()
+    embedding_dimensions: int = _get_int_env("EMBEDDING_DIMENSIONS", 768)
+    embedding_model_revision: str = os.getenv("EMBEDDING_MODEL_REVISION", "unversioned").strip() or "unversioned"
+    # Tokens per chunk sent to the model; chunks are ~2 KB (MAX_CHUNK_BYTES) so 512 keeps nearly all of each.
+    embedding_max_seq_length: int = _get_int_env("EMBEDDING_MAX_SEQ_LENGTH", 512)
     embed_warmup_on_startup: bool = _get_bool_env("EMBED_WARMUP_ON_STARTUP", True)
     progressive_indexing: bool = _get_bool_env("PROGRESSIVE_INDEXING", True)
     progressive_complete_deferred_in_ingest: bool = _get_bool_env("PROGRESSIVE_COMPLETE_DEFERRED_IN_INGEST", False)
@@ -130,6 +139,11 @@ class Settings:
     query_planner_enabled: bool = _get_bool_env("QUERY_PLANNER_ENABLED", False)
     lexical_min_hits: int = _get_int_env("LEXICAL_MIN_HITS", 2)
     retrieval_span_limit: int = _get_int_env("RETRIEVAL_SPAN_LIMIT", 12)
+    # Evidence budget per question, in bytes. Source code from spans (~28 KB is about 7k tokens), and
+    # all evidence text including span/edge labels. The system prompt and conversation history are
+    # not counted here; the model context window still bounds the whole prompt.
+    retrieval_source_byte_cap: int = _get_int_env("RETRIEVAL_SOURCE_BYTE_CAP", 28_000)
+    retrieval_evidence_byte_cap: int = _get_int_env("RETRIEVAL_EVIDENCE_BYTE_CAP", 36_000)
     retrieval_edge_limit: int = _get_int_env("RETRIEVAL_EDGE_LIMIT", 24)
     answer_overview_span_bonus: int = _get_int_env("ANSWER_OVERVIEW_SPAN_BONUS", 10)
     answer_evidence_rounds: int = _get_int_env("ANSWER_EVIDENCE_ROUNDS", 0)

@@ -24,10 +24,10 @@ from app.ingestion.versions import (
 from app.storage.identity import (
     chunk_id,
     content_hash,
-    context_prefix,
     directory_id,
     edge_id,
     embedding_input_hash,
+    embedding_prefix,
     file_id,
     identity_key,
     lexical_input,
@@ -157,7 +157,7 @@ def assemble_generation(
     cache=None,
     progressive: bool = False,
 ) -> GenerationDraft:
-    included = [blob for blob in blobs if is_included(blob.relative_path, blob.mode)]
+    included = [blob for blob in blobs if is_indexed_blob(blob)]
     included.sort(key=lambda blob: blob.relative_path.encode("utf-8"))
     draft = GenerationDraft()
     ir_by_path: dict[str, IrDocument] = {}
@@ -473,9 +473,11 @@ def _chunk_records(
             continue
         span = payload[draft.start_byte : draft.end_byte]
         digest = content_hash(span)
-        prefix = ""
-        if symbol is not None:
-            prefix = context_prefix(symbol.qualified_name, symbol.signature)
+        prefix = embedding_prefix(
+            file.relative_path,
+            symbol.qualified_name if symbol is not None else None,
+            symbol.signature if symbol is not None else None,
+        )
         start_line, end_line = line_labels(payload, draft.start_byte, draft.end_byte, spans)
         records.append(
             ChunkRecord(

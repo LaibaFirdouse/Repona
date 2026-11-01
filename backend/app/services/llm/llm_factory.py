@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import logging
 import os
 
 from app.core.config import settings
 from app.services.llm.base import BaseLLMProvider, LLMProviderError
 from app.services.llm.claude_provider import ClaudeProvider
 from app.services.llm.codex_provider import CodexProvider
-from app.services.llm.copilot_provider import CopilotProvider
 from app.services.llm.cursor_provider import CursorProvider
 from app.services.llm.grok_provider import GrokProvider
 from app.services.llm.ollama_provider import OllamaProvider

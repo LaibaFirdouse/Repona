@@ -35,19 +35,20 @@ class ClaimParse:
 
 
 def parse_claims(raw: str) -> ClaimParse:
-    """Accept a claims object, including one wrapped in a fence. Shape is not factual support."""
+    """Accept a claims object, also when fenced or preceded by prose. Shape is not factual support.
+
+    Claims beyond LLM_MAX_CLAIMS are dropped from the end. Rejecting the whole body instead threw
+    away exactly the long, multi-step answers and left the user with a refusal line.
+    """
     if len(raw.encode("utf-8")) > settings.llm_max_response_bytes:
         return ClaimParse([], False)
-    text = _unwrap_fence(raw.strip())
-    try:
-        body = json.loads(text)
-    except json.JSONDecodeError:
-        return ClaimParse([], False)
+    body = extract_json_object(raw)
     if not isinstance(body, dict):
         return ClaimParse([], False)
     claims = body.get("claims")
-    if not isinstance(claims, list) or len(claims) > settings.llm_max_claims:
+    if not isinstance(claims, list):
         return ClaimParse([], False)
+    claims = claims[: settings.llm_max_claims]
     if not claims:
         return ClaimParse([], True)
     kept = [claim for claim in (_one_claim(item) for item in claims) if claim is not None]
@@ -304,16 +305,60 @@ def _unwrap_fence(text: str) -> str:
     return text
 
 
+def extract_json_object(raw: str) -> object | None:
+    """Parse the model's JSON: as-is, inside a leading fence, or the outermost {...} in the text.
+
+    Models often add a sentence before the JSON or wrap it in a fence after a preamble; each of
+    those used to cost a repair call. A leading fence is unwrapped only after a direct parse fails,
+    because claim text may itself contain fenced code.
+    """
+    text = raw.strip()
+    candidates = [text]
+    if text.startswith("```"):
+        candidates.append(_unwrap_fence(text).strip())
+    start, end = text.find("{"), text.rfind("}")
+    if 0 <= start < end:
+        candidates.append(text[start : end + 1])
+    for candidate in candidates:
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
+_ID_SEPARATORS = re.compile(r"[\s,;]+")
+
+
+def _evidence_ids(value: object) -> list[str] | None:
+    """Evidence ids as clean strings; malformed entries are dropped rather than the whole claim.
+
+    Accepts a list of strings, a list with "E1, E2"-style entries, or one separated string.
+    """
+    if isinstance(value, str):
+        items: list = [value]
+    elif isinstance(value, list):
+        items = value
+    else:
+        return None
+    ids: list[str] = []
+    for item in items:
+        if not isinstance(item, str):
+            continue
+        for token in _ID_SEPARATORS.split(item.strip()):
+            if token and EVIDENCE_ID.fullmatch(token) and token not in ids:
+                ids.append(token)
+    return ids
+
+
 def _one_claim(claim: object) -> dict | None:
     if not isinstance(claim, dict):
         return None
-    kind = claim.get("kind")
+    kind = str(claim.get("kind") or "").strip().lower()
     text = claim.get("text")
-    evidence_ids = claim.get("evidence_ids")
     if kind not in KINDS or not isinstance(text, str) or not text.strip():
         return None
-    if not isinstance(evidence_ids, list):
+    evidence_ids = _evidence_ids(claim.get("evidence_ids"))
+    if evidence_ids is None:
         return None
-    if any(not isinstance(item, str) or EVIDENCE_ID.fullmatch(item) is None for item in evidence_ids):
-        return None
-    return {"kind": kind, "text": text.strip(), "evidence_ids": list(evidence_ids)}
+    return {"kind": kind, "text": text.strip(), "evidence_ids": evidence_ids}

@@ -151,6 +151,11 @@ LANGUAGE_BY_EXTENSION = {
     '.fish': 'shell',
     '.ps1': 'powershell',
     '.md': 'markdown',
+    '.mdx': 'markdown',
+    '.rst': 'restructuredtext',
+    '.txt': 'text',
+    '.ini': 'ini',
+    '.cfg': 'ini',
     '.json': 'json',
     '.yml': 'yaml',
     '.yaml': 'yaml',
@@ -1044,6 +1049,23 @@ def is_included(relative_path: str, mode: str) -> bool:
     name = parts[-1]
     if name in LOCKFILE_NAMES or name.endswith(".lock"):
         return False
-    if name in INCLUDED_FILENAMES:
+    if name.lower().endswith(GENERATED_SUFFIXES):
+        return False
+    if name in INCLUDED_FILENAMES or _is_dockerfile_variant(name):
         return True
     return PurePosixPath(name).suffix.lower() in INCLUDED_EXTENSIONS
+
+
+def is_indexable_payload(payload: bytes) -> bool:
+    """Small enough to be useful, and text rather than binary."""
+    return len(payload) <= MAX_INDEXED_FILE_BYTES and b"\x00" not in payload[:BINARY_SNIFF_BYTES]
+
+
+def is_indexed_blob(blob) -> bool:
+    """The single inclusion rule. Snapshot writing, assembly and validation must all agree on it."""
+    return is_included(blob.relative_path, blob.mode) and is_indexable_payload(blob.payload)
+
+
+def _is_dockerfile_variant(name: str) -> bool:
+    lowered = name.lower()
+    return lowered.startswith("dockerfile.") or lowered.endswith(".dockerfile")

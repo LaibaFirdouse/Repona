@@ -1,7 +1,15 @@
 import unittest
+from types import SimpleNamespace
 
 from app.ingestion.chunking import Span, build_chunks, split_on_newlines
-from app.ingestion.inclusion import is_included
+from app.ingestion.inclusion import (
+    BINARY_SNIFF_BYTES,
+    MAX_INDEXED_FILE_BYTES,
+    is_included,
+    is_indexable_payload,
+    is_indexed_blob,
+)
+from app.ingestion.versions import MAX_CHUNK_BYTES
 
 
 class InclusionTests(unittest.TestCase):
@@ -18,8 +26,64 @@ class InclusionTests(unittest.TestCase):
         self.assertTrue(is_included("Cargo.toml", "100644"))
         self.assertTrue(is_included("pyproject.toml", "100644"))
 
-    def test_skips_other_text_lockfiles_and_vendor_trees(self) -> None:
-        self.assertFalse(is_included("notes.txt", "100644"))
+    def test_includes_docs_and_config_text(self) -> None:
+        for path in (
+            "notes.txt",
+            "requirements-dev.txt",
+            "docs/index.rst",
+            "docs/guide.mdx",
+            "setup.cfg",
+            "alembic.ini",
+            "README",
+            "Procfile",
+            "Jenkinsfile",
+            "Dockerfile.hosted",
+            "deploy/api.dockerfile",
+        ):
+            self.assertTrue(is_included(path, "100644"), path)
+
+    def test_skips_vendored_virtualenv_and_build_output(self) -> None:
+        for path in (
+            "vendor/github.com/pkg/errors/errors.go",
+            "third_party/lib/util.c",
+            ".venv/lib/python3.12/site-packages/x.py",
+            "venv/bin/activate",
+            "target/debug/build.rs",
+            "web/.next/server/page.js",
+            "pkg/__pycache__/mod.py",
+        ):
+            self.assertFalse(is_included(path, "100644"), path)
+
+    def test_skips_generated_and_minified_files(self) -> None:
+        for path in (
+            "static/app.min.js",
+            "static/site.MIN.CSS",
+            "static/app.js.map",
+            "proto/orders_pb2.py",
+            "proto/orders_pb2_grpc.py",
+            "api/orders.pb.go",
+        ):
+            self.assertFalse(is_included(path, "100644"), path)
+        self.assertTrue(is_included("static/app.js", "100644"))
+        self.assertTrue(is_included("proto/orders.py", "100644"))
+
+    def test_payload_size_cap_and_binary_sniffing(self) -> None:
+        self.assertTrue(is_indexable_payload(b"print('hi')\n"))
+        self.assertTrue(is_indexable_payload(b"x" * MAX_INDEXED_FILE_BYTES))
+        self.assertFalse(is_indexable_payload(b"x" * (MAX_INDEXED_FILE_BYTES + 1)))
+        self.assertFalse(is_indexable_payload(b"\x89PNG\r\n\x1a\n\x00\x00"))
+        # Only the first 8 KB are sniffed.
+        self.assertTrue(is_indexable_payload(b"a" * BINARY_SNIFF_BYTES + b"\x00"))
+
+    def test_indexed_blob_needs_both_path_and_content_rules(self) -> None:
+        text = SimpleNamespace(relative_path="src/app.py", mode="100644", payload=b"x = 1\n")
+        binary = SimpleNamespace(relative_path="src/app.py", mode="100644", payload=b"\x00\x01")
+        vendored = SimpleNamespace(relative_path="vendor/app.py", mode="100644", payload=b"x = 1\n")
+        self.assertTrue(is_indexed_blob(text))
+        self.assertFalse(is_indexed_blob(binary))
+        self.assertFalse(is_indexed_blob(vendored))
+
+    def test_skips_other_files_lockfiles_and_vendor_trees(self) -> None:
         self.assertFalse(is_included("logo.png", "100644"))
         self.assertFalse(is_included("go.sum", "100644"))
         self.assertFalse(is_included("package-lock.json", "100644"))
@@ -80,6 +144,75 @@ class ChunkingTests(unittest.TestCase):
             [],
         )
         self.assertFalse(any(chunk.kind == "non_code" for chunk in chunks))
+
+    def test_default_chunk_limit_fits_the_embedding_window(self) -> None:
+        self.assertLessEqual(MAX_CHUNK_BYTES, 2048)
+        payload = b"".join(b"line %04d of a long function body\n" % index for index in range(200))
+        symbol = (("function", "f", "", 0), "function", Span(0, len(payload)))
+        parts = [chunk for chunk in build_chunks(payload, [symbol], []) if chunk.kind == "symbol_part"]
+        self.assertGreater(len(parts), 1)
+        self.assertTrue(all(part.end_byte - part.start_byte <= MAX_CHUNK_BYTES for part in parts))
+
+    def test_class_keeps_only_its_header_and_methods_are_not_duplicated(self) -> None:
+        header = b'class Signer:\n    """Signs values."""\n    digest = "sha1"\n\n'
+        sign = b"    def sign(self, value):\n        return value\n\n"
+        verify = b"    def verify(self, value):\n        return True\n"
+        payload = header + sign + verify
+        sign_start = len(header)
+        verify_start = sign_start + len(sign)
+        chunks = build_chunks(
+            payload,
+            [
+                (("class", "Signer", "", 0), "class", Span(0, len(payload))),
+                (("method", "Signer.sign", "", 0), "method", Span(sign_start + 4, verify_start - 1)),
+                (("method", "Signer.verify", "", 0), "method", Span(verify_start + 4, len(payload))),
+            ],
+            [],
+        )
+        by_symbol = {chunk.symbol_ordinal_key[1]: chunk for chunk in chunks if chunk.symbol_ordinal_key}
+        class_text = payload[by_symbol["Signer"].start_byte : by_symbol["Signer"].end_byte]
+        self.assertEqual(class_text, b'class Signer:\n    """Signs values."""\n    digest = "sha1"\n')
+        self.assertNotIn(b"def sign", class_text)
+        self.assertIn(b"def sign", payload[by_symbol["Signer.sign"].start_byte : by_symbol["Signer.sign"].end_byte])
+        # Blank lines and indentation between members are not chunks of their own.
+        self.assertFalse(any(chunk.kind == "non_code" for chunk in chunks))
+
+    def test_class_without_members_keeps_its_whole_body(self) -> None:
+        payload = b"class Config:\n    debug = False\n"
+        chunks = build_chunks(payload, [(("class", "Config", "", 0), "class", Span(0, len(payload)))], [])
+        self.assertEqual([(chunk.kind, chunk.start_byte, chunk.end_byte) for chunk in chunks], [("symbol_body", 0, len(payload))])
+
+    def test_nested_functions_stay_inside_the_outer_function(self) -> None:
+        payload = b"def outer():\n    def inner():\n        return 1\n    return inner()\n"
+        inner_start = payload.index(b"def inner")
+        inner_end = payload.index(b"    return inner")
+        chunks = build_chunks(
+            payload,
+            [
+                (("function", "outer", "", 0), "function", Span(0, len(payload))),
+                (("function", "outer.inner", "", 0), "function", Span(inner_start, inner_end)),
+            ],
+            [],
+        )
+        outer = next(chunk for chunk in chunks if chunk.symbol_ordinal_key and chunk.symbol_ordinal_key[1] == "outer")
+        self.assertEqual((outer.start_byte, outer.end_byte), (0, len(payload)))
+
+    def test_brace_only_gaps_are_not_chunks(self) -> None:
+        payload = b"class A {\n  run() {\n    go();\n  }\n}\n\nconst x = 1;\n"
+        run_start = payload.index(b"run()")
+        run_end = payload.index(b"  }\n}") + 3
+        class_end = payload.index(b"}\n\n") + 1
+        chunks = build_chunks(
+            payload,
+            [
+                (("class", "A", "", 0), "class", Span(0, class_end)),
+                (("method", "A.run", "", 0), "method", Span(run_start, run_end)),
+            ],
+            [],
+        )
+        gap_texts = [payload[chunk.start_byte : chunk.end_byte] for chunk in chunks if chunk.kind == "non_code"]
+        self.assertEqual(gap_texts, [b"const x = 1;\n"])
+        self.assertEqual([chunk.ordinal for chunk in chunks if chunk.kind == "non_code"], [0])
 
     def test_import_ordinals_are_per_file_and_may_overlap_a_symbol(self) -> None:
         payload = b"def a():\n    import os\n    return os\n"

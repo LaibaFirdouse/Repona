@@ -24,7 +24,7 @@ from app.ingestion.claims import (
 )
 from app.ingestion.coordination import lease_deadline
 from app.ingestion.graph_store import current_epoch_edge_ids, delete_edges_outside_expected, publish_graph_epoch, write_graph
-from app.ingestion.inclusion import is_included
+from app.ingestion.inclusion import is_indexed_blob
 from app.ingestion.materialize import adopt_or_promote_tree, read_commit_blobs, write_detached_tree
 from app.ingestion.persist import (
     GenerationWriteError,
@@ -648,7 +648,7 @@ def _lost_ownership(db: Session, repository_id: str, owner: str, epoch: int) -> 
 
 
 def _assert_catalog(db: Session, generation_id: str, fingerprint: str, draft, blobs) -> None:
-    included = [blob for blob in blobs if is_included(blob.relative_path, blob.mode)]
+    included = [blob for blob in blobs if is_indexed_blob(blob)]
     file_links = (
         db.query(func.count(GenerationFile.file_id))
         .filter(GenerationFile.index_generation_id == generation_id)

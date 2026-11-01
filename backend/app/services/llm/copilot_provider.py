@@ -1,3 +1,8 @@
+"""Not offered: LLMFactory refuses provider "copilot" because this CLI runs with --allow-all-tools.
+
+Kept so it can be re-enabled once it can run without tools.
+"""
+
 from __future__ import annotations
 
 import os

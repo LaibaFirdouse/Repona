@@ -69,6 +69,33 @@ class RateLimitMiddlewareTests(unittest.TestCase):
             self.assertEqual(blocked.status_code, 429)
             self.assertIn("Retry-After", blocked.headers)
 
+    def test_streaming_ask_is_limited_and_shares_the_ask_bucket(self) -> None:
+        app = FastAPI()
+        app.add_middleware(RateLimitMiddleware)
+
+        @app.post("/api/v1/ask")
+        def ask() -> dict[str, str]:
+            return {"status": "ok"}
+
+        @app.post("/api/v1/ask/stream")
+        def ask_stream() -> dict[str, str]:
+            return {"status": "ok"}
+
+        settings = SimpleNamespace(
+            rate_limit_enabled=True,
+            rate_limit_trust_proxy=False,
+            rate_limit_ask_per_minute=2,
+            rate_limit_index_per_hour=4,
+            api_v1_prefix="/api/v1",
+        )
+        with patch("app.middleware.rate_limit.settings", settings):
+            client = TestClient(app)
+            self.assertEqual(client.post("/api/v1/ask/stream").status_code, 200)
+            self.assertEqual(client.post("/api/v1/ask").status_code, 200)
+            # Alternating endpoints does not get around the limit.
+            self.assertEqual(client.post("/api/v1/ask/stream").status_code, 429)
+            self.assertEqual(client.post("/api/v1/ask").status_code, 429)
+
 
 if __name__ == "__main__":
     unittest.main()
