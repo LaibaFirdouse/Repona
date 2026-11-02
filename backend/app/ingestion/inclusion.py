@@ -1049,8 +1049,6 @@ def is_included(relative_path: str, mode: str) -> bool:
     name = parts[-1]
     if name in LOCKFILE_NAMES or name.endswith(".lock"):
         return False
-    if name.lower().endswith(GENERATED_SUFFIXES):
-        return False
     if name in INCLUDED_FILENAMES or _is_dockerfile_variant(name):
         return True
     return PurePosixPath(name).suffix.lower() in INCLUDED_EXTENSIONS
