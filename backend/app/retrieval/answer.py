@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from time import perf_counter
 
-from sqlalchemy import case, desc, func, literal, or_
+from sqlalchemy import case, desc, func, literal, literal_column, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -2052,10 +2052,10 @@ def _text_hits(db: Session, generation: IndexGeneration, lexical_queries: list[s
         return []
     terms = [tsquery_term(word) for word in words]
     vector = GenerationChunk.search_vector
-    query = func.to_tsquery("simple", " | ".join(terms))
+    query = func.to_tsquery(literal_column("'simple'"), " | ".join(terms))
     coverage = literal(0)
     for term in terms:
-        coverage = coverage + case((vector.op("@@")(func.to_tsquery("simple", term)), 1), else_=0)
+        coverage = coverage + case((vector.op("@@")(func.to_tsquery(literal_column("'simple'"), term)), 1), else_=0)
     rows = (
         db.query(GenerationChunk.chunk_id, Chunk.symbol_id, Chunk.file_id)
         .join(Chunk, Chunk.id == GenerationChunk.chunk_id)

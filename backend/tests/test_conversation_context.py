@@ -1,6 +1,7 @@
 import unittest
 
 from app.core.config import settings
+from app.retrieval.packet import INSUFFICIENT_EVIDENCE, NO_CITED_CLAIM
 from app.retrieval.conversation_context import (
     QaTurn,
     format_answer_history,
@@ -45,6 +46,17 @@ class ConversationContextTests(unittest.TestCase):
         cap = settings.answer_conversation_max_turns
         self.assertEqual(len(kept), cap)
         self.assertEqual(kept[0].question, f"Q{20 - cap}")
+
+    def test_normalize_turns_drops_canonical_refusal_answers(self) -> None:
+        history = [
+            QaTurn("Question one", NO_CITED_CLAIM),
+            QaTurn("Question two", INSUFFICIENT_EVIDENCE),
+            QaTurn("Question three", "A useful answer."),
+        ]
+        self.assertEqual(
+            normalize_turns(history),
+            [QaTurn("Question three", "A useful answer.")],
+        )
 
     def test_normalize_turns_truncates_long_answers(self) -> None:
         limit = settings.answer_conversation_answer_chars

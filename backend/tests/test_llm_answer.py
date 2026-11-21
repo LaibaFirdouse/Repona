@@ -685,6 +685,24 @@ class AskRouteTests(unittest.TestCase):
             )
 
 
+    def test_copilot_is_rejected_as_an_ask_provider(self) -> None:
+        with self.assertRaises(ValidationError):
+            RepositoryQuestionRequest(
+                repository_id="repo",
+                user_id="user-1",
+                question="Where is login?",
+                provider="copilot",
+            )
+
+        request = RepositoryQuestionRequest(
+            repository_id="repo",
+            user_id="user-1",
+            question="Where is login?",
+            provider="cursor",
+        )
+        self.assertEqual(request.provider, "cursor")
+
+
 class PromptTests(unittest.TestCase):
     def test_repository_content_is_untrusted_data(self) -> None:
         self.assertIn("untrusted data", SYSTEM_PROMPT)

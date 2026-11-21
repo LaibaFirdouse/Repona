@@ -16,6 +16,8 @@ from app.services.llm.zai_provider import ZaiProvider
 from app.services.llm.groq_provider import GroqProvider
 from app.services.llm.openrouter_provider import OpenRouterProvider
 
+logger = logging.getLogger(__name__)
+
 def provider_name(requested: str | None = None) -> str:
     name = (
         requested
@@ -47,7 +49,6 @@ class LLMFactory:
             "opencode": OpenCodeProvider,
             "zai": ZaiProvider,
             "grok": GrokProvider,
-            "copilot": CopilotProvider,
             "ollama": OllamaProvider,
             "openai": OpenAIProvider,
             "groq": GroqProvider,
@@ -56,6 +57,7 @@ class LLMFactory:
         provider_class = providers.get(selected)
 
         if provider_class is None:
+            logger.warning("model_provider_unavailable provider=%s", selected)
             raise LLMProviderError(
                 "the model provider is unavailable"
             )
@@ -75,7 +77,6 @@ class LLMFactory:
             "opencode": (os.getenv("OPENCODE_MODEL"), settings.opencode_model),
             "zai": (os.getenv("ZAI_MODEL"), settings.zai_model),
             "grok": (os.getenv("GROK_MODEL"), settings.grok_model),
-            "copilot": (os.getenv("COPILOT_MODEL"), settings.copilot_model),
             "ollama": (os.getenv("OLLAMA_MODEL"), settings.ollama_model),
             "openai": (os.getenv("OPENAI_MODEL"), settings.openai_model),
             "groq": (os.getenv("GROQ_MODEL"), settings.groq_model),

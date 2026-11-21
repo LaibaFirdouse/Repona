@@ -8,6 +8,7 @@ from typing import Iterable
 from app.core.config import settings
 from app.retrieval.answer_prose import sanitize_answer_prose
 from app.retrieval.query_terms import extract_search_terms
+from app.retrieval.packet import INSUFFICIENT_EVIDENCE, NO_CITED_CLAIM
 
 # A follow-up with fewer distinctive words than this ("and where is it called?") borrows the
 # previous question's words; a self-contained question is searched on its own.
@@ -34,7 +35,7 @@ def normalize_turns(history: Iterable[QaTurn] | None) -> list[QaTurn]:
         if not question:
             continue
         answer = (item.answer or "").strip()
-        if answer in REFUSAL_LINES:
+        if answer in {NO_CITED_CLAIM, INSUFFICIENT_EVIDENCE}:
             continue
         if len(answer) > settings.answer_conversation_answer_chars:
             answer = answer[: settings.answer_conversation_answer_chars].rstrip() + "…"

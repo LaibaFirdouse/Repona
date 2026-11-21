@@ -64,7 +64,7 @@ class QuestionPlanTests(unittest.TestCase):
             },
         )()
         self.assertTrue(versions_match(generation, "fp"))
-        generation.chunking_version = "v2"
+        generation.chunking_version = "v1"
         self.assertFalse(versions_match(generation, "fp"))
         generation.chunking_version = CHUNKING_VERSION
         generation.gc_claimed_at = datetime.utcnow()

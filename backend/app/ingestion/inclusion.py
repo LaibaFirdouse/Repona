@@ -1,5 +1,8 @@
 from pathlib import PurePosixPath
 
+MAX_INDEXED_FILE_BYTES = 2 * 1024 * 1024  # 2 MiB
+BINARY_SNIFF_BYTES = 8 * 1024  # 8 KiB
+
 # Programming-language extensions from GitHub Linguist, plus the config
 # files this app already kept. Python and JavaScript/TypeScript are parsed
 # for declarations and calls. Every other file is stored as source text.
@@ -1006,6 +1009,9 @@ INCLUDED_EXTENSIONS = frozenset(LANGUAGE_BY_EXTENSION)
 INCLUDED_FILENAMES = {
     "Dockerfile",
     "requirements.txt",
+    "README",
+    "Procfile",
+    "Jenkinsfile",
     "Pipfile",
     "pyproject.toml",
     "go.mod",
@@ -1025,7 +1031,19 @@ INCLUDED_FILENAMES = {
     "tsconfig.json",
     "jsconfig.json",
 }
-EXCLUDED_COMPONENTS = {".git", "node_modules", "build", "dist"}
+EXCLUDED_COMPONENTS = {
+    ".git",
+    "node_modules",
+    "build",
+    "dist",
+    "vendor",
+    "third_party",
+    ".venv",
+    "venv",
+    "target",
+    ".next",
+    "__pycache__",
+}
 LOCKFILE_NAMES = {
     "package-lock.json",
     "yarn.lock",
@@ -1047,11 +1065,22 @@ def is_included(relative_path: str, mode: str) -> bool:
     if any(part in EXCLUDED_COMPONENTS for part in parts):
         return False
     name = parts[-1]
+    lowered = name.lower()
+
     if name in LOCKFILE_NAMES or name.endswith(".lock"):
+        return False
+    if _is_generated_file(lowered):
         return False
     if name in INCLUDED_FILENAMES or _is_dockerfile_variant(name):
         return True
     return PurePosixPath(name).suffix.lower() in INCLUDED_EXTENSIONS
+
+
+def _is_generated_file(name: str) -> bool:
+    return (
+        name.endswith((".min.js", ".min.css", ".js.map"))
+        or name.endswith(("_pb2.py", "_pb2_grpc.py", ".pb.go"))
+    )
 
 
 def is_indexable_payload(payload: bytes) -> bool:

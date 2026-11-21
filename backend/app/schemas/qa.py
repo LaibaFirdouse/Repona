@@ -12,10 +12,9 @@ AskProviderName = Literal[
     "zai",
     "grok",
     "groq",
-    "copilot",
     "openrouter",
 ]
-ASK_PROVIDERS = frozenset(("cursor", "claude", "codex", "ollama", "opencode", "zai","grok","groq","openrouter", "copilot"))
+ASK_PROVIDERS = frozenset(("cursor", "claude", "codex", "ollama", "opencode", "zai","grok","groq","openrouter"))
 
 
 class ConversationTurn(BaseModel):

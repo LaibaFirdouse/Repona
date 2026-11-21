@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 from app.ingestion.chunking import Span, build_chunks
 from app.ingestion.ir import IrDocument, ir_to_parsed_file, parsed_file_to_ir
-from app.ingestion.inclusion import INCLUDED_FILENAMES, LANGUAGE_BY_EXTENSION, is_included
+from app.ingestion.inclusion import INCLUDED_FILENAMES, LANGUAGE_BY_EXTENSION, is_included, is_indexed_blob
 from app.ingestion.parse import ParsedFile, parse_file
 from app.ingestion.project_context import ProjectContext, discover_project_context
 from app.ingestion.versions import (
