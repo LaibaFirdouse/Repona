@@ -80,7 +80,10 @@ class CursorProvider(BaseLLMProvider):
     def _from_bridge(self, bridge: str, system_message: str, user_message: str, max_output_tokens: int) -> str:
         token = os.getenv("CURSOR_BRIDGE_TOKEN", "")
         if len(token) < 16:
-            raise LLMProviderError("the model provider is unavailable")
+            raise LLMProviderError(
+                "the model provider is unavailable",
+                failure_kind="AUTHENTICATION_FAILURE",
+            )
         endpoint = bridge_endpoint(bridge)
         payload = json.dumps(
             {
@@ -103,9 +106,53 @@ class CursorProvider(BaseLLMProvider):
         try:
             with urllib.request.urlopen(request, timeout=self.timeout + 30) as response:
                 body = json.loads(response.read().decode("utf-8"))
-        except (OSError, urllib.error.URLError, json.JSONDecodeError, UnicodeError, TimeoutError):
-            raise LLMProviderError("the model provider is unavailable") from None
+        except urllib.error.HTTPError as exc:
+            kind = (
+                "AUTHENTICATION_FAILURE"
+                if exc.code in {401, 403}
+                else (
+                    "REQUEST_REJECTED"
+                    if exc.code == 400
+                    else ("MODEL_UNAVAILABLE" if exc.code == 503 else "BRIDGE_UNAVAILABLE")
+                )
+            )
+            raise LLMProviderError("the model provider is unavailable", failure_kind=kind) from None
+        except TimeoutError:
+            raise LLMProviderError(
+                "the model provider is unavailable",
+                failure_kind="CONNECTION_TIMEOUT",
+            ) from None
+        except urllib.error.URLError as exc:
+            reason = exc.reason
+            kind = "BRIDGE_UNAVAILABLE"
+            if isinstance(reason, ConnectionRefusedError) or (
+                isinstance(reason, OSError) and getattr(reason, "errno", None) == 111
+            ):
+                kind = "CONNECTION_REFUSED"
+            elif isinstance(reason, TimeoutError):
+                kind = "CONNECTION_TIMEOUT"
+            raise LLMProviderError("the model provider is unavailable", failure_kind=kind) from None
+        except ConnectionRefusedError:
+            raise LLMProviderError(
+                "the model provider is unavailable",
+                failure_kind="CONNECTION_REFUSED",
+            ) from None
+        except OSError as exc:
+            kind = (
+                "CONNECTION_REFUSED"
+                if getattr(exc, "errno", None) == 111
+                else "BRIDGE_UNAVAILABLE"
+            )
+            raise LLMProviderError("the model provider is unavailable", failure_kind=kind) from None
+        except (json.JSONDecodeError, UnicodeError):
+            raise LLMProviderError(
+                "the model provider is unavailable",
+                failure_kind="RESPONSE_PARSE_FAILURE",
+            ) from None
         result = body.get("result") if isinstance(body, dict) else None
         if not isinstance(result, str) or not result.strip():
-            raise LLMProviderError("the model provider is unavailable")
+            raise LLMProviderError(
+                "the model provider is unavailable",
+                failure_kind="RESPONSE_PARSE_FAILURE",
+            )
         return result

@@ -68,16 +68,31 @@ def completion_prompt(system_message: str, user_message: str, max_output_tokens:
     )
 
 
+def cursor_sandbox_mode() -> str | None:
+    """Return the CLI ``--sandbox`` value, or None when sandbox is explicitly off.
+
+    Default is ``enabled``. Values such as IDE-injected ``native`` still enable a
+    sandbox flag (passed through) instead of omitting ``--sandbox`` entirely.
+    """
+    mode = os.getenv("CURSOR_SANDBOX", "enabled").strip().lower()
+    if mode in {"", "enabled", "enable", "true", "1", "yes", "on"}:
+        return "enabled"
+    if mode in {"disabled", "disable", "false", "0", "no", "off"}:
+        return None
+    # Pass through known Cursor modes (e.g. native) rather than dropping the flag.
+    return mode
+
+
 def cursor_sandbox_enabled() -> bool:
     """Host bridge uses sandbox when available. Docker/EC2 often cannot start it."""
-    mode = os.getenv("CURSOR_SANDBOX", "enabled").strip().lower()
-    return mode in {"enabled", "enable", "true", "1", "yes"}
+    return cursor_sandbox_mode() is not None
 
 
 def ask_command(executable: str, model: str, workspace: str, prompt: str) -> list[str]:
     command = [executable, "--print", "--mode", "ask"]
-    if cursor_sandbox_enabled():
-        command.extend(["--sandbox", "enabled"])
+    sandbox = cursor_sandbox_mode()
+    if sandbox is not None:
+        command.extend(["--sandbox", sandbox])
     command.extend(
         [
             "--trust",
