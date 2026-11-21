@@ -1153,10 +1153,14 @@ class AnswerService:
             if code_first or substantive or prefer_impl:
                 style_suffix += CODE_FIRST_SUFFIX
             if code_trace:
-                suffix += CODE_TRACE_SUFFIX
-            suffix += answer_suffix_for_intent(retrieval.intent)
+                style_suffix += CODE_TRACE_SUFFIX
+            style_suffix += answer_suffix_for_intent(retrieval.intent)
             if trace_plan is not None:
-                suffix += execution_trace_prompt_suffix(trace_plan)
+                style_suffix += execution_trace_prompt_suffix(trace_plan)
+            system_message, _final_only = answer_system_messages(
+                allow_more=allow_more,
+                style_suffix=style_suffix,
+            )
             user_block = _dialog_user_block(question, dialog_notes, history_prefix=history_prefix)
             # Always count the same system+user pair packing, repair, and the
             # provider call use (Cursor included — not only chat-template paths).
